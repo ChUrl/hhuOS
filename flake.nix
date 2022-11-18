@@ -84,7 +84,7 @@
             {
               name = "build";
               help = "Build hhuOS";
-              command = "nix build '.?submodules=1'";
+              command = "nix build '.?submodules=1' --keep-failed -L";
             }
           ];
         };
