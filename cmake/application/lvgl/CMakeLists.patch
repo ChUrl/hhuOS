@@ -1,17 +1,27 @@
-18c18
-< include(FetchContent)
----
-> # include(FetchContent)
-38,39c38,41
-< FetchContent_Declare(lvgl GIT_REPOSITORY https://github.com/lvgl/lvgl.git GIT_TAG v8.3.3)
-< FetchContent_MakeAvailable(lvgl)
----
-> # Nix expressions are pure, we can't just fetch arbitrary content during build...
-> # FetchContent_Declare(lvgl GIT_REPOSITORY https://github.com/lvgl/lvgl.git GIT_TAG v8.3.3)
-> # FetchContent_MakeAvailable(lvgl)
-> add_library(lvgl)
-41c43
-< target_link_libraries(${PROJECT_NAME} lib.crt0 lib.user lvgl::lvgl lvgl::demos)
+diff --git a/cmake/application/lvgl/CMakeLists.txt b/cmake/application/lvgl/CMakeLists.txt
+index 121adc20..dacf798c 100644
+--- a/cmake/application/lvgl/CMakeLists.txt
++++ b/cmake/application/lvgl/CMakeLists.txt
+@@ -15,7 +15,7 @@
+ # along with this program.  If not, see <http://www.gnu.org/licenses/>
+ 
+ cmake_minimum_required(VERSION 3.14)
+-include(FetchContent)
++# include(FetchContent)
+ 
+ project(lvgl_demo)
+ message(STATUS "Project " ${PROJECT_NAME})
+@@ -35,7 +35,9 @@ set(LV_CONF_PATH
+         ${HHUOS_SRC_DIR}/application/lvgl/lv_conf.h
+         CACHE STRING "" FORCE)
+ 
+-FetchContent_Declare(lvgl GIT_REPOSITORY https://github.com/lvgl/lvgl.git GIT_TAG v8.3.3)
+-FetchContent_MakeAvailable(lvgl)
++# Nix expressions are pure, we can't just fetch arbitrary content during build...
++# FetchContent_Declare(lvgl GIT_REPOSITORY https://github.com/lvgl/lvgl.git GIT_TAG v8.3.3)
++# FetchContent_MakeAvailable(lvgl)
++find_package(lvgl CONFIG REQUIRED) # The lvgl-config.cmake file is provided by the derivation
+ 
+-target_link_libraries(${PROJECT_NAME} lib.crt0 lib.user lvgl::lvgl lvgl::demos)
 \ No newline at end of file
----
-> target_link_libraries(${PROJECT_NAME} lib.crt0 lib.user lvgl::lvgl lvgl::demos)
++target_link_libraries(${PROJECT_NAME} lib.crt0 lib.user lvgl::lvgl lvgl::demos)
