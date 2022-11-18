@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Copyright (C) 2018-2023 Heinrich-Heine-Universitaet Duesseldorf,
 # Institute of Computer Science, Department Operating Systems
