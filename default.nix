@@ -57,17 +57,29 @@ in gcc12_multi.stdenv.mkDerivation rec {
   src = ./.;
 
   patches = [
-    # Change shebangs to #!/usr/bin/env bash instead of #!/bin/bash (doesn't exist on NixOS)
-    ./nix-patches/bios-obmf-build.patch
-    ./nix-patches/floppy0-build.patch
-    ./nix-patches/hdd0-build.patch
-    ./nix-patches/loader-towboot-build.patch
-
     # Remove use of cmake's FetchContent (not allowed on NixOS as nix expressions have to be pure)
     ./nix-patches/cmake-application-lvgl-CMakeLists.patch
   ];
 
-  nativeBuildInputs = [ cmake nasm mtools gnutar lvgl ];
+  # Post/Pre patch shouldn't matter but I use post because the patches are diff'ed from unmodified files, just to be sure
+  # Would be nice to abstract all the duplication away but then I want to keep it as readable as possible
+  postPatch = ''
+    # Patch shebangs
+    substituteInPlace ./bios/ovmf/build.sh      --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    substituteInPlace ./floppy0/build.sh        --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    substituteInPlace ./hdd0/build.sh           --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    substituteInPlace ./loader/towboot/build.sh --replace "#!/bin/bash" "#!/usr/bin/env bash"
+
+    # Patch /bin paths, executables used: cp, mv, rm, mkdir, tar (these should all be in /run/current-system/sw/bin/)
+    substituteInPlace ./cmake/towboot/CMakeLists.txt    --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
+    substituteInPlace ./cmake/music/CMakeLists.txt      --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
+    substituteInPlace ./cmake/initrd/CMakeLists.txt     --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
+    substituteInPlace ./cmake/grub/CMakeLists.txt       --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
+    substituteInPlace ./cmake/floppy0/CMakeLists.txt    --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
+    substituteInPlace ./cmake/hdd0/CMakeLists.txt       --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
+  '';
+
+  nativeBuildInputs = [ cmake bintools_multi nasm mtools gnutar lvgl ];
   buildInputs = [ qemu ];
 
   cmakeFlags = [
