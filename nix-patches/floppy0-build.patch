@@ -1,0 +1,10 @@
+diff --git a/floppy0/build.sh b/floppy0/build.sh
+index ad48e091..8ee10096 100755
+--- a/floppy0/build.sh
++++ b/floppy0/build.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ # Copyright (C) 2018-2022 Heinrich-Heine-Universitaet Duesseldorf,
+ # Institute of Computer Science, Department Operating Systems

@@ -57,6 +57,13 @@ in gcc12_multi.stdenv.mkDerivation rec {
   src = ./.;
 
   patches = [
+    # Change shebangs to #!/usr/bin/env bash instead of #!/bin/bash (doesn't exist on NixOS)
+    ./nix-patches/bios-obmf-build.patch
+    ./nix-patches/floppy0-build.patch
+    ./nix-patches/hdd0-build.patch
+    ./nix-patches/loader-towboot-build.patch
+
+    # Remove use of cmake's FetchContent (not allowed on NixOS as nix expressions have to be pure)
     ./nix-patches/cmake-application-lvgl-CMakeLists.patch
   ];
 
