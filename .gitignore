@@ -17,6 +17,7 @@ OVMF.fd
 *.ko
 *.beep
 .builddirs
+.direnv
 # Project files and folders
 cmake-build-debug/
 cmake-build-default/
