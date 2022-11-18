@@ -83,8 +83,8 @@
             # Required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
             {
               name = "build";
-              help = "Build hhuOS using build.sh";
-              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh";
+              help = "Build hhuOS";
+              command = "nix build '.?submodules=1'";
             }
           ];
         };
