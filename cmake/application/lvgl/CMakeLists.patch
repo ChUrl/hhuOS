@@ -1,0 +1,17 @@
+18c18
+< include(FetchContent)
+---
+> # include(FetchContent)
+38,39c38,41
+< FetchContent_Declare(lvgl GIT_REPOSITORY https://github.com/lvgl/lvgl.git GIT_TAG v8.3.3)
+< FetchContent_MakeAvailable(lvgl)
+---
+> # Nix expressions are pure, we can't just fetch arbitrary content during build...
+> # FetchContent_Declare(lvgl GIT_REPOSITORY https://github.com/lvgl/lvgl.git GIT_TAG v8.3.3)
+> # FetchContent_MakeAvailable(lvgl)
+> add_library(lvgl)
+41c43
+< target_link_libraries(${PROJECT_NAME} lib.crt0 lib.user lvgl::lvgl lvgl::demos)
+\ No newline at end of file
+---
+> target_link_libraries(${PROJECT_NAME} lib.crt0 lib.user lvgl::lvgl lvgl::demos)
