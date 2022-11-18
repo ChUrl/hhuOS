@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 readonly OVMF_URL="https://archlinux.org/packages/extra/any/edk2-ovmf/download"
 
