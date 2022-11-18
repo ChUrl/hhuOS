@@ -64,13 +64,17 @@ in gcc12_multi.stdenv.mkDerivation rec {
   # Post/Pre patch shouldn't matter but I use post because the patches are diff'ed from unmodified files, just to be sure
   # Would be nice to abstract all the duplication away but then I want to keep it as readable as possible
   postPatch = ''
-    # Patch shebangs
-    substituteInPlace ./bios/ovmf/build.sh      --replace "#!/bin/bash" "#!/usr/bin/env bash"
-    substituteInPlace ./floppy0/build.sh        --replace "#!/bin/bash" "#!/usr/bin/env bash"
-    substituteInPlace ./hdd0/build.sh           --replace "#!/bin/bash" "#!/usr/bin/env bash"
-    substituteInPlace ./loader/towboot/build.sh --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    # Patch shebangs (#!/bin/bash to #!/usr/bin/env bash)
+
+    substituteInPlace ./build.sh                 --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    substituteInPlace ./run.sh                   --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    substituteInPlace ./bios/ovmf/build.sh       --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    substituteInPlace ./floppy0/build.sh         --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    substituteInPlace ./hdd0/build.sh            --replace "#!/bin/bash" "#!/usr/bin/env bash"
+    substituteInPlace ./loader/towboot/build.sh  --replace "#!/bin/bash" "#!/usr/bin/env bash"
 
     # Patch /bin paths, executables used: cp, mv, rm, mkdir, tar (these should all be in /run/current-system/sw/bin/)
+
     substituteInPlace ./cmake/towboot/CMakeLists.txt    --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
     substituteInPlace ./cmake/music/CMakeLists.txt      --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
     substituteInPlace ./cmake/initrd/CMakeLists.txt     --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
@@ -79,17 +83,29 @@ in gcc12_multi.stdenv.mkDerivation rec {
     substituteInPlace ./cmake/hdd0/CMakeLists.txt       --replace "COMMAND /bin" "COMMAND /run/current-system/sw/bin"
   '';
 
+  # NixOS automatically exposes gcc from the stdenv, the linker is in bintools though and needs to be specified
+  # TODO: Also gnutar should be exposed automatically aswell, probably don't need that here
   nativeBuildInputs = [ cmake bintools_multi nasm mtools gnutar lvgl ];
   buildInputs = [ qemu ];
 
   cmakeFlags = [
     "-DCMAKE_C_COMPILER=${gcc12_multi}/bin/gcc"
     "-DCMAKE_CXX_COMPILER=${gcc12_multi}/bin/gcc"
-    "-DCMAKE_BUILD_TYPE=Default" # Default/Debug
+    "-DCMAKE_BUILD_TYPE=Debug" # Default/Debug
   ];
 
   # Done automatically
   # enableParallelBuilding = true;
+
+  # TODO: The build.sh calls make: make -j "${CORE_COUNT}" "${TARGET}"
+  #       Do I have to do this during the build phase manually or does nix already call cmake --build?
+
+  # TODO: Parse env variables for target + build type
+  # TODO: Need to keep the compiled images and the run script (rename to hhuOS and put in /bin?), maybe need to patch some qemu paths?
+  # postInstall = ''
+  #   mkdir -p $out
+  #   cp -r ./* $out/
+  # '';
 
   meta = with lib; {
     homepage = "https://github.com/churl/hhuos";
