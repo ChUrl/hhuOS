@@ -45,13 +45,19 @@
             clang14_multi
             # clang-tools_14 # clangd + clang-format + clang-tidy
 
+            # Native buildinputs
             nasm
-            gnumake
             cmake
+            gnumake
+            mtools # Generate floppy0.img etc.
+            gnutar
+
+            # Buildinputs
+            qemu # Start os in virtual machine
+
+            # Development
             bear # To generate compilation database
             gdb
-            qemu # Start os in virtual machine
-            mtools # Generate floppy0.img etc.
             # doxygen # Generate docs + graphs
 
             # glibc_multi # Needed for lsp to find some headers
@@ -82,5 +88,7 @@
             }
           ];
         };
+
+        defaultPackage = pkgs.callPackage ./default.nix { gcc12_multi=gcc12_multi; bintools_multi=bintools_multi; };
       });
 }
