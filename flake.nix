@@ -74,6 +74,7 @@
               help = "Run clion for project";
               command = "clion &>/dev/null ./ &";
             }
+            # Required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
             {
               name = "build";
               help = "Build hhuOS using build.sh";
