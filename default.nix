@@ -57,7 +57,7 @@ in gcc12_multi.stdenv.mkDerivation rec {
   src = ./.;
 
   patches = [
-    ./cmake/application/lvgl/CMakeLists.patch
+    ./nix-patches/cmake-application-lvgl-CMakeLists.patch
   ];
 
   nativeBuildInputs = [ cmake nasm mtools gnutar lvgl ];
