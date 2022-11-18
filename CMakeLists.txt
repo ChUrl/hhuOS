@@ -19,3 +19,9 @@ cmake_minimum_required(VERSION 3.14)
 project(hhuOS)
 
 add_subdirectory(cmake)
+
+set(VERBOSE ON)
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
+# Allow clangd lsp to find all source files
+set(EXPORT_COMPILE_COMMANDS ON)
