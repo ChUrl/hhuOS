@@ -1,0 +1,11 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4f2e4f2a..424ed90e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -19,3 +19,6 @@ cmake_minimum_required(VERSION 3.14)
+ project(hhuOS)
+ 
+ add_subdirectory(cmake)
++
++# Ad LV_CONF_PATH definition
++add_definitions(-DLV_CONF_PATH="./src/application/lvgl/lv_conf.h")
