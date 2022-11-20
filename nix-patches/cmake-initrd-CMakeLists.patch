@@ -1,0 +1,25 @@
+diff --git a/cmake/initrd/CMakeLists.txt b/cmake/initrd/CMakeLists.txt
+index 3a155473..b99f5dbb 100644
+--- a/cmake/initrd/CMakeLists.txt
++++ b/cmake/initrd/CMakeLists.txt
+@@ -44,7 +44,7 @@ else()
+             COMMAND /bin/cp "$<TARGET_FILE:hello>" "${HHUOS_ROOT_DIR}/initrd/bin/hello"
+             COMMAND /bin/cp "$<TARGET_FILE:kill>" "${HHUOS_ROOT_DIR}/initrd/bin/kill"
+             COMMAND /bin/cp "$<TARGET_FILE:ls>" "${HHUOS_ROOT_DIR}/initrd/bin/ls"
+-            COMMAND /bin/cp "$<TARGET_FILE:lvgl_demo>" "${HHUOS_ROOT_DIR}/initrd/bin/lvgl"
++            # COMMAND /bin/cp "$<TARGET_FILE:lvgl_demo>" "${HHUOS_ROOT_DIR}/initrd/bin/lvgl"
+             COMMAND /bin/cp "$<TARGET_FILE:membench>" "${HHUOS_ROOT_DIR}/initrd/bin/membench"
+             COMMAND /bin/cp "$<TARGET_FILE:mkdir>" "${HHUOS_ROOT_DIR}/initrd/bin/mkdir"
+             COMMAND /bin/cp "$<TARGET_FILE:mount>" "${HHUOS_ROOT_DIR}/initrd/bin/mount"
+@@ -62,7 +62,7 @@ else()
+             COMMAND /bin/cp -r "${CMAKE_BINARY_DIR}/beep" "${HHUOS_ROOT_DIR}/initrd"
+             COMMAND /bin/tar -C "${HHUOS_ROOT_DIR}/initrd/" --xform s:'./':: -cf "${CMAKE_BINARY_DIR}/hhuOS.initrd" ./
+             COMMAND /bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img" "${HHUOS_ROOT_DIR}/hhuOS.iso"
+-            DEPENDS shell ant beep cat color cp cube date echo fault hello kill ls lvgl_demo membench mkdir mount mouse polygon ps pwd rm rmdir shutdown touch tree unmount uptime)
++            DEPENDS shell ant beep cat color cp cube date echo fault hello kill ls membench mkdir mount mouse polygon ps pwd rm rmdir shutdown touch tree unmount uptime)
+ 
+-    add_custom_target(${PROJECT_NAME} DEPENDS shell ant beep cat color cp cube date echo fault hello kill ls lvgl_demo membench mkdir mount mouse polygon ps pwd rm rmdir shutdown touch tree unmount uptime music "${CMAKE_BINARY_DIR}/hhuOS.initrd")
+-endif()
+\ No newline at end of file
++    add_custom_target(${PROJECT_NAME} DEPENDS shell ant beep cat color cp cube date echo fault hello kill ls membench mkdir mount mouse polygon ps pwd rm rmdir shutdown touch tree unmount uptime music "${CMAKE_BINARY_DIR}/hhuOS.initrd")
++endif()
