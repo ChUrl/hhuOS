@@ -1,0 +1,13 @@
+diff --git a/cmake/application/CMakeLists.txt b/cmake/application/CMakeLists.txt
+index 991d4f1f..e8f86236 100644
+--- a/cmake/application/CMakeLists.txt
++++ b/cmake/application/CMakeLists.txt
+@@ -41,7 +41,7 @@ add_subdirectory(fault)
+ add_subdirectory(hello)
+ add_subdirectory(kill)
+ add_subdirectory(ls)
+-add_subdirectory(lvgl)
++# add_subdirectory(lvgl)
+ add_subdirectory(membench)
+ add_subdirectory(mkdir)
+ add_subdirectory(mount)
