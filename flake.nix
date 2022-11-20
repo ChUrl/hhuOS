@@ -16,8 +16,7 @@
 
         # bintools with multilib
         bintools_multi = pkgs.wrapBintoolsWith {
-          bintools =
-            pkgs.bintools.bintools; # Get the unwrapped bintools from the wrapper
+          bintools = pkgs.bintools.bintools; # Get the unwrapped bintools from the wrapper
           libc = pkgs.glibc_multi;
         };
 
@@ -84,7 +83,7 @@
             {
               name = "build";
               help = "Build hhuOS";
-              command = "nix build '.?submodules=1' --keep-failed -L";
+              command = "nix build '.?submodules=1' --keep-failed -L --verbose";
             }
           ];
         };
