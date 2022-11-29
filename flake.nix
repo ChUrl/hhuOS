@@ -88,16 +88,21 @@
               help = "Run clion for project";
               command = "clion &>/dev/null ./ &";
             }
-            # Required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
+            # {
+            #   name = "build-nix";
+            #   help = "Build hhuOS using default.nix";
+            #   command = "nix build '.?submodules=1' --keep-failed -L --verbose";
+            # }
             {
-              name = "build-nix";
-              help = "Build hhuOS using default.nix";
-              command = "nix build '.?submodules=1' --keep-failed -L --verbose";
+              name = "build";
+              help = "Build hhuOS using build.sh";
+              # Required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
+              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh";
             }
             {
-              name = "build-sh";
-              help = "Build hhuOS using build.sh";
-              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh";
+              name = "clean";
+              help = "Remove hhuOS buildfiles";
+              command = "./build.sh -c";
             }
           ];
         };
