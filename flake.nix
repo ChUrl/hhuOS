@@ -104,6 +104,11 @@
               help = "Remove hhuOS buildfiles";
               command = "./build.sh -c";
             }
+            {
+              name = "run";
+              help = "Run hhuOS in quemu";
+              command = "./run.sh";
+            }
           ];
         };
 
