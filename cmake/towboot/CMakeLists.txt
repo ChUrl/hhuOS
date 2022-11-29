@@ -21,10 +21,10 @@ message(STATUS "Project " ${PROJECT_NAME})
 
 add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hhuOS.img"
         WORKING_DIRECTORY "${HHUOS_ROOT_DIR}/loader/towboot/"
-        COMMAND /bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.bin"
-        COMMAND /bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.initrd"
+        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.bin"
+        COMMAND /run/current-system/sw/bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.initrd"
         COMMAND "${HHUOS_ROOT_DIR}/loader/towboot/build.sh"
-        COMMAND /bin/mv "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.img" "${HHUOS_ROOT_DIR}"
+        COMMAND /run/current-system/sw/bin/mv "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.img" "${HHUOS_ROOT_DIR}"
         DEPENDS system initrd floppy0 hdd0)
 
 add_custom_target(${PROJECT_NAME} DEPENDS system initrd floppy0 hdd0 "${HHUOS_ROOT_DIR}/hhuOS.img")
