@@ -15,7 +15,7 @@ OVMF.fd
 *.dump
 *.iso
 *.ko
-# *.beep
+*.beep
 .builddirs
 .direnv
 # Project files and folders
