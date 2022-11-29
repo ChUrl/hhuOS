@@ -33,6 +33,11 @@
           libc = pkgs.glibc_multi;
           bintools = bintools_multi;
         };
+
+        # Used to generate beep files
+        hhuOS_python = pkgs.python310.withPackages (p: with p; [
+          requests
+        ]);
       in {
         # devShell = pkgs.devshell.mkShell ...
         devShell = pkgs.devshell.mkShell {
@@ -42,14 +47,18 @@
             gcc12_multi
             bintools_multi
             clang14_multi
+            hhuOS_python
             # clang-tools_14 # clangd + clang-format + clang-tidy
 
             # Native buildinputs
             nasm
             cmake
             gnumake
+            gnutar # should be in stdenv
+            findutils
+            dosfstools
             mtools # Generate floppy0.img etc.
-            gnutar
+            util-linux
 
             # Buildinputs
             qemu # Start os in virtual machine
@@ -81,9 +90,14 @@
             }
             # Required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
             {
-              name = "build";
-              help = "Build hhuOS";
+              name = "build-nix";
+              help = "Build hhuOS using default.nix";
               command = "nix build '.?submodules=1' --keep-failed -L --verbose";
+            }
+            {
+              name = "build-sh";
+              help = "Build hhuOS using build.sh";
+              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh";
             }
           ];
         };
