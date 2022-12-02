@@ -17,4 +17,8 @@
 cmake_minimum_required(VERSION 3.14)
 
 target_sources(device PUBLIC
-        ${HHUOS_SRC_DIR}/device/interrupt/Pic.cpp)
+        ${HHUOS_SRC_DIR}/device/interrupt/Pic.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/LApic.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/IoApic.cpp
+        # TODO: This doesn't belong here, needs to be moved to x86/i386 folder
+        ${HHUOS_SRC_DIR}/device/interrupt/ModelSpecificRegister.cpp)
