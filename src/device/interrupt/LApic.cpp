@@ -168,8 +168,9 @@ void LApic::enableVirtualWire() {
     registerSelectorPort.writeByte(0x70); // IMCR address is 0x70
     registerDataPort.writeByte(0x01); // 0x00 connects PIC to BSP, 0x01 connects APIC to BSP
 
+    // Set LINT0 to ExtINT for external IC (PIC)
     uint32_t lint0_val = readDoubleWord(APIC_LVT_LINT0);
-    writeDoubleWord(APIC_LVT_LINT0, lint0_val | APIC_LVT_DELIVERY_MODE_EXTINT); // Set to ExtINT for external IC (PIC)
+    writeDoubleWord(APIC_LVT_LINT0, lint0_val | static_cast<uint32_t>(APIC_LVT_DELIVERY_MODE_EXTINT) << 8);
 }
 
 #if HHUOS_LAPIC_ENABLE_DEBUG == 1
