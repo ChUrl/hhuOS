@@ -1,5 +1,5 @@
 {
-  description = "BSEos flake for development shell";
+  description = "hhuOS flake for development shell";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   inputs.flake-utils.url = "github:numtide/flake-utils";
@@ -41,7 +41,7 @@
       in {
         # devShell = pkgs.devshell.mkShell ...
         devShell = pkgs.devshell.mkShell {
-          name = "BSEos";
+          name = "hhuOS";
 
           packages = with pkgs; [
             gcc12_multi
@@ -88,11 +88,6 @@
               help = "Run clion for project";
               command = "clion &>/dev/null ./ &";
             }
-            # {
-            #   name = "build-nix";
-            #   help = "Build hhuOS using default.nix";
-            #   command = "nix build '.?submodules=1' --keep-failed -L --verbose";
-            # }
             {
               name = "build";
               help = "Build hhuOS using build.sh";
@@ -108,6 +103,11 @@
               name = "run";
               help = "Run hhuOS in quemu";
               command = "./run.sh";
+            }
+            {
+              name = "cpuinfo";
+              help = "Show qemu i386 architecture information";
+              command = "qemu-system-i386 -cpu help";
             }
           ];
         };
