@@ -44,10 +44,13 @@ class InterruptDispatcher {
 public:
 
     enum Interrupt : uint8_t {
+        // NOTE: 0 - 31 are exceptions
         DEVICE_NOT_AVAILABLE = 7,
         PAGEFAULT = 14,
-        PIT = 32,
-        KEYBOARD = 33,
+
+        // NOTE: 32 - 254 are normal interrupts
+        PIT = 32, // NOTE: IRQ0
+        KEYBOARD = 33, // NOTE: IRQ1
         COM2 = 35,
         COM1 = 36,
         LPT2 = 37,
@@ -61,7 +64,12 @@ public:
         FPU = 45,
         PRIMARY_ATA = 46,
         SECONDARY_ATA = 47,
-        SYSTEM_CALL = 0x86
+        SYSTEM_CALL = 0x86,
+
+        // NOTE: 255 is spurious interrupt
+        // TODO: Verify if this approach is correct
+        // TODO: Depend on if APIC is in use
+        SPURIOUS = 0xFF
     };
 
     /**

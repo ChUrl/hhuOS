@@ -21,6 +21,8 @@
 #include <cstdint>
 
 #include "device/interrupt/Pic.h"
+#include "device/interrupt/LApic.h"
+#include "device/interrupt/IoApic.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "kernel/service/Service.h"
 
@@ -64,6 +66,10 @@ public:
     bool checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt);
 
     static const constexpr uint8_t SERVICE_ID = 1;
+
+    // TODO: Private
+    Device::IoApic ioapic;
+    Device::LApic lapic;
 
 private:
 

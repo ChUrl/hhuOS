@@ -44,10 +44,16 @@ void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interru
 }
 
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
+    // TODO: Depend on if APIC is in use
+    // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
+    return interrupt == InterruptDispatcher::SPURIOUS;
+
+    // NOTE: When using the PIC the spurious interrupt has the lowest priority of the corresponding chip (7 or 15)
     if (interrupt != InterruptDispatcher::LPT1 && interrupt != InterruptDispatcher::SECONDARY_ATA) {
         return false;
     }
 
+    // NOTE: If an interrupt (number 7 or 15) happens (PIC) but the interrupt flag in ISR is not set, it is spurious
     return pic.isSpurious(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
 }
 
