@@ -18,6 +18,7 @@
 #include "lib/util/base/Address.h"
 #include "asm_interface.h"
 #include "device/cpu/Cpu.h"
+#include "device/interrupt/LApic.h" // TODO: Remove
 #include "device/time/Rtc.h"
 #include "device/time/Pit.h"
 #include "kernel/paging/MemoryLayout.h"
@@ -109,9 +110,17 @@ void System::initializeSystem() {
 
     initialized = true;
 
+    // TODO: Enable APIC
+    interruptService->lapic.init();
+
+    // TODO: Disable PIC if IO APIC enabled (If PIC is disabled by masking this here is way too early)
+
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
     Device::Cpu::enableInterrupts();
+
+    // TODO: Enable APIC Timer
+    // TODO: Disable PIT if APIC Timer enabled
 
     // Setup time and date devices
     log.info("Initializing PIT");
