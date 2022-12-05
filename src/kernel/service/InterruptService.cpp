@@ -58,29 +58,29 @@ void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt)
 
 // TODO: Modify for APIC
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA) {
-        pic.sendEndOfInterrupt(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
-        Device::LApic::sendEndOfInterrupt(); // Broadcast to IO APICs if enabled and interrupt was level-triggered
-    }
-
 #if HHUOS_IOAPIC_ENABLE == 1
     // TODO: I think the IO APIC EOI doesn't work correctly
     // TODO: Exclude NMI, SMI, Init, ExtINT, Startup, Init-Deassert somehow?
     if ((interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA)
     || (interrupt >= InterruptDispatcher::APICTIMER && interrupt < InterruptDispatcher::SPURIOUS)) {
+        Device::LApic::sendEndOfInterrupt();
         Device::IoApic::sendEndOfInterrupt(interrupt);
+    }
+#else
+    if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA) {
+        pic.sendEndOfInterrupt(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
+
+        // NOTE: Local APIC ExtINT doesn't have to be EOI'd
     }
 #endif
 }
 
+// TODO: Modify for APIC
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    // TODO: Depend on if APIC is in use
-    // TODO: Keep like this or create SpuriousInterrupt stub handler that gets called?
+#if HHUOS_IOAPIC_ENABLE == 1
     // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
-    if (interrupt == InterruptDispatcher::SPURIOUS) {
-        return true;
-    }
-
+    return interrupt == InterruptDispatcher::SPURIOUS;
+#else
     // NOTE: When using the PIC the spurious interrupt has the lowest priority of the corresponding chip (7 or 15)
     if (interrupt != InterruptDispatcher::LPT1 && interrupt != InterruptDispatcher::SECONDARY_ATA) {
         return false;
@@ -88,6 +88,7 @@ bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt int
 
     // NOTE: If an interrupt (number 7 or 15) happens (PIC) but the interrupt flag in ISR is not set, it is spurious
     return pic.isSpurious(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
+#endif
 }
 
 }
