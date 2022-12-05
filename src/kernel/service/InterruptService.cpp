@@ -58,12 +58,16 @@ void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt)
 
 // TODO: Modify for APIC
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
+    // EOI for local interrupts
+    if (interrupt == InterruptDispatcher::APICTIMER) {
+        Device::LApic::sendEndOfInterrupt();
+    }
+
 #if HHUOS_IOAPIC_ENABLE == 1
-    // TODO: I think the IO APIC EOI doesn't work correctly
     // TODO: Exclude NMI, SMI, Init, ExtINT, Startup, Init-Deassert somehow?
     if ((interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA)
     || (interrupt >= InterruptDispatcher::APICTIMER && interrupt < InterruptDispatcher::SPURIOUS)) {
-        Device::LApic::sendEndOfInterrupt();
+        Device::LApic::sendEndOfInterrupt(); // TODO: Do IO APIC GSIs need local APIC EOI?
         Device::IoApic::sendEndOfInterrupt(interrupt);
     }
 #else
