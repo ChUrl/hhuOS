@@ -7,4 +7,6 @@ void IpiTest::plugin() {
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::IPITEST, *this);
 }
 
-void IpiTest::trigger(const Kernel::InterruptFrame &frame) {}
+void IpiTest::trigger(const Kernel::InterruptFrame &frame) {
+    Kernel::Logger::get("IpiTest").debug("Called IpiTest::trigger()");
+}

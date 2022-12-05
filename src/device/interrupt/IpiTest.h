@@ -3,7 +3,7 @@
 
 #include "kernel/interrupt/InterruptHandler.h"
 
-#define HHUOS_IPITEST_ENABLE 0
+#define HHUOS_IPITEST_ENABLE 1
 
 class IpiTest : public Kernel::InterruptHandler {
 public:
