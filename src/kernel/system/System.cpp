@@ -18,7 +18,6 @@
 #include "lib/util/base/Address.h"
 #include "asm_interface.h"
 #include "device/cpu/Cpu.h"
-#include "device/interrupt/LApic.h" // TODO: Remove
 #include "device/time/Rtc.h"
 #include "device/time/Pit.h"
 #include "kernel/paging/MemoryLayout.h"
@@ -50,6 +49,12 @@
 #include "lib/util/collection/Array.h"
 #include "lib/util/base/FreeListMemoryManager.h"
 #include "lib/util/base/HeapMemoryManager.h"
+
+// NOTE: My stuff
+#include "device/interrupt/ApicTimer.h"
+#include "device/interrupt/LApic.h"
+#include "device/interrupt/IoApic.h"
+#include "device/interrupt/IpiTest.h"
 
 namespace Kernel {
 class Service;
@@ -97,7 +102,7 @@ void System::initializeSystem() {
     auto *interruptService = new InterruptService();
     registerService(InterruptService::SERVICE_ID, interruptService);
     registerService(MemoryService::SERVICE_ID, memoryService);
-    memoryService->plugin();
+    memoryService->plugin(); // NOTE: PAGEFAULT, doesn't need to be hardware allowed
     log.info("Welcome to hhuOS!");
     log.info("Memory management has been initialized");
 
@@ -110,17 +115,29 @@ void System::initializeSystem() {
 
     initialized = true;
 
-    // TODO: Enable APIC
-    interruptService->lapic.init();
+    // NOTE: Enable APIC
+    log.info("Initializing local APIC");
+    Device::LApic::init();
+    Device::LApic::enableVirtualWireMode();
 
-    // TODO: Disable PIC if IO APIC enabled (If PIC is disabled by masking this here is way too early)
+#if HHUOS_IOAPIC_ENABLE == 1
+    // NOTE: Enable IO APIC
+    log.info("Initializing IO APIC");
+    Device::IoApic::init();
+    Device::LApic::enableIoApicMode();
+#endif
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
     Device::Cpu::enableInterrupts();
 
-    // TODO: Enable APIC Timer
-    // TODO: Disable PIT if APIC Timer enabled
+// TODO: Remove
+#if HHUOS_IPITEST_ENABLE == 1
+    // NOTE: Verify IPI
+    auto* ipitest = new IpiTest();
+    ipitest->plugin();
+    Device::LApic::verifyIPI();
+#endif
 
     // Setup time and date devices
     log.info("Initializing PIT");
@@ -141,6 +158,15 @@ void System::initializeSystem() {
     }
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
+
+#if HHUOS_APICTIMER_ENABLE == 1
+    // NOTE: Enable APIC Timer
+    log.info("Initializing APIC Timer");
+    auto* apictimer = new Device::ApicTimer();
+    apictimer->plugin();
+#endif
+
+    // TODO: Disable PIT after APIC Timer enabled and calibrated (also need to disable time source)
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));
