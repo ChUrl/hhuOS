@@ -115,12 +115,14 @@ void System::initializeSystem() {
 
     initialized = true;
 
+#if HHUOS_LAPIC_ENABLE == 1
     // NOTE: Enable APIC
     log.info("Initializing local APIC");
     Device::LApic::init();
     Device::LApic::enableVirtualWireMode();
+#endif
 
-#if HHUOS_IOAPIC_ENABLE == 1
+#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // NOTE: Enable IO APIC
     log.info("Initializing IO APIC");
     Device::IoApic::init();
@@ -131,7 +133,7 @@ void System::initializeSystem() {
     log.info("Enabling interrupts");
     Device::Cpu::enableInterrupts();
 
-#if HHUOS_IPITEST_ENABLE == 1
+#if HHUOS_IPITEST_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // NOTE: Verify IPI
     auto* ipitest = new IpiTest();
     ipitest->plugin();
@@ -160,7 +162,7 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
-#if HHUOS_APICTIMER_ENABLE == 1
+#if HHUOS_APICTIMER_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // NOTE: Enable APIC Timer
     log.info("Initializing APIC Timer");
     auto* apictimer = new Device::ApicTimer();

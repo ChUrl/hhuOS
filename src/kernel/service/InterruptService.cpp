@@ -32,11 +32,10 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
     dispatcher.dispatch(frame);
 }
 
-// TODO: Modify for APIC
 void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) {
     pic.allow(interrupt);
 
-#if HHUOS_IOAPIC_ENABLE == 1
+#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // TODO: Is disabling interrupts like this safe? Or better use spinlock?
     Device::Cpu::disableInterrupts();
     Device::IoApic::allow(interrupt);
@@ -44,11 +43,10 @@ void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) 
 #endif
 }
 
-// TODO: Modify for APIC
 void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt) {
     pic.forbid(interrupt);
 
-#if HHUOS_IOAPIC_ENABLE == 1
+#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // TODO: Is disabling interrupts like this safe?
     Device::Cpu::disableInterrupts();
     Device::IoApic::forbid(interrupt);
@@ -56,14 +54,15 @@ void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt)
 #endif
 }
 
-// TODO: Modify for APIC
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
+#if HHUOS_LAPIC_ENABLE == 1
     // EOI for local interrupts
     if (interrupt == InterruptDispatcher::APICTIMER) {
         Device::LApic::sendEndOfInterrupt();
     }
+#endif
 
-#if HHUOS_IOAPIC_ENABLE == 1
+#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // TODO: Exclude NMI, SMI, Init, ExtINT, Startup, Init-Deassert somehow?
     if ((interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA)
     || (interrupt >= InterruptDispatcher::APICTIMER && interrupt < InterruptDispatcher::SPURIOUS)) {
@@ -79,9 +78,8 @@ void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interru
 #endif
 }
 
-// TODO: Modify for APIC
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
-#if HHUOS_IOAPIC_ENABLE == 1
+#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
     return interrupt == InterruptDispatcher::SPURIOUS;
 #else

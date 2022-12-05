@@ -31,6 +31,7 @@
 #include "lib/util/collection/List.h"
 #include "lib/util/io/stream/PrintStream.h"
 #include "lib/util/base/System.h"
+#include "device/interrupt/LApic.h"
 
 namespace Kernel {
 
@@ -95,10 +96,12 @@ bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrup
         return false;
     }
 
+#if HHUOS_LAPIC_ENABLE == 1
     // NOTE: I chose vectors 0xAA to 0xFF for APIC interrupts
     if (slot >= APICTIMER && slot <= SPURIOUS) {
         return false;
     }
+#endif
 
     // Software interrupts
     if (slot == SYSTEM_CALL) {

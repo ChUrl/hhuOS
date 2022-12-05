@@ -8,6 +8,7 @@
 #include "kernel/log/Logger.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 
+#define HHUOS_LAPIC_ENABLE 1
 #define HHUOS_LAPIC_ENABLE_DEBUG 1
 
 // NOTE: There are now 4 enums in total that are called "Interrupt":

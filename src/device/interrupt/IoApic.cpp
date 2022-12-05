@@ -136,7 +136,12 @@ bool IoApic::status(Interrupt gsi) {
 
 // Intel ICH5 Datasheet Chapter 9.5.5
 void IoApic::sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt interrupt) {
-    // TODO: Check if EOI register supported? But don't access version register every EOI...
+    // TODO: This is called very often, is checking here a problem?
+    if (!hasEOIRegister()) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                        "IoApic::sendEndOfInterrupt(): IoApic doesn't have EOI register!");
+    }
+
     volatile auto *regAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + Register::EOI);
     *regAddr = static_cast<uint8_t>(interrupt);
 }
