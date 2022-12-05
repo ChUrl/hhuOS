@@ -46,8 +46,8 @@ void IoApic::init() {
                                         "IoApic::init(): Local APIC is not initialized!");
     }
 
-    auto& memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    auto& pageDirectory = memoryService.getKernelAddressSpace().getPageDirectory();
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+    auto &pageDirectory = memoryService.getKernelAddressSpace().getPageDirectory();
 
     // TODO: The IO APIC MMIO registers could cross a page boundary and don't have to be 4kb aligned
     //       If unaligned add the offset to virtAddress (virtAddress += physAddress % PAGESIZE)
@@ -55,7 +55,7 @@ void IoApic::init() {
     // NOTE: The default physical address is 4kb aligned and thus doesn't cross pages
     // NOTE: IO memory region is 0xEEE00000 - 0xFFFFFFFF, so it contains the default physical address
     // NOTE: (https://hhuos.github.io/docs/paging_mm#the-virtual-memory-layout-in-hhuos)
-    void* virtAddress = memoryService.mapIO(IOAPIC_BASE_DEFAULT_PHYS_ADDRESS, Util::Memory::PAGESIZE, true);
+    void *virtAddress = memoryService.mapIO(IOAPIC_BASE_DEFAULT_PHYS_ADDRESS, Util::Memory::PAGESIZE, true);
 
     if (virtAddress == nullptr) {
         Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY,
@@ -142,7 +142,7 @@ bool IoApic::status(Interrupt gsi) {
 // Intel ICH5 Datasheet Chapter 9.5.5
 void IoApic::sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt interrupt) {
     // TODO: Check if EOI register supported? But don't access version register every EOI...
-    volatile auto* regAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + Register::EOI);
+    volatile auto *regAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + Register::EOI);
     *regAddr = static_cast<uint8_t>(interrupt);
 }
 
@@ -164,8 +164,8 @@ uint32_t IoApic::readDoubleWord(uint8_t reg) {
                                         "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
     }
 
-    volatile auto* indAddr = reinterpret_cast<uint8_t*>(baseVirtAddress + Register::IND);
-    volatile auto* datAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + Register::DAT);
+    volatile auto *indAddr = reinterpret_cast<uint8_t *>(baseVirtAddress + Register::IND);
+    volatile auto *datAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + Register::DAT);
 
     // NOTE: Interrupts have to be disabled beforehand
     *indAddr = static_cast<uint8_t>(reg); // Select register
@@ -178,8 +178,8 @@ void IoApic::writeDoubleWord(uint8_t reg, uint32_t val) {
                                         "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
     }
 
-    volatile auto* indAddr = reinterpret_cast<uint8_t*>(baseVirtAddress + Register::IND);
-    volatile auto* datAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + Register::DAT);
+    volatile auto *indAddr = reinterpret_cast<uint8_t *>(baseVirtAddress + Register::IND);
+    volatile auto *datAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + Register::DAT);
 
     // NOTE: Interrupts have to be disabled beforehand
     *indAddr = static_cast<uint8_t>(reg); // Select register
@@ -200,14 +200,14 @@ IoApic::REDTBL_Entry IoApic::readREDTBL(uint8_t gsi) {
 
     // Intel ICH5 Datasheet Chapter 9.5.8
     return {
-        .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
-        .deliveryMode = static_cast<Delivery_Mode>((low & (0b111 << 8)) >> 8), // Mask is <<, result is shifted back
-        .destinationMode = static_cast<Destination_Mode>((low & (1 << 11)) >> 11),
-        .deliveryStatus = static_cast<Delivery_Status>((low & (1 << 12)) >> 12),
-        .pinPolarity = static_cast<Pin_Polarity>((low & (1 << 13)) >> 13),
-        .triggerMode = static_cast<Trigger_Mode>((low & (1 << 15)) >> 15),
-        .isMasked = static_cast<bool>((low & (1 << 16)) >> 16),
-        .destination = static_cast<uint8_t>(high >> 24)
+            .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
+            .deliveryMode = static_cast<Delivery_Mode>((low & (0b111 << 8)) >> 8), // Mask is <<, result is shifted back
+            .destinationMode = static_cast<Destination_Mode>((low & (1 << 11)) >> 11),
+            .deliveryStatus = static_cast<Delivery_Status>((low & (1 << 12)) >> 12),
+            .pinPolarity = static_cast<Pin_Polarity>((low & (1 << 13)) >> 13),
+            .triggerMode = static_cast<Trigger_Mode>((low & (1 << 15)) >> 15),
+            .isMasked = static_cast<bool>((low & (1 << 16)) >> 16),
+            .destination = static_cast<uint8_t>(high >> 24)
     };
 }
 
@@ -220,11 +220,11 @@ void IoApic::writeREDTBL(uint8_t gsi, REDTBL_Entry entry) {
     // Intel ICH5 Datasheet Chapter 9.5.8
     uint32_t low, high;
     low = static_cast<uint32_t>(entry.slot)
-            | static_cast<uint32_t>(entry.deliveryMode) << 8
-            | static_cast<uint32_t>(entry.destinationMode) << 11
-            | static_cast<uint32_t>(entry.pinPolarity) << 13
-            | static_cast<uint32_t>(entry.triggerMode) << 15
-            | static_cast<uint32_t>(entry.isMasked) << 16;
+          | static_cast<uint32_t>(entry.deliveryMode) << 8
+          | static_cast<uint32_t>(entry.destinationMode) << 11
+          | static_cast<uint32_t>(entry.pinPolarity) << 13
+          | static_cast<uint32_t>(entry.triggerMode) << 15
+          | static_cast<uint32_t>(entry.isMasked) << 16;
     high = entry.destination << 24;
 
     // NOTE: Interrupts have to be disabled beforehand
@@ -287,18 +287,19 @@ void IoApic::initREDTBL() {
     for (uint8_t gsi = 0; gsi <= maxREDTBLEntry; ++gsi) {
         // NOTE: Interrupts have to be disabled beforehand
         writeREDTBL(gsi, {
-            .slot = getGsiToSlotMapping(static_cast<Interrupt>(gsi)),
-            .deliveryMode = Delivery_Mode::FIXED,
-            .destinationMode = Destination_Mode::PHYSICAL,
-            .pinPolarity = Pin_Polarity::HIGH,
-            .triggerMode = Trigger_Mode::EDGE,
-            .isMasked = true,
-            .destination = id });
+                .slot = getGsiToSlotMapping(static_cast<Interrupt>(gsi)),
+                .deliveryMode = Delivery_Mode::FIXED,
+                .destinationMode = Destination_Mode::PHYSICAL,
+                .pinPolarity = Pin_Polarity::HIGH,
+                .triggerMode = Trigger_Mode::EDGE,
+                .isMasked = true,
+                .destination = id});
     }
 
 }
 
 #if HHUOS_IOAPIC_ENABLE_DEBUG == 1
+
 void IoApic::logDebugDump() {
     uint8_t id = getId();
 
@@ -308,6 +309,7 @@ void IoApic::logDebugDump() {
     log.debug("IO APIC VER: 0x%x (Has EOI Register: %u)", getVersion(), hasEOIRegister());
     log.debug("IO APIC REDTLB Entries: %u", maxREDTBLEntry + 1);
 }
+
 #endif
 
 }

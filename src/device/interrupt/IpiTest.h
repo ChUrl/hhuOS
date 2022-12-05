@@ -8,10 +8,13 @@
 class IpiTest : public Kernel::InterruptHandler {
 public:
     IpiTest() = default;
+
     IpiTest(const IpiTest &copy) = delete;
+
     IpiTest &operator=(const IpiTest &other) = delete;
+
     ~IpiTest() override = default;
-    
+
     /**
      * Overriding function from InterruptHandler.
      */

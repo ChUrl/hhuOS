@@ -13,26 +13,14 @@ namespace Device {
 class ApicTimer : public Kernel::InterruptHandler {
 public:
     // TODO: Parameters for interval, calibration source etc.
-    /**
-     * Constructor.
-     */
     explicit ApicTimer();
 
-    /**
-     * Copy Constructor.
-     */
     ApicTimer(const ApicTimer &copy) = delete;
 
-    /**
-     * Assignment operator.
-     */
     ApicTimer &operator=(const ApicTimer &other) = delete;
 
-    /**
-     * Destructor.
-     */
     ~ApicTimer() override = default;
-    
+
     /**
      * Overriding function from InterruptHandler.
      */

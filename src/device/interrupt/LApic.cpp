@@ -2,8 +2,6 @@
 #include "lib/util/cpu/CpuId.h"
 #include "kernel/system/System.h"
 #include "kernel/paging/Paging.h"
-#include "kernel/interrupt/InterruptDispatcher.h"
-#include "device/cpu/Cpu.h"
 
 namespace Device {
 
@@ -24,7 +22,7 @@ bool LApic::isInitialized() {
 
 bool LApic::hasApicSupport() {
     const auto features = Util::Cpu::CpuId::getCpuFeatures();
-    for (auto feature : features) {
+    for (auto feature: features) {
         if (feature == Util::Cpu::CpuId::CpuFeature::APIC) {
             return true;
         }
@@ -34,7 +32,7 @@ bool LApic::hasApicSupport() {
 
 bool LApic::hasX2ApicSupport() {
     const auto features = Util::Cpu::CpuId::getCpuFeatures();
-    for (auto feature : features) {
+    for (auto feature: features) {
         if (feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
             return true;
         }
@@ -74,8 +72,8 @@ void LApic::init() {
     }
 
     // TODO: Move MMIO stuff to other function
-    auto& memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    auto& pageDirectory = memoryService.getKernelAddressSpace().getPageDirectory();
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+    auto &pageDirectory = memoryService.getKernelAddressSpace().getPageDirectory();
 
     // Using default physical address without relocation
     // TODO: Check if physAddress could be not 4kb aligned (then it would also cross page boundaries)
@@ -83,7 +81,7 @@ void LApic::init() {
     // NOTE: The default physical address is 4kb aligned and thus doesn't cross pages
     // NOTE: IO memory region is 0xEEE00000 - 0xFFFFFFFF, so it contains the default physical address
     // NOTE: (https://hhuos.github.io/docs/paging_mm#the-virtual-memory-layout-in-hhuos)
-    void* virtAddress = memoryService.mapIO(APIC_BASE_DEFAULT_PHYS_ADDRESS, Util::Memory::PAGESIZE, true);
+    void *virtAddress = memoryService.mapIO(APIC_BASE_DEFAULT_PHYS_ADDRESS, Util::Memory::PAGESIZE, true);
 
     if (virtAddress == nullptr) {
         Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY,
@@ -115,9 +113,9 @@ void LApic::init() {
 
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
     // and the SW ENABLE flag. Also allow EOI broadcasting to other APICs/IO APICs
-    writeSVR({ .spuriousVector = Kernel::InterruptDispatcher::SPURIOUS,
+    writeSVR({.spuriousVector = Kernel::InterruptDispatcher::SPURIOUS,
                      .isSWEnabled = true,
-                     .hasEOIBroadcastSuppression = true });
+                     .hasEOIBroadcastSuppression = true});
 
     clearErrors(); // Clear possible error interrupts
     sendEndOfInterrupt(); // Clear other outstanding interrupts
@@ -161,7 +159,7 @@ void LApic::enableVirtualWireMode() {
     registerDataPort.writeByte(0x01); // 0x00 connects PIC to BSP, 0x01 connects APIC to BSP
 
     // Set LINT0 to ExtINT for external IC (PIC)
-    writeLVT(Interrupt::LINT0, { .deliveryMode = LVT_Delivery_Mode::EXTINT, .isMasked = false });
+    writeLVT(Interrupt::LINT0, {.deliveryMode = LVT_Delivery_Mode::EXTINT, .isMasked = false});
 }
 
 void LApic::enableIoApicMode() {
@@ -170,15 +168,14 @@ void LApic::enableIoApicMode() {
     registerDataPort.writeByte(0x01); // 0x00 connects PIC to BSP, 0x01 connects APIC to BSP
 
     // Mask LINT0 to suppress external IC interrupts (PIC)
-    writeLVT(Interrupt::LINT0, { .deliveryMode = LVT_Delivery_Mode::FIXED, .isMasked = true });
+    writeLVT(Interrupt::LINT0, {.deliveryMode = LVT_Delivery_Mode::FIXED, .isMasked = true});
 }
 
 void LApic::verifyIPI() {
-    // TODO: Unsafe if interrupts weren't enabled before
-    writeICR({ .slot = Kernel::InterruptDispatcher::IPITEST,
-               .deliveryMode = ICR_Delivery_Mode::FIXED,
-               .triggerMode = ICR_Trigger_Mode::EDGE,
-               .destinationShorthand = ICR_Destination_Shorthand::SELF });
+    writeICR({.slot = Kernel::InterruptDispatcher::IPITEST,
+                     .deliveryMode = ICR_Delivery_Mode::FIXED,
+                     .triggerMode = ICR_Trigger_Mode::EDGE,
+                     .destinationShorthand = ICR_Destination_Shorthand::SELF});
 }
 
 /*
@@ -190,19 +187,19 @@ LApic::MSR_Entry LApic::readMSR() {
     uint64_t val = ia32ApicBaseMsr.readQuadWord();
 
     return {
-        .isBSP = static_cast<bool>((val & (1 << 8)) >> 8),
-        .isX2Apic = static_cast<bool>((val & (1 << 10)) >> 10),
-        .isHWEnabled = static_cast<bool>((val & (1 << 11)) >> 11),
-        .baseField = static_cast<uint32_t>(val & 0xFFFFF000)
+            .isBSP = static_cast<bool>((val & (1 << 8)) >> 8),
+            .isX2Apic = static_cast<bool>((val & (1 << 10)) >> 10),
+            .isHWEnabled = static_cast<bool>((val & (1 << 11)) >> 11),
+            .baseField = static_cast<uint32_t>(val & 0xFFFFF000)
     };
 }
 
 // IA-32 Architecture Manual Chapter 10.4.4
 void LApic::writeMSR(MSR_Entry entry) {
     uint64_t val = static_cast<uint64_t>(entry.isBSP) << 8
-            | static_cast<uint64_t>(entry.isX2Apic) << 10
-            | static_cast<uint64_t>(entry.isHWEnabled) << 11
-            | static_cast<uint64_t>(entry.baseField) << 12;
+                   | static_cast<uint64_t>(entry.isX2Apic) << 10
+                   | static_cast<uint64_t>(entry.isHWEnabled) << 11
+                   | static_cast<uint64_t>(entry.baseField) << 12;
 
     ia32ApicBaseMsr.writeQuadWord(val);
 }
@@ -213,7 +210,7 @@ uint32_t LApic::readDoubleWord(uint16_t reg) {
                                         "LApic::readDoubleWord(): APIC MMIO not initialized!");
     }
 
-    volatile auto* regAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + reg);
+    volatile auto *regAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + reg);
     return *regAddr;
 }
 
@@ -223,7 +220,7 @@ void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
                                         "LApic::writeDoubleWord(): APIC MMIO not initialized!");
     }
 
-    volatile auto* regAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + reg);
+    volatile auto *regAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + reg);
     *regAddr = val;
 }
 
@@ -232,19 +229,19 @@ LApic::SVR_Entry LApic::readSVR() {
     uint32_t val = readDoubleWord(Register::SVR);
 
     return {
-        .spuriousVector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
-        .isSWEnabled = static_cast<bool>((val & (1 << 8)) >> 8),
-        .hasFocusProcessorChecking = static_cast<bool>((val & (1 << 9)) >> 9),
-        .hasEOIBroadcastSuppression = static_cast<bool>((val & (1 << 12)) >> 12)
+            .spuriousVector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
+            .isSWEnabled = static_cast<bool>((val & (1 << 8)) >> 8),
+            .hasFocusProcessorChecking = static_cast<bool>((val & (1 << 9)) >> 9),
+            .hasEOIBroadcastSuppression = static_cast<bool>((val & (1 << 12)) >> 12)
     };
 }
 
 // IA-32 Architecture Manual Chapter 10.9
 void LApic::writeSVR(SVR_Entry svr) {
     uint32_t val = static_cast<uint32_t>(svr.spuriousVector)
-            | static_cast<uint32_t>(svr.isSWEnabled) << 8
-            | static_cast<uint32_t>(svr.hasFocusProcessorChecking) << 9
-            | static_cast<uint32_t>(svr.hasEOIBroadcastSuppression) << 12;
+                   | static_cast<uint32_t>(svr.isSWEnabled) << 8
+                   | static_cast<uint32_t>(svr.hasFocusProcessorChecking) << 9
+                   | static_cast<uint32_t>(svr.hasEOIBroadcastSuppression) << 12;
 
     writeDoubleWord(Register::SVR, val);
 }
@@ -254,13 +251,14 @@ LApic::LVT_Entry LApic::readLVT(Interrupt lint) {
     uint32_t val = readDoubleWord(lint);
 
     return {
-        .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
-        .deliveryMode = static_cast<LVT_Delivery_Mode>((val & (0b111 << 8)) >> 8), // Mask is <<, result is shifted back
-        .deliveryStatus = static_cast<LVT_Delivery_Status>((val & (1 << 12)) >> 12),
-        .pinPolarity = static_cast<LVT_Pin_Polarity>((val & (1 << 13)) >> 13),
-        .triggerMode = static_cast<LVT_Trigger_Mode>((val & (1 << 15)) >> 15),
-        .isMasked = static_cast<bool>((val & (1 << 16)) >> 16),
-        .timerMode = static_cast<LVT_Timer_Mode>((val & (0b11 << 17)) >> 17)
+            .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
+            .deliveryMode = static_cast<LVT_Delivery_Mode>((val & (0b111 << 8))
+                    >> 8), // Mask is <<, result is shifted back
+            .deliveryStatus = static_cast<LVT_Delivery_Status>((val & (1 << 12)) >> 12),
+            .pinPolarity = static_cast<LVT_Pin_Polarity>((val & (1 << 13)) >> 13),
+            .triggerMode = static_cast<LVT_Trigger_Mode>((val & (1 << 15)) >> 15),
+            .isMasked = static_cast<bool>((val & (1 << 16)) >> 16),
+            .timerMode = static_cast<LVT_Timer_Mode>((val & (0b11 << 17)) >> 17)
     };
 }
 
@@ -268,11 +266,11 @@ LApic::LVT_Entry LApic::readLVT(Interrupt lint) {
 // IA-32 Architecture Manual Chapter 10.5.1
 void LApic::writeLVT(Interrupt lint, LVT_Entry entry) {
     uint32_t val = static_cast<uint32_t>(entry.slot)
-            | static_cast<uint32_t>(entry.deliveryMode) << 8
-            | static_cast<uint32_t>(entry.pinPolarity) << 13
-            | static_cast<uint32_t>(entry.triggerMode) << 15
-            | static_cast<uint32_t>(entry.isMasked) << 16
-            | static_cast<uint32_t>(entry.timerMode) << 17;
+                   | static_cast<uint32_t>(entry.deliveryMode) << 8
+                   | static_cast<uint32_t>(entry.pinPolarity) << 13
+                   | static_cast<uint32_t>(entry.triggerMode) << 15
+                   | static_cast<uint32_t>(entry.isMasked) << 16
+                   | static_cast<uint32_t>(entry.timerMode) << 17;
 
     writeDoubleWord(lint, val);
 }
@@ -285,14 +283,14 @@ LApic::ICR_Entry LApic::readICR() {
     high = readDoubleWord(Register::ICR_HIGH);
 
     return {
-        .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
-        .deliveryMode = static_cast<ICR_Delivery_Mode>((low & (0b111 << 8)) >> 8),
-        .destinationMode = static_cast<ICR_Destination_Mode>((low & (1 << 11)) >> 11),
-        .deliveryStatus = static_cast<ICR_Delivery_Status>((low & (1 << 12)) >> 12),
-        .level = static_cast<ICR_Level>((low & (1 << 14)) >> 14),
-        .triggerMode = static_cast<ICR_Trigger_Mode>((low & (1 << 15)) >> 15),
-        .destinationShorthand = static_cast<ICR_Destination_Shorthand>((low & (0b11 << 18)) >> 18),
-        .destinationField = static_cast<uint8_t>(high >> 24)
+            .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
+            .deliveryMode = static_cast<ICR_Delivery_Mode>((low & (0b111 << 8)) >> 8),
+            .destinationMode = static_cast<ICR_Destination_Mode>((low & (1 << 11)) >> 11),
+            .deliveryStatus = static_cast<ICR_Delivery_Status>((low & (1 << 12)) >> 12),
+            .level = static_cast<ICR_Level>((low & (1 << 14)) >> 14),
+            .triggerMode = static_cast<ICR_Trigger_Mode>((low & (1 << 15)) >> 15),
+            .destinationShorthand = static_cast<ICR_Destination_Shorthand>((low & (0b11 << 18)) >> 18),
+            .destinationField = static_cast<uint8_t>(high >> 24)
     };
 }
 
@@ -300,12 +298,12 @@ LApic::ICR_Entry LApic::readICR() {
 void LApic::writeICR(ICR_Entry icr) {
     uint32_t low, high;
     low = static_cast<uint32_t>(icr.slot)
-            | static_cast<uint32_t>(icr.deliveryMode) << 8
-            | static_cast<uint32_t>(icr.destinationMode) << 11
-            | static_cast<uint32_t>(icr.deliveryStatus) << 12
-            | static_cast<uint32_t>(icr.level) << 14
-            | static_cast<uint32_t>(icr.triggerMode) << 15
-            | static_cast<uint32_t>(icr.destinationShorthand) << 18;
+          | static_cast<uint32_t>(icr.deliveryMode) << 8
+          | static_cast<uint32_t>(icr.destinationMode) << 11
+          | static_cast<uint32_t>(icr.deliveryStatus) << 12
+          | static_cast<uint32_t>(icr.level) << 14
+          | static_cast<uint32_t>(icr.triggerMode) << 15
+          | static_cast<uint32_t>(icr.destinationShorthand) << 18;
     high = static_cast<uint32_t>(icr.destinationField) << 24;
 
     // NOTE: Interrupts have to be disabled beforehand
@@ -349,6 +347,7 @@ void LApic::clearErrors() {
 }
 
 #if HHUOS_LAPIC_ENABLE_DEBUG == 1
+
 void LApic::logDebugDump() {
     uint8_t id = getId();
     uint8_t version = getVersion();
@@ -362,6 +361,7 @@ void LApic::logDebugDump() {
     log.debug("Local APIC VER: 0x%x (Integrated APIC: %u)", version, 0x10 <= version && version <= 0x15);
     log.debug("Local APIC Spurious interrupt vector: 0x%x", readSVR().spuriousVector);
 }
+
 #endif
 
 }

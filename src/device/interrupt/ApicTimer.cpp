@@ -8,7 +8,7 @@ Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 ApicTimer::ApicTimer() {
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
     LApic::writeDoubleWord(LApic::Register::TIMER_DIVIDE, Divide::BY_1);
-    LApic::writeLVT(LApic::TIMER, { .timerMode = LApic::LVT_Timer_Mode::PERIODIC });
+    LApic::writeLVT(LApic::TIMER, {.timerMode = LApic::LVT_Timer_Mode::PERIODIC});
 
     // TODO: Has to be calibrated (using PIT or RTC or probably just the TimeService)
     // TODO: Setting this to values smaller than 0xFFFFFFFF doesn't work?

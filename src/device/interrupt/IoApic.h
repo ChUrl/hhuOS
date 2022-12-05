@@ -48,8 +48,11 @@ public:
 
 public:
     IoApic() = delete;
+
     IoApic(const IoApic &copy) = delete;
+
     IoApic &operator=(const IoApic &other) = delete;
+
     ~IoApic() = default;
 
     static bool isInitialized();
@@ -183,10 +186,18 @@ private:
         INIT = 0b101,
         EXTINT = 0b111
     };
-    enum class Destination_Mode : uint8_t { PHYSICAL = 0, LOGICAL = 1 };
-    enum class Delivery_Status : uint8_t { IDLE = 0, PENDING = 1 };
-    enum class Pin_Polarity : uint8_t { HIGH = 0, LOW = 1 };
-    enum class Trigger_Mode : uint8_t { EDGE = 0, LEVEL = 1 };
+    enum class Destination_Mode : uint8_t {
+        PHYSICAL = 0, LOGICAL = 1
+    };
+    enum class Delivery_Status : uint8_t {
+        IDLE = 0, PENDING = 1
+    };
+    enum class Pin_Polarity : uint8_t {
+        HIGH = 0, LOW = 1
+    };
+    enum class Trigger_Mode : uint8_t {
+        EDGE = 0, LEVEL = 1
+    };
     typedef struct {
         Kernel::InterruptDispatcher::Interrupt slot;
         Delivery_Mode deliveryMode;
@@ -281,7 +292,9 @@ private:
     // TODO: Just use a function that reads REDTBL and returns a struct (no bitfields) and the same for writing
 
 #if HHUOS_IOAPIC_ENABLE_DEBUG == 1
+
     static void logDebugDump();
+
 #endif
 
 private:

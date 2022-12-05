@@ -37,8 +37,11 @@ public:
 
 public:
     LApic() = delete;
+
     LApic(const LApic &copy) = delete;
+
     LApic &operator=(const LApic &other) = delete;
+
     ~LApic() = default;
 
     static bool isInitialized();
@@ -233,10 +236,18 @@ private:
         INIT = 0b101,
         EXTINT = 0b111
     };
-    enum class LVT_Delivery_Status : uint8_t { IDLE = 0, PENDING = 1 };
-    enum class LVT_Pin_Polarity : uint8_t { HIGH = 0, LOW = 1 }; // TODO: Verify
-    enum class LVT_Trigger_Mode : uint8_t { EDGE = 0, LEVEL = 1 };
-    enum class LVT_Timer_Mode : uint8_t { ONESHOT = 0, PERIODIC = 1 };
+    enum class LVT_Delivery_Status : uint8_t {
+        IDLE = 0, PENDING = 1
+    };
+    enum class LVT_Pin_Polarity : uint8_t {
+        HIGH = 0, LOW = 1
+    }; // TODO: Verify
+    enum class LVT_Trigger_Mode : uint8_t {
+        EDGE = 0, LEVEL = 1
+    };
+    enum class LVT_Timer_Mode : uint8_t {
+        ONESHOT = 0, PERIODIC = 1
+    };
     typedef struct {
         Kernel::InterruptDispatcher::Interrupt slot;
         LVT_Delivery_Mode deliveryMode; // All except timer
@@ -256,10 +267,18 @@ private:
         INIT = 0b101,
         STARTUP = 0b110
     };
-    enum class ICR_Destination_Mode : uint8_t { PHYSICAL = 0, LOGICAL = 1 };
-    enum class ICR_Delivery_Status : uint8_t { IDLE = 0, PENDING = 1 };
-    enum class ICR_Level : uint8_t { DEASSERT = 0, ASSERT = 1 };
-    enum class ICR_Trigger_Mode : uint8_t { EDGE = 0, LEVEL = 1 };
+    enum class ICR_Destination_Mode : uint8_t {
+        PHYSICAL = 0, LOGICAL = 1
+    };
+    enum class ICR_Delivery_Status : uint8_t {
+        IDLE = 0, PENDING = 1
+    };
+    enum class ICR_Level : uint8_t {
+        DEASSERT = 0, ASSERT = 1
+    };
+    enum class ICR_Trigger_Mode : uint8_t {
+        EDGE = 0, LEVEL = 1
+    };
     enum class ICR_Destination_Shorthand : uint8_t { // If used ICR_DESTINATION_FIELD is ignored
         SELF = 1,
         ALL = 0b10,
@@ -397,7 +416,9 @@ private:
     static void clearErrors();
 
 #if HHUOS_LAPIC_ENABLE_DEBUG == 1
+
     static void logDebugDump();
+
 #endif
 
 private:
