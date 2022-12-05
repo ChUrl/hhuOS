@@ -109,11 +109,6 @@ void IoApic::allow(Pic::Interrupt irq, uint8_t destination) {
         return;
     }
 
-    // TODO: SECONDARY_ATA stops the system from booting (time stops increasing, probably EOI bug?)
-    if (irq == Pic::Interrupt::SECONDARY_ATA) {
-        return;
-    }
-
     allow(getIrqToGsiMapping(irq), destination);
 }
 
