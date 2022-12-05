@@ -44,7 +44,7 @@ public:
      *
      * @param val The 64 bit value to write
      */
-    void writeQuadWord(uint64_t val);
+    void writeQuadWord(uint64_t val) const;
 
 private:
     const uint32_t MSR_ADDRESS;

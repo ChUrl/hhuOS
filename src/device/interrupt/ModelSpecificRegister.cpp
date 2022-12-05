@@ -2,7 +2,6 @@
 
 namespace Device {
 
-// NOTE: Inline Assembly: https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html
 // NOTE: https://wiki.osdev.org/Model_Specific_Registers#Accessing_Model_Specific_Registers
 
 uint64_t ModelSpecificRegister::readQuadWord() const {
@@ -14,7 +13,7 @@ uint64_t ModelSpecificRegister::readQuadWord() const {
     return low | (static_cast<uint64_t>(high) << 32);
 }
 
-void ModelSpecificRegister::writeQuadWord(uint64_t val) {
+void ModelSpecificRegister::writeQuadWord(uint64_t val) const {
     uint32_t low, high;
     low = val & 0xFFFFFFFF;
     high = val >> 32;
