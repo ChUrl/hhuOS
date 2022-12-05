@@ -2,10 +2,21 @@
 #include "lib/util/cpu/CpuId.h"
 #include "kernel/system/System.h"
 #include "kernel/paging/Paging.h"
+#include "kernel/interrupt/InterruptDispatcher.h"
+#include "device/cpu/Cpu.h"
 
 namespace Device {
 
+bool LApic::initialized = false;
+uint32_t LApic::baseVirtAddress = 0;
+Device::ModelSpecificRegister LApic::ia32ApicBaseMsr = Device::ModelSpecificRegister(0x1B);
 Kernel::Logger LApic::log = Kernel::Logger::get("LApic");
+const IoPort LApic::registerSelectorPort = IoPort(0x22);
+const IoPort LApic::registerDataPort = IoPort(0x23);
+
+bool LApic::isInitialized() {
+    return initialized;
+}
 
 bool LApic::hasApicSupport() {
     const auto features = Util::Cpu::CpuId::getCpuFeatures();
@@ -28,70 +39,48 @@ bool LApic::hasX2ApicSupport() {
 }
 
 // IA-32 Architecture Manual Chapter 10.12.1
-bool LApic::isX2Apic() const {
-    uint64_t val = IA32_APIC_BASE_MSR.readQuadWord();
-    return val & APIC_MSR_X2APIC_ENABLE_FLAG;
+bool LApic::isX2Apic() {
+    Apic_MSR msr = readMSR();
+    return msr.isX2Apic;
+}
+
+bool LApic::isEnabled() {
+    return isEnabledHW() && isEnabledSW();
 }
 
 // IA-32 Architecture Manual Chapter 10.4.6
-uint8_t LApic::getId() const {
-    return readDoubleWord(Device::LApic::APIC_ID) >> 24;
+uint8_t LApic::getId() {
+    return (readDoubleWord(Register::ID) >> 24) & 0xFF;
 }
 
 // IA-32 Architecture Manual Chapter 10.4.8
-uint8_t LApic::getVersion() const {
-    return readDoubleWord(Device::LApic::APIC_VER) & 0xFF;
-}
-
-void LApic::enable() {
-    uint64_t val = IA32_APIC_BASE_MSR.readQuadWord();
-    IA32_APIC_BASE_MSR.writeQuadWord(val | APIC_MSR_ENABLE_FLAG | APIC_MSR_BSP_FLAG);
-}
-
-void LApic::enable(void* base_address) {
-    uint64_t val = (reinterpret_cast<uint64_t>(base_address) & APIC_MSR_BASE_FIELD_MASK)
-            | APIC_MSR_ENABLE_FLAG
-            | APIC_MSR_BSP_FLAG;
-    IA32_APIC_BASE_MSR.writeQuadWord(val);
-}
-
-bool LApic::isEnabled() const {
-    uint64_t val = IA32_APIC_BASE_MSR.readQuadWord();
-    return val & APIC_MSR_ENABLE_FLAG;
-}
-
-void* LApic::getBaseAddr() const {
-    uint64_t val = IA32_APIC_BASE_MSR.readQuadWord();
-    return reinterpret_cast<void*>(val & APIC_MSR_BASE_FIELD_MASK);
-}
-
-void LApic::disable() {
-    uint64_t val = IA32_APIC_BASE_MSR.readQuadWord();
-    IA32_APIC_BASE_MSR.writeQuadWord(val & ~APIC_MSR_ENABLE_FLAG);
+uint8_t LApic::getVersion() {
+    return readDoubleWord(Register::VER) & 0xFF;
 }
 
 void LApic::init() {
+    if (!hasApicSupport()) {
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION,
+                                        "LApic::init(): xApic support not present!");
+    }
+
+    // x2Apic doesn't have MMIO register access (x2Apic uses MSRs)
+    if (hasX2ApicSupport() && isX2Apic()) {
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION,
+                                        "LApic::init(): Only xApic mode is implemented!");
+    }
+
+    // TODO: Move MMIO stuff to other function
     auto& memoryService = Kernel::System::getService<Kernel::MemoryService>();
     auto& pageDirectory = memoryService.getKernelAddressSpace().getPageDirectory();
 
-    // Relocation
-    // NOTE: Register reads yield wrong values
-    // void* virtAddress = memoryService.allocateKernelMemory(4096, Kernel::Paging::PAGESIZE);
-    // NOTE: All register reads yield only 1s
-    // void* virtAddress = memoryService.mapIO(4096, true);
-
-    // MP
-    // NOTE: Can't find the MP Structures with 1 CPU core in QEMU. It doesn't work even with -smp 2. MP stuff is bugged.
-    // auto* mp_ct = Util::Cpu::MultiProcessor::searchMPConfigurationTable();
-    // if (mp_ct == nullptr) {
-    //     Util::Exception::throwException(Util::Exception::NULL_POINTER,
-    //                                     "LApic::writeDoubleWord(): Didn't find valid MP Configuration Table!");
-    // }
-    // uint32_t lapicBaseAddress = mp_ct->lapic_address;
-    // void* virtAddress = memoryService.mapIO(lapicBaseAddress, 4096, true);
-
-    // No relocation
-    void* virtAddress = memoryService.mapIO(APIC_BASE_DEFAULT_PHYS_ADDRESS, 4096, true);
+    // Using default physical address without relocation
+    // TODO: Check if physAddress could be not 4kb aligned (then it would also cross page boundaries)
+    // TODO: If unaligned add the offset to virtAddress (virtAddress += physAddress % PAGESIZE) and allocate 2 pages
+    // NOTE: The default physical address is 4kb aligned and thus doesn't cross pages
+    // NOTE: IO memory region is 0xEEE00000 - 0xFFFFFFFF, so it contains the default physical address
+    // NOTE: (https://hhuos.github.io/docs/paging_mm#the-virtual-memory-layout-in-hhuos)
+    void* virtAddress = memoryService.mapIO(APIC_BASE_DEFAULT_PHYS_ADDRESS, Util::Memory::PAGESIZE, true);
 
     if (virtAddress == nullptr) {
         Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY,
@@ -107,70 +96,254 @@ void LApic::init() {
                                | Kernel::Paging::READ_WRITE);
 
     // Use this address to access the local APIC's memory mapped registers
-    APIC_BASE_VIRT_ADDRESS = virtAddress;
-
-    // HW Enable APIC with relocation/MP
-    // void* physAddress = memoryService.getPhysicalAddress(virtAddress);
-    // enable(physAddress);
+    baseVirtAddress = reinterpret_cast<uint32_t>(virtAddress);
 
     // HW Enable APIC without relocation
-    enable();
+    enableHW();
 
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
-    uint32_t svr_val = readDoubleWord(APIC_SVR);
-    writeDoubleWord(APIC_SVR, svr_val | APIC_SVR_SPURIOUS_VECTOR_MASK | APIC_SVR_SW_ENABLE_FLAG);
+    // and the SW ENABLE flag. Also allow EOI broadcasting to other APICs/IO APICs
+    writeSVR({ .spuriousVector = Kernel::InterruptDispatcher::SPURIOUS,
+               .isSWEnabled = true,
+               .hasEOIBroadcastSuppression = false });
 
+    // Mask all the interrupts to reenable them when needed
+    forbid(Interrupt::LINT0); // Gets reenabled when enabling virtual wire mode
+    forbid(Interrupt::LINT1); // TODO: Not entirely sure what LINT1 is used for
+    forbid(Interrupt::CMCI);
+    forbid(Interrupt::TIMER);
+    forbid(Interrupt::THERMAL);
+    forbid(Interrupt::PERFORMANCE);
+    forbid(Interrupt::ERROR);
+
+    clearErrors(); // Clear possible error interrupts
+    sendEndOfInterrupt(); // Clear other outstanding interrupts
+
+    // NOTE: QEMU does this by default
     // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
     // (IA-32 Architecture Manual Chapter 10.8.3.1)
-    writeDoubleWord(APIC_TPR, 0);
+    writeDoubleWord(Register::TPR, 0);
 
-    // Mask all the interrupts I currently don't care about (all except LINT0 for virtual wire mode and LINT1)
-    writeDoubleWord(APIC_LVT_CMCI, readDoubleWord(APIC_LVT_CMCI) | APIC_LVT_MASKED_FLAG);
-    writeDoubleWord(APIC_LVT_TIMER, readDoubleWord(APIC_LVT_TIMER) | APIC_LVT_MASKED_FLAG);
-    writeDoubleWord(APIC_LVT_THERMAL, readDoubleWord(APIC_LVT_THERMAL) | APIC_LVT_MASKED_FLAG);
-    writeDoubleWord(APIC_LVT_PERFORMANCE, readDoubleWord(APIC_LVT_PERFORMANCE) | APIC_LVT_MASKED_FLAG);
-    writeDoubleWord(APIC_LVT_ERROR, readDoubleWord(APIC_LVT_ERROR) | APIC_LVT_MASKED_FLAG);
+    initialized = true;
 
-    // NOTE: Either QEMU does this by default with +apic or the IMCR doesn't exist? The IMCR always reads 0xFF...
-    // Connect APIC to BSP and set LINT0 to ExtINT
-    enableVirtualWire();
-
-    // NOTE: If LINT0 is masked OS should be stuck when booting as no interrupts should arrive through virtual wire
-    // writeDoubleWord(APIC_LVT_LINT0, readDoubleWord(APIC_LVT_LINT0) | APIC_LVT_MASKED_FLAG);
-
-    log.info("Local APIC has been initialized");
 #if HHUOS_LAPIC_ENABLE_DEBUG == 1
     logDebugDump();
 #endif
 }
 
-uint32_t LApic::readDoubleWord(uint16_t reg) const {
-    if (APIC_BASE_VIRT_ADDRESS == nullptr) {
-        Util::Exception::throwException(Util::Exception::NULL_POINTER,
-                                        "LApic::readDoubleWord(): APIC_BASE_ADDRESS not initialized!");
-    }
-
-    auto* regAddr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint32_t>(APIC_BASE_VIRT_ADDRESS) + reg);
-    return *regAddr;
+void LApic::allow(Interrupt lint) {
+    LVT_Entry entry = readLVT(lint);
+    entry.isMasked = false;
+    writeLVT(lint, entry);
 }
 
-void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
-    if (APIC_BASE_VIRT_ADDRESS == nullptr) {
-        Util::Exception::throwException(Util::Exception::NULL_POINTER,
-                                        "LApic::writeDoubleWord(): APIC_BASE_ADDRESS not initialized!");
-    }
-
-    auto* regAddr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint32_t>(APIC_BASE_VIRT_ADDRESS) + reg);
-    *regAddr = val;
+void LApic::forbid(Interrupt lint) {
+    LVT_Entry entry = readLVT(lint);
+    entry.isMasked = true;
+    writeLVT(lint, entry);
 }
 
-void LApic::enableVirtualWire() {
+bool LApic::status(Interrupt lint) {
+    LVT_Entry entry = readLVT(lint);
+    return entry.isMasked;
+}
+
+void LApic::sendEndOfInterrupt() {
+    writeDoubleWord(Register::EOI, 0);
+}
+
+void LApic::enableVirtualWireMode() {
+    // NOTE: Interrupts have to be disabled beforehand
     registerSelectorPort.writeByte(0x70); // IMCR address is 0x70
     registerDataPort.writeByte(0x01); // 0x00 connects PIC to BSP, 0x01 connects APIC to BSP
 
     // Set LINT0 to ExtINT for external IC (PIC)
-    uint32_t lint0_val = readDoubleWord(APIC_LVT_LINT0);
-    writeDoubleWord(APIC_LVT_LINT0, lint0_val | static_cast<uint32_t>(APIC_LVT_DELIVERY_MODE_EXTINT) << 8);
+    writeLVT(Interrupt::LINT0, { .deliveryMode = LVT_Delivery_Mode::EXTINT, .isMasked = false });
+}
+
+void LApic::enableIoApicMode() {
+    registerSelectorPort.writeByte(0x70); // IMCR address is 0x70
+    registerDataPort.writeByte(0x01); // 0x00 connects PIC to BSP, 0x01 connects APIC to BSP
+
+    writeLVT(Interrupt::LINT0, { .deliveryMode = LVT_Delivery_Mode::FIXED, .isMasked = true });
+
+    // TODO: Does the local APIC need additional configuration to accept interrupt messages from the IO APIC?
+    //       I think when IO APIC uses physical destination mode no additional config should be needed?
+}
+
+void LApic::verifyIPI() {
+    // TODO: Is disabling interrupts like this safe?
+    Cpu::disableInterrupts();
+    writeICR({ .slot = Kernel::InterruptDispatcher::IPITEST,
+               .deliveryMode = ICR_Delivery_Mode::FIXED,
+               .triggerMode = ICR_Trigger_Mode::EDGE,
+               .destinationShorthand = ICR_Destination_Shorthand::SELF });
+    Cpu::enableInterrupts();
+}
+
+// IA-32 Architecture Manual Chapter 10.4.4
+LApic::Apic_MSR LApic::readMSR() {
+    uint64_t val = ia32ApicBaseMsr.readQuadWord();
+
+    return {
+        .isBSP = static_cast<bool>((val & (1 << 8)) >> 8),
+        .isX2Apic = static_cast<bool>((val & (1 << 10)) >> 10),
+        .isHWEnabled = static_cast<bool>((val & (1 << 11)) >> 11),
+        .baseField = static_cast<uint32_t>(val & 0xFFFFF000)
+    };
+}
+
+// IA-32 Architecture Manual Chapter 10.4.4
+void LApic::writeMSR(Apic_MSR msr) {
+    uint64_t val = static_cast<uint64_t>(msr.isBSP) << 8
+            | static_cast<uint64_t>(msr.isX2Apic) << 10
+            | static_cast<uint64_t>(msr.isHWEnabled) << 11
+            | static_cast<uint64_t>(msr.baseField) << 12;
+
+    ia32ApicBaseMsr.writeQuadWord(val);
+}
+
+uint32_t LApic::readDoubleWord(uint16_t reg) {
+    if (baseVirtAddress == 0) {
+        Util::Exception::throwException(Util::Exception::NULL_POINTER,
+                                        "LApic::readDoubleWord(): APIC MMIO not initialized!");
+    }
+
+    volatile auto* regAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + reg);
+    return *regAddr;
+}
+
+void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
+    if (baseVirtAddress == 0) {
+        Util::Exception::throwException(Util::Exception::NULL_POINTER,
+                                        "LApic::writeDoubleWord(): APIC MMIO not initialized!");
+    }
+
+    volatile auto* regAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + reg);
+    *regAddr = val;
+}
+
+// IA-32 Architecture Manual Chapter 10.9
+LApic::Apic_SVR LApic::readSVR() {
+    uint32_t val = readDoubleWord(Register::SVR);
+
+    return {
+        .spuriousVector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
+        .isSWEnabled = static_cast<bool>((val & (1 << 8)) >> 8),
+        .hasFocusProcessorChecking = static_cast<bool>((val & (1 << 9)) >> 9),
+        .hasEOIBroadcastSuppression = static_cast<bool>((val & (1 << 12)) >> 12)
+    };
+}
+
+// IA-32 Architecture Manual Chapter 10.9
+void LApic::writeSVR(Apic_SVR svr) {
+    uint32_t val = static_cast<uint32_t>(svr.spuriousVector)
+            | static_cast<uint32_t>(svr.isSWEnabled) << 8
+            | static_cast<uint32_t>(svr.hasFocusProcessorChecking) << 9
+            | static_cast<uint32_t>(svr.hasEOIBroadcastSuppression) << 12;
+
+    writeDoubleWord(Register::SVR, val);
+}
+
+// IA-32 Architecture Manual Chapter 10.5.1
+LApic::LVT_Entry LApic::readLVT(Interrupt lint) {
+    uint32_t val = readDoubleWord(lint);
+
+    return {
+        .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
+        .deliveryMode = static_cast<LVT_Delivery_Mode>((val & (0b111 << 8)) >> 8), // Mask is <<, result is shifted back
+        .deliveryStatus = static_cast<LVT_Delivery_Status>((val & (1 << 12)) >> 12),
+        .pinPolarity = static_cast<LVT_Pin_Polarity>((val & (1 << 13)) >> 13),
+        .triggerMode = static_cast<LVT_Trigger_Mode>((val & (1 << 15)) >> 15),
+        .isMasked = static_cast<bool>((val & (1 << 16)) >> 16),
+        .timerMode = static_cast<LVT_Timer_Mode>((val & (0b11 << 17)) >> 17)
+    };
+}
+
+// TODO: Check if it is a problem to write to readonly/reserved areas
+// IA-32 Architecture Manual Chapter 10.5.1
+void LApic::writeLVT(Interrupt lint, LVT_Entry entry) {
+    uint32_t val = static_cast<uint32_t>(entry.slot)
+            | static_cast<uint32_t>(entry.deliveryMode) << 8
+            | static_cast<uint32_t>(entry.pinPolarity) << 13
+            | static_cast<uint32_t>(entry.triggerMode) << 15
+            | static_cast<uint32_t>(entry.isMasked) << 16
+            | static_cast<uint32_t>(entry.timerMode) << 17;
+
+    writeDoubleWord(lint, val);
+}
+
+// IA-32 Architecture Manual Chapter 10.6.1
+LApic::Apic_ICR LApic::readICR() {
+    // NOTE: Interrupts have to be disabled beforehand
+    uint32_t low, high;
+    low = readDoubleWord(Register::ICR_LOW);
+    high = readDoubleWord(Register::ICR_HIGH);
+
+    return {
+        .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
+        .deliveryMode = static_cast<ICR_Delivery_Mode>((low & (0b111 << 8)) >> 8),
+        .destinationMode = static_cast<ICR_Destination_Mode>((low & (1 << 11)) >> 11),
+        .deliveryStatus = static_cast<ICR_Delivery_Status>((low & (1 << 12)) >> 12),
+        .level = static_cast<ICR_Level>((low & (1 << 14)) >> 14),
+        .triggerMode = static_cast<ICR_Trigger_Mode>((low & (1 << 15)) >> 15),
+        .destinationShorthand = static_cast<ICR_Destination_Shorthand>((low & (0b11 << 18)) >> 18),
+        .destinationField = static_cast<uint8_t>(high >> 24)
+    };
+}
+
+// IA-32 Architecture Manual Chapter 10.6.1
+void LApic::writeICR(Apic_ICR icr) {
+    uint32_t low, high;
+    low = static_cast<uint32_t>(icr.slot)
+            | static_cast<uint32_t>(icr.deliveryMode) << 8
+            | static_cast<uint32_t>(icr.destinationMode) << 11
+            | static_cast<uint32_t>(icr.deliveryStatus) << 12
+            | static_cast<uint32_t>(icr.level) << 14
+            | static_cast<uint32_t>(icr.triggerMode) << 15
+            | static_cast<uint32_t>(icr.destinationShorthand) << 18;
+    high = static_cast<uint32_t>(icr.destinationField) << 24;
+
+    // NOTE: Interrupts have to be disabled beforehand
+    writeDoubleWord(Register::ICR_HIGH, high);
+    writeDoubleWord(Register::ICR_LOW, low); // Last as writing low DW sends the IPI
+}
+
+void LApic::enableHW() {
+    Apic_MSR msr = readMSR();
+    msr.isBSP = true;
+    msr.isHWEnabled = true;
+    writeMSR(msr);
+}
+
+void LApic::enableHW(uint32_t base_address) {
+    Apic_MSR msr = readMSR();
+    msr.isBSP = true;
+    msr.isHWEnabled = true;
+    msr.baseField = base_address;
+    writeMSR(msr);
+}
+
+void LApic::disableHW() {
+    Apic_MSR msr = readMSR();
+    msr.isHWEnabled = false;
+    writeMSR(msr);
+}
+
+bool LApic::isEnabledHW() {
+    Apic_MSR msr = readMSR();
+    return msr.isHWEnabled;
+}
+
+bool LApic::isEnabledSW() {
+    Apic_SVR svr = readSVR();
+    return svr.isSWEnabled;
+}
+
+void LApic::clearErrors() {
+    // TODO: Why is this written twice in xv6?
+    writeDoubleWord(Register::ESR, 0);
+    writeDoubleWord(Register::ESR, 0);
 }
 
 #if HHUOS_LAPIC_ENABLE_DEBUG == 1
@@ -178,15 +351,14 @@ void LApic::logDebugDump() {
     uint8_t id = getId();
     uint8_t version = getVersion();
 
-    log.debug("APIC Enabled: %u", isEnabled());
-    log.debug("Has Apic Support: %u", Device::LApic::hasApicSupport());
-    log.debug("Has x2Apic Support: %u", Device::LApic::hasX2ApicSupport());
-    log.debug("Is x2Apic: %u", isX2Apic());
-    log.debug("Base Phys Address: 0x%x", reinterpret_cast<uint32_t>(getBaseAddr()));
-    log.debug("Base Virt Address: 0x%x", reinterpret_cast<uint32_t>(APIC_BASE_VIRT_ADDRESS));
+    log.debug("Has Apic Support: %u", hasApicSupport());
+    log.debug("Has x2Apic Support: %u (Is x2Apic: %u)", hasX2ApicSupport(), isX2Apic());
+    log.debug("APIC Enabled: %u (HW: %u, SW: %u)", isEnabled(), isEnabledHW(), isEnabledSW());
+    log.debug("Base Phys Address: 0x%x", APIC_BASE_DEFAULT_PHYS_ADDRESS);
+    log.debug("Base Virt Address: 0x%x", reinterpret_cast<uint32_t>(baseVirtAddress));
     log.debug("APIC ID: %u", id);
     log.debug("APIC VER: 0x%x (Integrated APIC: %u)", version, 0x10 <= version && version <= 0x15);
-    log.debug("Spurious interrupt vector: 0x%x", readDoubleWord(APIC_SVR) & APIC_SVR_SPURIOUS_VECTOR_MASK);
+    log.debug("Spurious interrupt vector: 0x%x", readSVR().spuriousVector);
 }
 #endif
 
