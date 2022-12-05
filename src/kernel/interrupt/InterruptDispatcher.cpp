@@ -99,6 +99,11 @@ bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrup
         return false;
     }
 
+    // NOTE: I chose vectors 0xAA to 0xFF for APIC interrupts
+    if (slot >= APICTIMER && slot <= SPURIOUS) {
+        return false;
+    }
+
     // Recoverable faults
     return slot != PAGEFAULT && slot != DEVICE_NOT_AVAILABLE;
 }
