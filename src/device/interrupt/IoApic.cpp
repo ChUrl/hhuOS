@@ -6,9 +6,14 @@
 namespace Device {
 
 bool IoApic::initialized = false;
+uint8_t IoApic::version = 0;
 uint8_t IoApic::maxREDTBLEntry = 0;
 uint32_t IoApic::baseVirtAddress = 0;
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
+
+/*
+ * Public Member Functions
+ */
 
 bool IoApic::isInitialized() {
     return initialized;
@@ -19,7 +24,17 @@ uint8_t IoApic::getId() {
 }
 
 uint8_t IoApic::getVersion() {
-    return readDoubleWord(Indirect_Register::VER) & 0xFF;
+    // Save the version as it could potentially be queried for every EOI
+    if (!initialized) {
+        return readDoubleWord(Indirect_Register::VER) & 0xFF;
+    }
+
+    return version;
+}
+
+// https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
+bool IoApic::hasEOIRegister() {
+    return getVersion() >= 0x20;
 }
 
 void IoApic::init() {
@@ -58,6 +73,7 @@ void IoApic::init() {
     baseVirtAddress = reinterpret_cast<uint32_t>(virtAddress);
 
     maxREDTBLEntry = getMaxREDTBLEntry();
+    version = getVersion();
 
     // TODO: Check possible valid IRQ amounts, for now we need at least 16 for PIC compatibility
     if (maxREDTBLEntry < 15) {
@@ -77,13 +93,18 @@ void IoApic::init() {
 }
 
 // TODO: Do I have to check if 0 <= gsi <= 23? Or is this excessive
-void IoApic::allow(Interrupt gsi) {
-    Redtbl_Entry entry = readREDTBL(gsi);
+void IoApic::allow(Interrupt gsi, uint8_t destination) {
+    REDTBL_Entry entry = readREDTBL(gsi);
     entry.isMasked = false;
+    entry.destination = destination;
     writeREDTBL(gsi, entry);
 }
 
-void IoApic::allow(Pic::Interrupt irq) {
+void IoApic::allow(Interrupt gsi) {
+    allow(gsi, LApic::getId()); // Currently running CPU as destination
+}
+
+void IoApic::allow(Pic::Interrupt irq, uint8_t destination) {
     if (irq == Pic::Interrupt::CASCADE) {
         return;
     }
@@ -93,11 +114,15 @@ void IoApic::allow(Pic::Interrupt irq) {
         return;
     }
 
-    allow(getIrqToGsiMapping(irq));
+    allow(getIrqToGsiMapping(irq), destination);
+}
+
+void IoApic::allow(Pic::Interrupt irq) {
+    allow(getIrqToGsiMapping(irq), LApic::getId()); // Currently running CPU as destination
 }
 
 void IoApic::forbid(Interrupt gsi) {
-    Redtbl_Entry entry = readREDTBL(gsi);
+    REDTBL_Entry entry = readREDTBL(gsi);
     entry.isMasked = true;
     writeREDTBL(gsi, entry);
 }
@@ -110,14 +135,27 @@ void IoApic::forbid(Pic::Interrupt irq) {
     forbid(getIrqToGsiMapping(irq));
 }
 
+bool IoApic::status(Interrupt gsi) {
+    return readREDTBL(gsi).isMasked;
+}
+
 // Intel ICH5 Datasheet Chapter 9.5.5
 void IoApic::sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt interrupt) {
+    // TODO: Check if EOI register supported? But don't access version register every EOI...
     volatile auto* regAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + Register::EOI);
     *regAddr = static_cast<uint8_t>(interrupt);
 }
 
+/*
+ * Private Member Functions
+ */
+
 uint8_t IoApic::getMaxREDTBLEntry() {
-    return (readDoubleWord(Indirect_Register::VER) >> 16) & 0xFF;
+    if (!initialized) {
+        return (readDoubleWord(Indirect_Register::VER) >> 16) & 0xFF;
+    }
+
+    return maxREDTBLEntry;
 }
 
 uint32_t IoApic::readDoubleWord(uint8_t reg) {
@@ -126,8 +164,8 @@ uint32_t IoApic::readDoubleWord(uint8_t reg) {
                                         "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
     }
 
-    volatile auto* indAddr = reinterpret_cast<uint8_t*>(baseVirtAddress + static_cast<uint8_t>(Register::IND));
-    volatile auto* datAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + static_cast<uint8_t>(Register::DAT));
+    volatile auto* indAddr = reinterpret_cast<uint8_t*>(baseVirtAddress + Register::IND);
+    volatile auto* datAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + Register::DAT);
 
     // NOTE: Interrupts have to be disabled beforehand
     *indAddr = static_cast<uint8_t>(reg); // Select register
@@ -140,15 +178,15 @@ void IoApic::writeDoubleWord(uint8_t reg, uint32_t val) {
                                         "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
     }
 
-    volatile auto* indAddr = reinterpret_cast<uint8_t*>(baseVirtAddress + static_cast<uint8_t>(Register::IND));
-    volatile auto* datAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + static_cast<uint8_t>(Register::DAT));
+    volatile auto* indAddr = reinterpret_cast<uint8_t*>(baseVirtAddress + Register::IND);
+    volatile auto* datAddr = reinterpret_cast<uint32_t*>(baseVirtAddress + Register::DAT);
 
     // NOTE: Interrupts have to be disabled beforehand
     *indAddr = static_cast<uint8_t>(reg); // Select register
     *datAddr = val; // Write value indirectly
 }
 
-IoApic::Redtbl_Entry IoApic::readREDTBL(uint8_t gsi) {
+IoApic::REDTBL_Entry IoApic::readREDTBL(uint8_t gsi) {
     if (gsi > maxREDTBLEntry) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT,
                                         "IoApic::readREDTBL(): REDTBL only has 24 entries!");
@@ -173,7 +211,7 @@ IoApic::Redtbl_Entry IoApic::readREDTBL(uint8_t gsi) {
     };
 }
 
-void IoApic::writeREDTBL(uint8_t gsi, Redtbl_Entry entry) {
+void IoApic::writeREDTBL(uint8_t gsi, REDTBL_Entry entry) {
     if (gsi > maxREDTBLEntry) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT,
                                         "IoApic::readREDTBL(): REDTBL only has 24 entries!");
@@ -211,8 +249,6 @@ IoApic::Interrupt IoApic::getIrqToGsiMapping(Pic::Interrupt irq) {
     return static_cast<Interrupt>(irq);
 }
 
-// TODO: Man you ugly
-// NOTE: For IoTest change on of the mappings to InterruptDispatcher::IOTEST
 Kernel::InterruptDispatcher::Interrupt IoApic::getGsiToSlotMapping(Interrupt gsi) {
     // PIT is mapped to GSI 2 but slot 32
     if (gsi == Interrupt::PIT) {
@@ -240,18 +276,6 @@ Kernel::InterruptDispatcher::Interrupt IoApic::getGsiToSlotMapping(Interrupt gsi
     }
 }
 
-// TODO: For real hardware the MP/ACPI tables have to be parsed to get the mapping
-// NOTE: In QEMU the IRQ/GSI mappings match (except PIT)
-// NOTE: (https://github.com/qemu/qemu/blob/master/hw/intc/ioapic.c#L153)
-void IoApic::setGsiToSlotMapping(Interrupt gsi) {
-    Kernel::InterruptDispatcher::Interrupt slot = getGsiToSlotMapping(gsi);
-
-    // NOTE: Interrupts have to be disabled beforehand
-    Redtbl_Entry entry = readREDTBL(gsi);
-    entry.slot = slot;
-    writeREDTBL(gsi, entry);
-}
-
 void IoApic::initREDTBL() {
     if (baseVirtAddress == 0) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER,
@@ -262,8 +286,14 @@ void IoApic::initREDTBL() {
     uint8_t id = LApic::getId();
     for (uint8_t gsi = 0; gsi <= maxREDTBLEntry; ++gsi) {
         // NOTE: Interrupts have to be disabled beforehand
-        writeREDTBL(gsi, { .isMasked = true, .destination = id });
-        setGsiToSlotMapping(static_cast<Interrupt>(gsi));
+        writeREDTBL(gsi, {
+            .slot = getGsiToSlotMapping(static_cast<Interrupt>(gsi)),
+            .deliveryMode = Delivery_Mode::FIXED,
+            .destinationMode = Destination_Mode::PHYSICAL,
+            .pinPolarity = Pin_Polarity::HIGH,
+            .triggerMode = Trigger_Mode::EDGE,
+            .isMasked = true,
+            .destination = id });
     }
 
 }
@@ -271,13 +301,12 @@ void IoApic::initREDTBL() {
 #if HHUOS_IOAPIC_ENABLE_DEBUG == 1
 void IoApic::logDebugDump() {
     uint8_t id = getId();
-    uint8_t version = getVersion();
 
-    log.debug("Base Phys Address: 0x%x", IOAPIC_BASE_DEFAULT_PHYS_ADDRESS);
-    log.debug("Base Virt Address: 0x%x", baseVirtAddress);
+    log.debug("IO APIC Base Phys Address: 0x%x", IOAPIC_BASE_DEFAULT_PHYS_ADDRESS);
+    log.debug("IO APIC Base Virt Address: 0x%x", baseVirtAddress);
     log.debug("IO APIC ID: %u", id);
-    log.debug("IO APIC VER: 0x%x (Has EOI Register: %u)", version, version >= 0x20);
-    log.debug("Max REDTLB Entry: %u", maxREDTBLEntry);
+    log.debug("IO APIC VER: 0x%x (Has EOI Register: %u)", getVersion(), hasEOIRegister());
+    log.debug("IO APIC REDTLB Entries: %u", maxREDTBLEntry + 1);
 }
 #endif
 

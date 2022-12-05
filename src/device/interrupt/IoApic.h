@@ -12,16 +12,11 @@
 namespace Device {
 
 // TODO: In order to detect IO APIC(s), MP/ACPI tables have to be parsed.
-//       Currently I just assume that an IO APIC exists, which is true for QEMU with +apic
+//       Currently I just assume that one IO APIC exists, which is true for QEMU with +apic
+//       This code doesn't work with multiple IO APICs at all
 
 class IoApic {
-
 public:
-    IoApic() = delete;
-    IoApic(const IoApic &copy) = delete;
-    IoApic &operator=(const IoApic &other) = delete;
-    ~IoApic() = default;
-
     enum Interrupt : uint8_t {
         FREE0 = 0x00,
         KEYBOARD = 0x01,
@@ -51,24 +46,35 @@ public:
         FREE11 = 0x17,
     };
 
+public:
+    IoApic() = delete;
+    IoApic(const IoApic &copy) = delete;
+    IoApic &operator=(const IoApic &other) = delete;
+    ~IoApic() = default;
+
     static bool isInitialized();
 
     [[nodiscard]] static uint8_t getId();
 
-    // NOTE: IO APICs with version below 0x20 don't support EOI register (QEMU reports 0x20)
-    // NOTE: (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
     // NOTE: Intel ICH2, ICH5 Datasheets Chapter 9.5.7 describe version 0x20
     /**
-     * Determine the IO APICs version.
+     * Determine the IO APIC's version.
      *
-     * @return The IO APICs version
+     * @return The IO APIC's version
      */
     [[nodiscard]] static uint8_t getVersion();
 
+    // NOTE: IO APICs with version below 0x20 don't support EOI register (QEMU reports 0x20)
+    // NOTE: (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
+    /**
+     * Determine if the IO APIC supports sending EOIs.
+     *
+     * @return True if sendinf EOIs is supported
+     */
     [[nodiscard]] static bool hasEOIRegister();
 
     // NOTE: This only initializes the IO APIC at the default physical address
-    // NOTE: If there are multiple IO APICs the MMIO addresses have to be read from MP/ACPI tables
+    // TODO: If there are multiple IO APICs the MMIO addresses have to be read from MP/ACPI tables
     /**
      * Initialize the IO APIC.
      *
@@ -81,18 +87,49 @@ public:
      *
      * Must not be called with enabled interrupts.
      *
-     * @param irq The number of the interrupt to activated
+     * @param gsi The number of the interrupt to activated
+     * @param destination Target CPU to send the interrupt to
      */
-    static void allow(Pic::Interrupt irq);
+    static void allow(Interrupt gsi, uint8_t destination);
 
     /**
      * Unmask an interrupt in the IO APIC.
+     * The interrupt will be sent to the current CPU's local APIC.
      *
      * Must not be called with enabled interrupts.
      *
      * @param gsi The number of the interrupt to activated
      */
     static void allow(Interrupt gsi);
+
+    /**
+     * Unmask an interrupt in the IO APIC.
+     *
+     * Must not be called with enabled interrupts.
+     *
+     * @param irq The number of the interrupt to activated
+     * @param destination Target CPU to send the interrupt to
+     */
+    static void allow(Pic::Interrupt irq, uint8_t destination); // Destination means CPU
+
+    /**
+     * Unmask an interrupt in the IO APIC.
+     * The interrupt will be sent to the current CPU's local APIC.
+     *
+     * Must not be called with enabled interrupts.
+     *
+     * @param irq The number of the interrupt to activated
+     */
+    static void allow(Pic::Interrupt irq);
+
+    /**
+     * Mask an interrupt in the local APIC.
+     *
+     * Must not be called with enabled interrupts.
+     *
+     * @param gsi The number of the interrupt to deactivate
+     */
+    static void forbid(Interrupt gsi);
 
     /**
      * Mask an interrupt in the local APIC.
@@ -104,14 +141,11 @@ public:
     static void forbid(Pic::Interrupt irq);
 
     /**
-     * Mask an interrupt in the local APIC.
+     * Get the state of this interrupt - whether it is masked out or not.
      *
-     * Must not be called with enabled interrupts.
-     *
-     * @param gsi The number of the interrupt to deactivate
+     * @param gsi The IO APIC GSI
+     * @return True, if the interrupt is disabled
      */
-    static void forbid(Interrupt gsi);
-
     static bool status(Interrupt gsi);
 
     /**
@@ -162,7 +196,7 @@ private:
         Trigger_Mode triggerMode;
         bool isMasked;
         uint8_t destination;
-    } Redtbl_Entry;
+    } REDTBL_Entry;
 
 private:
     // TODO: Under what circumstances is this different from 24? Every datasheet lists 24 REDTBL entries...
@@ -206,7 +240,7 @@ private:
      * @param entry The number of the entry to read (same as IoApic::Interrupt)
      * @return The redirection table entry
      */
-    [[nodiscard]] static Redtbl_Entry readREDTBL(uint8_t gsi);
+    [[nodiscard]] static REDTBL_Entry readREDTBL(uint8_t gsi);
 
     /**
      * Write an entry to the redirection table.
@@ -216,7 +250,7 @@ private:
      * @param entry The number of the entry to write (same as IoApic::Interrupt)
      * @param entry The redirection table entry value
      */
-    static void writeREDTBL(uint8_t gsi, Redtbl_Entry entry);
+    static void writeREDTBL(uint8_t gsi, REDTBL_Entry entry);
 
     /**
      * Return a corresponding IO APIC GSI for a legacy PIC IRQ.
@@ -233,17 +267,6 @@ private:
      * @return Corresponding vector number
      */
     static Kernel::InterruptDispatcher::Interrupt getGsiToSlotMapping(Interrupt gsi);
-
-    // NOTE: Everything is routed to local APIC 0 at the moment (we only have one)
-    /**
-     * Write a physical IO APIC GSI to vector number mapping to the redirection table.
-     * Routes IO APIC GSIs to the BSP's local APIC.
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param gsi The IO APIC GSI to map
-     */
-    static void setGsiToSlotMapping(Interrupt gsi);
 
     /**
      * Marks every GSI in the redirection table as edge-triggered, active high, masked,
@@ -263,6 +286,7 @@ private:
 
 private:
     static bool initialized;
+    static uint8_t version;
     static uint8_t maxREDTBLEntry;
     static uint32_t baseVirtAddress;
 
