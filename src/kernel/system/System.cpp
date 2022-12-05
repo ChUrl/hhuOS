@@ -131,12 +131,13 @@ void System::initializeSystem() {
     log.info("Enabling interrupts");
     Device::Cpu::enableInterrupts();
 
-// TODO: Remove
 #if HHUOS_IPITEST_ENABLE == 1
     // NOTE: Verify IPI
     auto* ipitest = new IpiTest();
     ipitest->plugin();
+    Device::Cpu::disableInterrupts();
     Device::LApic::verifyIPI();
+    Device::Cpu::enableInterrupts();
 #endif
 
     // Setup time and date devices
