@@ -14,6 +14,10 @@ Kernel::Logger LApic::log = Kernel::Logger::get("LApic");
 const IoPort LApic::registerSelectorPort = IoPort(0x22);
 const IoPort LApic::registerDataPort = IoPort(0x23);
 
+/*
+ * Public Member Functions
+ */
+
 bool LApic::isInitialized() {
     return initialized;
 }
@@ -40,8 +44,7 @@ bool LApic::hasX2ApicSupport() {
 
 // IA-32 Architecture Manual Chapter 10.12.1
 bool LApic::isX2Apic() {
-    Apic_MSR msr = readMSR();
-    return msr.isX2Apic;
+    return readMSR().isX2Apic;
 }
 
 bool LApic::isEnabled() {
@@ -101,12 +104,6 @@ void LApic::init() {
     // HW Enable APIC without relocation
     enableHW();
 
-    // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
-    // and the SW ENABLE flag. Also allow EOI broadcasting to other APICs/IO APICs
-    writeSVR({ .spuriousVector = Kernel::InterruptDispatcher::SPURIOUS,
-               .isSWEnabled = true,
-               .hasEOIBroadcastSuppression = false });
-
     // Mask all the interrupts to reenable them when needed
     forbid(Interrupt::LINT0); // Gets reenabled when enabling virtual wire mode
     forbid(Interrupt::LINT1); // TODO: Not entirely sure what LINT1 is used for
@@ -115,6 +112,12 @@ void LApic::init() {
     forbid(Interrupt::THERMAL);
     forbid(Interrupt::PERFORMANCE);
     forbid(Interrupt::ERROR);
+
+    // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
+    // and the SW ENABLE flag. Also allow EOI broadcasting to other APICs/IO APICs
+    writeSVR({ .spuriousVector = Kernel::InterruptDispatcher::SPURIOUS,
+                     .isSWEnabled = true,
+                     .hasEOIBroadcastSuppression = true });
 
     clearErrors(); // Clear possible error interrupts
     sendEndOfInterrupt(); // Clear other outstanding interrupts
@@ -131,8 +134,9 @@ void LApic::init() {
 #endif
 }
 
-void LApic::allow(Interrupt lint) {
+void LApic::allow(Interrupt lint, Kernel::InterruptDispatcher::Interrupt slot) {
     LVT_Entry entry = readLVT(lint);
+    entry.slot = slot;
     entry.isMasked = false;
     writeLVT(lint, entry);
 }
@@ -144,8 +148,7 @@ void LApic::forbid(Interrupt lint) {
 }
 
 bool LApic::status(Interrupt lint) {
-    LVT_Entry entry = readLVT(lint);
-    return entry.isMasked;
+    return readLVT(lint).isMasked;
 }
 
 void LApic::sendEndOfInterrupt() {
@@ -162,27 +165,28 @@ void LApic::enableVirtualWireMode() {
 }
 
 void LApic::enableIoApicMode() {
+    // NOTE: Interrupts have to be disabled beforehand
     registerSelectorPort.writeByte(0x70); // IMCR address is 0x70
     registerDataPort.writeByte(0x01); // 0x00 connects PIC to BSP, 0x01 connects APIC to BSP
 
+    // Mask LINT0 to suppress external IC interrupts (PIC)
     writeLVT(Interrupt::LINT0, { .deliveryMode = LVT_Delivery_Mode::FIXED, .isMasked = true });
-
-    // TODO: Does the local APIC need additional configuration to accept interrupt messages from the IO APIC?
-    //       I think when IO APIC uses physical destination mode no additional config should be needed?
 }
 
 void LApic::verifyIPI() {
-    // TODO: Is disabling interrupts like this safe?
-    Cpu::disableInterrupts();
+    // TODO: Unsafe if interrupts weren't enabled before
     writeICR({ .slot = Kernel::InterruptDispatcher::IPITEST,
                .deliveryMode = ICR_Delivery_Mode::FIXED,
                .triggerMode = ICR_Trigger_Mode::EDGE,
                .destinationShorthand = ICR_Destination_Shorthand::SELF });
-    Cpu::enableInterrupts();
 }
 
+/*
+ * Private Member Functions
+ */
+
 // IA-32 Architecture Manual Chapter 10.4.4
-LApic::Apic_MSR LApic::readMSR() {
+LApic::MSR_Entry LApic::readMSR() {
     uint64_t val = ia32ApicBaseMsr.readQuadWord();
 
     return {
@@ -194,11 +198,11 @@ LApic::Apic_MSR LApic::readMSR() {
 }
 
 // IA-32 Architecture Manual Chapter 10.4.4
-void LApic::writeMSR(Apic_MSR msr) {
-    uint64_t val = static_cast<uint64_t>(msr.isBSP) << 8
-            | static_cast<uint64_t>(msr.isX2Apic) << 10
-            | static_cast<uint64_t>(msr.isHWEnabled) << 11
-            | static_cast<uint64_t>(msr.baseField) << 12;
+void LApic::writeMSR(MSR_Entry entry) {
+    uint64_t val = static_cast<uint64_t>(entry.isBSP) << 8
+            | static_cast<uint64_t>(entry.isX2Apic) << 10
+            | static_cast<uint64_t>(entry.isHWEnabled) << 11
+            | static_cast<uint64_t>(entry.baseField) << 12;
 
     ia32ApicBaseMsr.writeQuadWord(val);
 }
@@ -224,7 +228,7 @@ void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
 }
 
 // IA-32 Architecture Manual Chapter 10.9
-LApic::Apic_SVR LApic::readSVR() {
+LApic::SVR_Entry LApic::readSVR() {
     uint32_t val = readDoubleWord(Register::SVR);
 
     return {
@@ -236,7 +240,7 @@ LApic::Apic_SVR LApic::readSVR() {
 }
 
 // IA-32 Architecture Manual Chapter 10.9
-void LApic::writeSVR(Apic_SVR svr) {
+void LApic::writeSVR(SVR_Entry svr) {
     uint32_t val = static_cast<uint32_t>(svr.spuriousVector)
             | static_cast<uint32_t>(svr.isSWEnabled) << 8
             | static_cast<uint32_t>(svr.hasFocusProcessorChecking) << 9
@@ -274,7 +278,7 @@ void LApic::writeLVT(Interrupt lint, LVT_Entry entry) {
 }
 
 // IA-32 Architecture Manual Chapter 10.6.1
-LApic::Apic_ICR LApic::readICR() {
+LApic::ICR_Entry LApic::readICR() {
     // NOTE: Interrupts have to be disabled beforehand
     uint32_t low, high;
     low = readDoubleWord(Register::ICR_LOW);
@@ -293,7 +297,7 @@ LApic::Apic_ICR LApic::readICR() {
 }
 
 // IA-32 Architecture Manual Chapter 10.6.1
-void LApic::writeICR(Apic_ICR icr) {
+void LApic::writeICR(ICR_Entry icr) {
     uint32_t low, high;
     low = static_cast<uint32_t>(icr.slot)
             | static_cast<uint32_t>(icr.deliveryMode) << 8
@@ -310,14 +314,14 @@ void LApic::writeICR(Apic_ICR icr) {
 }
 
 void LApic::enableHW() {
-    Apic_MSR msr = readMSR();
+    MSR_Entry msr = readMSR();
     msr.isBSP = true;
     msr.isHWEnabled = true;
     writeMSR(msr);
 }
 
 void LApic::enableHW(uint32_t base_address) {
-    Apic_MSR msr = readMSR();
+    MSR_Entry msr = readMSR();
     msr.isBSP = true;
     msr.isHWEnabled = true;
     msr.baseField = base_address;
@@ -325,19 +329,17 @@ void LApic::enableHW(uint32_t base_address) {
 }
 
 void LApic::disableHW() {
-    Apic_MSR msr = readMSR();
+    MSR_Entry msr = readMSR();
     msr.isHWEnabled = false;
     writeMSR(msr);
 }
 
 bool LApic::isEnabledHW() {
-    Apic_MSR msr = readMSR();
-    return msr.isHWEnabled;
+    return readMSR().isHWEnabled;
 }
 
 bool LApic::isEnabledSW() {
-    Apic_SVR svr = readSVR();
-    return svr.isSWEnabled;
+    return readSVR().isSWEnabled;
 }
 
 void LApic::clearErrors() {
@@ -353,12 +355,12 @@ void LApic::logDebugDump() {
 
     log.debug("Has Apic Support: %u", hasApicSupport());
     log.debug("Has x2Apic Support: %u (Is x2Apic: %u)", hasX2ApicSupport(), isX2Apic());
-    log.debug("APIC Enabled: %u (HW: %u, SW: %u)", isEnabled(), isEnabledHW(), isEnabledSW());
-    log.debug("Base Phys Address: 0x%x", APIC_BASE_DEFAULT_PHYS_ADDRESS);
-    log.debug("Base Virt Address: 0x%x", reinterpret_cast<uint32_t>(baseVirtAddress));
-    log.debug("APIC ID: %u", id);
-    log.debug("APIC VER: 0x%x (Integrated APIC: %u)", version, 0x10 <= version && version <= 0x15);
-    log.debug("Spurious interrupt vector: 0x%x", readSVR().spuriousVector);
+    log.debug("Local APIC Enabled: %u (HW: %u, SW: %u)", isEnabled(), isEnabledHW(), isEnabledSW());
+    log.debug("Local APIC Base Phys Address: 0x%x", APIC_BASE_DEFAULT_PHYS_ADDRESS);
+    log.debug("Local APIC Base Virt Address: 0x%x", reinterpret_cast<uint32_t>(baseVirtAddress));
+    log.debug("Local APIC ID: %u", id);
+    log.debug("Local APIC VER: 0x%x (Integrated APIC: %u)", version, 0x10 <= version && version <= 0x15);
+    log.debug("Local APIC Spurious interrupt vector: 0x%x", readSVR().spuriousVector);
 }
 #endif
 
