@@ -48,7 +48,6 @@
             bintools_multi
             clang14_multi
             hhuOS_python
-            # clang-tools_14 # clangd + clang-format + clang-tidy
 
             # Native buildinputs
             nasm
@@ -66,19 +65,11 @@
             qemu # Start os in virtual machine
 
             # Development
+            jetbrains.clion
             bear # To generate compilation database
             gdb
+            cling # To try out my bullshit implementations
             # doxygen # Generate docs + graphs
-
-            # glibc_multi # Needed for lsp to find some headers
-            # clang_14 # To view template generation, also alternative error messages, conflicts with gcc
-
-            jetbrains.clion
-
-            # TODO: Figure out what is needed to make cling work
-            # llvmPackages_14.llvm
-            # cling # To try out my bullshit implementations
-            # root
           ];
 
           # Not for devshell
