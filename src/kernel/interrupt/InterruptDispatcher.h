@@ -77,6 +77,7 @@ public:
         FREE11 = 0xB3,
 
         IPITEST = 0xF0, // TODO: Remove
+        // TODO: Map PIT (GSI2) to IOTEST initially, remap it to InterruptDispatcher::PIT in the IOTEST handler?
         IOTEST = 0xF1, // TODO: Remove
         SPURIOUS = 0xFF
     };

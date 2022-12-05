@@ -51,6 +51,7 @@ void InterruptDispatcher::dispatch(const InterruptFrame &frame) {
         processService.exitCurrentProcess(-1);
     }
 
+    // NOTE: Spurious Interrupts must not send an EOI as the IRR/ISR won't be set
     // Ignore spurious interrupts
     if (interruptService.checkSpuriousInterrupt(slot)) {
         spuriousCounterWrapper.inc();
@@ -94,13 +95,13 @@ bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrup
         return false;
     }
 
-    // Software interrupts
-    if (slot == SYSTEM_CALL) {
+    // NOTE: I chose vectors 0xAA to 0xFF for APIC interrupts
+    if (slot >= APICTIMER && slot <= SPURIOUS) {
         return false;
     }
 
-    // NOTE: I chose vectors 0xAA to 0xFF for APIC interrupts
-    if (slot >= APICTIMER && slot <= SPURIOUS) {
+    // Software interrupts
+    if (slot == SYSTEM_CALL) {
         return false;
     }
 
