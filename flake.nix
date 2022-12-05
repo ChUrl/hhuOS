@@ -58,6 +58,8 @@
             findutils
             dosfstools
             mtools # Generate floppy0.img etc.
+            grub2
+            xorriso
             util-linux
 
             # Buildinputs
@@ -89,20 +91,30 @@
               command = "clion &>/dev/null ./ &";
             }
             {
-              name = "build";
-              help = "Build hhuOS using build.sh";
-              # Required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
-              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh";
-            }
-            {
               name = "clean";
               help = "Remove hhuOS buildfiles";
               command = "./build.sh -c";
             }
             {
+              name = "build";
+              help = "Build hhuOS using build.sh";
+              # NIX_CC required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
+              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh -g \"Debug\"";
+            }
+            {
               name = "run";
               help = "Run hhuOS in quemu";
               command = "./run.sh";
+            }
+            {
+              name = "run-gdb";
+              help = "Run hhuOS in quemu and wait for gdb connection";
+              command = "./run.sh -d 1234";
+            }
+            {
+              name = "connect-gdb";
+              help = "Run hhuOS in quemu and wait for gdb connection";
+              command = "./run.sh -g 1234";
             }
             {
               name = "cpuinfo";
