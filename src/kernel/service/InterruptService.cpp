@@ -16,6 +16,9 @@
  */
 
 #include "InterruptService.h"
+#include "device/interrupt/LApic.h"
+#include "device/interrupt/IoApic.h"
+#include "device/cpu/Cpu.h"
 
 namespace Kernel {
 class InterruptHandler;
@@ -29,24 +32,54 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
     dispatcher.dispatch(frame);
 }
 
+// TODO: Modify for APIC
 void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) {
     pic.allow(interrupt);
+
+#if HHUOS_IOAPIC_ENABLE == 1
+    // TODO: Is disabling interrupts like this safe? Or better use spinlock?
+    Device::Cpu::disableInterrupts();
+    Device::IoApic::allow(interrupt);
+    Device::Cpu::enableInterrupts();
+#endif
 }
 
+// TODO: Modify for APIC
 void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt) {
     pic.forbid(interrupt);
+
+#if HHUOS_IOAPIC_ENABLE == 1
+    // TODO: Is disabling interrupts like this safe?
+    Device::Cpu::disableInterrupts();
+    Device::IoApic::forbid(interrupt);
+    Device::Cpu::enableInterrupts();
+#endif
 }
 
+// TODO: Modify for APIC
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
     if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA) {
         pic.sendEndOfInterrupt(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
+        Device::LApic::sendEndOfInterrupt(); // Broadcast to IO APICs if enabled and interrupt was level-triggered
     }
+
+#if HHUOS_IOAPIC_ENABLE == 1
+    // TODO: I think the IO APIC EOI doesn't work correctly
+    // TODO: Exclude NMI, SMI, Init, ExtINT, Startup, Init-Deassert somehow?
+    if ((interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA)
+    || (interrupt >= InterruptDispatcher::APICTIMER && interrupt < InterruptDispatcher::SPURIOUS)) {
+        Device::IoApic::sendEndOfInterrupt(interrupt);
+    }
+#endif
 }
 
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
     // TODO: Depend on if APIC is in use
+    // TODO: Keep like this or create SpuriousInterrupt stub handler that gets called?
     // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
-    return interrupt == InterruptDispatcher::SPURIOUS;
+    if (interrupt == InterruptDispatcher::SPURIOUS) {
+        return true;
+    }
 
     // NOTE: When using the PIC the spurious interrupt has the lowest priority of the corresponding chip (7 or 15)
     if (interrupt != InterruptDispatcher::LPT1 && interrupt != InterruptDispatcher::SECONDARY_ATA) {
