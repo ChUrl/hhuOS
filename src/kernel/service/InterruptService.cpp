@@ -33,24 +33,24 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
 }
 
 void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) {
-    pic.allow(interrupt);
-
 #if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // TODO: Is disabling interrupts like this safe? Or better use spinlock?
     Device::Cpu::disableInterrupts();
     Device::IoApic::allow(interrupt);
     Device::Cpu::enableInterrupts();
+#else
+    pic.allow(interrupt);
 #endif
 }
 
 void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt) {
-    pic.forbid(interrupt);
-
 #if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // TODO: Is disabling interrupts like this safe?
     Device::Cpu::disableInterrupts();
     Device::IoApic::forbid(interrupt);
     Device::Cpu::enableInterrupts();
+#else
+    pic.forbid(interrupt);
 #endif
 }
 
@@ -81,7 +81,7 @@ void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interru
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
 #if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
-    return interrupt == InterruptDispatcher::SPURIOUS;
+    return interrupt == InterruptDispatcher::SPURIOUS; // TODO: Is this working in virtual wire mode for ExtINT IRQs?
 #else
     // NOTE: When using the PIC the spurious interrupt has the lowest priority of the corresponding chip (7 or 15)
     if (interrupt != InterruptDispatcher::LPT1 && interrupt != InterruptDispatcher::SECONDARY_ATA) {
