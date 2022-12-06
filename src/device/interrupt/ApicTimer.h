@@ -5,15 +5,21 @@
 #include "kernel/service/InterruptService.h"
 #include "kernel/log/Logger.h"
 #include "kernel/system/System.h"
+#include "device/time/TimeProvider.h"
 
-#define HHUOS_APICTIMER_ENABLE 0
+#define HHUOS_APICTIMER_ENABLE 1
+
+// NOTE: The APIC Timer's counter is decremented at external CPU frequency (bus frequency)
+// NOTE: divided by the divisor specified in the divide register (thus Divide::BY_1 is the fastest)
+
+// NOTE: The PIT is configured with an interval of 1ms by default
 
 namespace Device {
 
-class ApicTimer : public Kernel::InterruptHandler {
+class ApicTimer : public Kernel::InterruptHandler, public TimeProvider {
 public:
     // TODO: Parameters for interval, calibration source etc.
-    explicit ApicTimer();
+    explicit ApicTimer(uint32_t timerInterval = 1000000, uint32_t yieldInterval = 10);
 
     ApicTimer(const ApicTimer &copy) = delete;
 
@@ -31,7 +37,10 @@ public:
      */
     void trigger(const Kernel::InterruptFrame &frame) override;
 
-    // TODO: Functions to set mode/interval more easily
+    /**
+     * Overriding function from TimeProvider.
+     */
+    [[nodiscard]] Util::Time::Timestamp getTime() override;
 
 private:
     // IA-32 Architecture Manual Chapter 10.5.4
@@ -45,6 +54,18 @@ private:
         BY_64 = 0b1001,
         BY_128 = 0b1010
     };
+
+private:
+    /**
+     * Sets the interval at which the APIC Timer fires interrupts.
+     *
+     * @param interval The interval in nanoseconds
+     */
+    void setInterruptRate(uint32_t interval);
+
+    Util::Time::Timestamp time{};
+    uint32_t timerInterval = 0;
+    uint32_t yieldInterval;
 
     static Kernel::Logger log;
 };
