@@ -58,9 +58,13 @@ void Pit::plugin() {
 
 void Pit::trigger(const Kernel::InterruptFrame &frame) {
     time.addNanoseconds(timerInterval);
+
+#if HHUOS_APICTIMER_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
+    // Don't use PIT for scheduling when APIC Timer is enabled
     if (time.toMilliseconds() % yieldInterval == 0) {
         Kernel::System::getService<Kernel::SchedulerService>().yield();
     }
+#endif
 }
 
 Util::Time::Timestamp Pit::getTime() {
