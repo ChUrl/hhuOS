@@ -14,6 +14,8 @@
 
 // NOTE: The PIT is configured with an interval of 1ms by default
 
+// TODO: This code doesn't account for multi core systems
+
 namespace Device {
 
 class ApicTimer : public Kernel::InterruptHandler, public TimeProvider {

@@ -167,9 +167,11 @@ void System::initializeSystem() {
     log.info("Initializing APIC Timer");
     auto* apictimer = new Device::ApicTimer();
     apictimer->plugin();
-#endif
 
-    // TODO: Disable PIT after APIC Timer enabled and calibrated (also need to disable time source)
+    // TODO: APIC Timer calibration requires timeservice (sleep), so timeservice can't be initialized with APIC timer
+    //       and the PIT can't be disabled
+    // interruptService->forbidHardwareInterrupt(Device::Pic::Interrupt::PIT);
+#endif
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));

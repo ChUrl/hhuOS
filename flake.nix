@@ -114,7 +114,5 @@
             }
           ];
         };
-
-        defaultPackage = pkgs.callPackage ./default.nix { gcc12_multi=gcc12_multi; bintools_multi=bintools_multi; };
       });
 }

@@ -34,10 +34,13 @@ Util::Time::Timestamp ApicTimer::getTime() {
     return time;
 }
 
+// TODO: Check CPUID if the timer stops in deep C-States (IA-32 10.5.4)
 // https://wiki.osdev.org/APIC_timer#Example_code_in_C
 void ApicTimer::setInterruptRate(uint32_t interval) {
-    LApic::writeDoubleWord(LApic::Register::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter
-    Util::Async::Thread::sleep(Util::Time::Timestamp::ofMilliseconds(interval / 1000000)); // TODO: Suboptimal
+    LApic::writeDoubleWord(LApic::Register::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter, writing starts timer
+
+    // TODO: Suboptimal for 2 reasons: Large interval delays the system and inaccurate?
+    Util::Async::Thread::sleep(Util::Time::Timestamp::ofMilliseconds(interval / 1000000));
     uint32_t initialCount = 0xFFFFFFFF - LApic::readDoubleWord(LApic::Register::TIMER_CURRENT);
 
     log.info("Setting APIC Timer interval to [%uns] (Initial count: [%u])", interval, initialCount);

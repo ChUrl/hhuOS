@@ -242,7 +242,7 @@ private:
     };
     enum class LVT_Pin_Polarity : uint8_t {
         HIGH = 0, LOW = 1
-    }; // TODO: Verify
+    };
     enum class LVT_Trigger_Mode : uint8_t {
         EDGE = 0, LEVEL = 1
     };

@@ -13,7 +13,7 @@ namespace Device {
 
 // TODO: In order to detect IO APIC(s), MP/ACPI tables have to be parsed.
 //       Currently I just assume that one IO APIC exists, which is true for QEMU with +apic
-//       This code doesn't work with multiple IO APICs at all
+//       This code doesn't account for multiple IO APICs at all
 
 class IoApic {
 public:
@@ -242,7 +242,6 @@ private:
      */
     static void writeDoubleWord(uint8_t reg, uint32_t val);
 
-    // TODO: Investigate removal of 64 bit operations
     /**
      * Read an entry from the redirection table.
      *
