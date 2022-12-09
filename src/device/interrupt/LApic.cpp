@@ -77,7 +77,8 @@ void LApic::init() {
 
     // Using default physical address without relocation
     // TODO: Check if physAddress could be not 4kb aligned (then it would also cross page boundaries)
-    // TODO: If unaligned add the offset to virtAddress (virtAddress += physAddress % PAGESIZE) and allocate 2 pages
+    //       If unaligned add the offset to virtAddress (virtAddress += physAddress % PAGESIZE) and allocate 2 pages
+    // TODO: mapIO sets CACHE_DISABLE, is this strong uncacheable?
     // NOTE: The default physical address is 4kb aligned and thus doesn't cross pages
     // NOTE: IO memory region is 0xEEE00000 - 0xFFFFFFFF, so it contains the default physical address
     // NOTE: (https://hhuos.github.io/docs/paging_mm#the-virtual-memory-layout-in-hhuos)
@@ -88,29 +89,24 @@ void LApic::init() {
                                         "LApic::init(): Not enough space left on kernel heap!");
     }
 
-    // Set page to uncacheable as described in IA-32 Architecture Manual Chapter 10.4.1
-    // TODO: "Strong Uncacheable"
-    // TODO: How do I check that the mapping was successful?
-    pageDirectory.setPageFlags(reinterpret_cast<uint32_t>(virtAddress),
-                               Kernel::Paging::PRESENT | Kernel::Paging::DO_NOT_UNMAP
-                               | Kernel::Paging::CACHE_DISABLE | Kernel::Paging::WRITE_THROUGH
-                               | Kernel::Paging::READ_WRITE);
-
     // Use this address to access the local APIC's memory mapped registers
     baseVirtAddress = reinterpret_cast<uint32_t>(virtAddress);
 
+    // NOTE: In QEMU this is done by default
     // HW Enable APIC without relocation
     enableHW();
 
+    // NOTE: In QEMU all are masked by default except LINT0/LINT1
     // Mask all the interrupts to reenable them when needed
     forbid(Interrupt::LINT0); // Gets reenabled when enabling virtual wire mode
     forbid(Interrupt::LINT1); // TODO: Not entirely sure what LINT1 is used for
     forbid(Interrupt::CMCI);
-    forbid(Interrupt::TIMER);
+    forbid(Interrupt::TIMER); // Gets reenabled when using the ApicTimer
     forbid(Interrupt::THERMAL);
     forbid(Interrupt::PERFORMANCE);
-    forbid(Interrupt::ERROR);
+    forbid(Interrupt::ERROR); // TODO: Map and handle error interrupt
 
+    // NOTE: In QEMU the local APIC is enabled by default
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
     // and the SW ENABLE flag. Also allow EOI broadcasting to other APICs/IO APICs
     writeSVR({.spuriousVector = Kernel::InterruptDispatcher::SPURIOUS,

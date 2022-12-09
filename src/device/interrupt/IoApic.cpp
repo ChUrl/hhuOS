@@ -62,13 +62,6 @@ void IoApic::init() {
                                         "IoApic::init(): Not enough space left on kernel heap!");
     }
 
-    // TODO: How do I check that the mapping was successful?
-    // TODO: Necessary with mapIO?
-    pageDirectory.setPageFlags(reinterpret_cast<uint32_t>(virtAddress),
-                               Kernel::Paging::PRESENT | Kernel::Paging::DO_NOT_UNMAP
-                               | Kernel::Paging::CACHE_DISABLE | Kernel::Paging::WRITE_THROUGH
-                               | Kernel::Paging::READ_WRITE);
-
     // Use this addresses to access the IO APIC's memory mapped registers
     baseVirtAddress = reinterpret_cast<uint32_t>(virtAddress);
 
