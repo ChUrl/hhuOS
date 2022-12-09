@@ -38,6 +38,13 @@
         hhuOS_python = pkgs.python310.withPackages (p: with p; [
           requests
         ]);
+
+        grub2 = pkgs.hiPrio pkgs.pkgsi686Linux.grub2;
+
+        # Contains the needed lib/grub/i386-efi
+        grub2_efi = pkgs.pkgsi686Linux.grub2.override {
+          efiSupport = true;
+        };
       in {
         # devShell = pkgs.devshell.mkShell ...
         devShell = pkgs.devshell.mkShell {
@@ -58,6 +65,7 @@
             dosfstools
             mtools # Generate floppy0.img etc.
             grub2
+            grub2_efi
             xorriso
             util-linux
 
@@ -84,13 +92,19 @@
             {
               name = "clean";
               help = "Remove hhuOS buildfiles";
-              command = "./build.sh -c";
+              command = "./build.sh --clean";
             }
             {
               name = "build";
               help = "Build hhuOS using build.sh";
               # NIX_CC required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
-              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh -g \"Debug\"";
+              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh --type \"Debug\"";
+            }
+            {
+              name = "build-grub";
+              help = "Build hhuOS target grub using build.sh";
+              # NIX_CC required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
+              command = "NIX_CC=$(readlink -f $(which gcc)) ./build.sh --type \"Debug\" --target \"grub\"";
             }
             {
               name = "run";
@@ -98,14 +112,19 @@
               command = "./run.sh";
             }
             {
+              name = "run-grub";
+              help = "Run hhuOS in quemu using grub";
+              command = "./run.sh --bios \"true\" --file \"hhuOS.iso\"";
+            }
+            {
               name = "run-gdb";
               help = "Run hhuOS in quemu and wait for gdb connection";
-              command = "./run.sh -d 1234";
+              command = "./run.sh --debug 1234";
             }
             {
               name = "connect-gdb";
               help = "Run hhuOS in quemu and wait for gdb connection";
-              command = "./run.sh -g 1234";
+              command = "./run.sh --gdb 1234";
             }
             {
               name = "cpuinfo";
