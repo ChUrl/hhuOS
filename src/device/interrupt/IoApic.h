@@ -20,39 +20,15 @@ namespace Device {
 
 // TODO: Crosscheck references to the original IO APIC Datasheet with Intel ICH5 Datasheet
 
+// TODO: Do IO APIC GSIs have to be continuous (could there be gaps between IO APICs)?
+
+// TODO: Find the chapter where this is described in some manual (the range is mentioned in ICH5,
+//       but I remember to have seen it somewhere else aswell...)
+// NOTE: IO APIC REDTBL vectors range between 0x10 and 0xFE
+
+// NOTE: SAPIC/IO SAPIC is not supported
+
 class IoApic {
-public:
-    // TODO: Remove this, set the mapping in an array in the platformConfiguration
-    // TODO: Unify the PIC/IO APIC interrupt structs
-    enum Interrupt : uint8_t {
-        FREE0 = 0x00,
-        KEYBOARD = 0x01,
-        PIT = 0x02, // (QEMU: PIT is mapped to IO APIC GSI2)
-        COM2 = 0x03,
-        COM1 = 0x04,
-        LPT2 = 0x05,
-        FLOPPY = 0x06,
-        LPT1 = 0x07,
-        RTC = 0x08,
-        FREE1 = 0x09,
-        FREE2 = 0x0A,
-        FREE3 = 0x0B,
-        MOUSE = 0x0C,
-        FPU = 0x0D,
-        PRIMARY_ATA = 0x0E,
-        SECONDARY_ATA = 0x0F,
-
-        // TODO: Depends on how many GSIs the system supports
-        FREE4 = 0x10,
-        FREE5 = 0x11,
-        FREE6 = 0x12,
-        FREE7 = 0x13,
-        FREE8 = 0x14,
-        FREE9 = 0x15,
-        FREE10 = 0x16,
-        FREE11 = 0x17,
-    };
-
 public:
     IoApic() = delete; // Static class
 
@@ -87,7 +63,7 @@ public:
      *
      * @param gsi The number of the interrupt to activated
      */
-    static void allow(Interrupt gsi);
+    static void allow(uint8_t gsi);
 
     /**
      * Unmask an interrupt in the IO APIC.
@@ -106,7 +82,7 @@ public:
      *
      * @param gsi The number of the interrupt to deactivate
      */
-    static void forbid(Interrupt gsi);
+    static void forbid(uint8_t gsi);
 
     /**
      * Mask an interrupt in the local APIC.
@@ -123,7 +99,7 @@ public:
      * @param gsi The IO APIC GSI
      * @return True, if the interrupt is disabled
      */
-    static bool status(Interrupt gsi);
+    static bool status(uint8_t gsi);
 
     /**
      * Send an end of interrupt signal to the IO APIC.
@@ -158,44 +134,30 @@ private:
         uint32_t virtAddress; // Needs to be set when initializing MMIO for this IO APIC
         uint32_t gsiBase; // GSI where IO APIC interrupt inputs start
         uint32_t redtblEntries; // Needs to be set after MMIO is available
-
-        bool operator!=(const IoApicConfiguration &other) const {
-            return id != other.id || address != other.address || virtAddress != other.virtAddress
-            || gsiBase != other.gsiBase || redtblEntries != other.redtblEntries;
-        }
     } IoApicConfiguration;
 
-    typedef struct InterruptOverride {
-        uint8_t bus;
+    typedef struct IoInterruptOverride {
+        uint8_t bus; // TODO: What is this
         Pic::Interrupt source;
         uint32_t gsi;
         REDTBLPinPolarity polarity;
         REDTBLTriggerMode triggerMode;
+    } IoInterruptOverride;
 
-        bool operator!=(const InterruptOverride &other) const {
-            return bus != other.bus || source != other.source || gsi != other.gsi || polarity != other.polarity
-            || triggerMode != other.triggerMode;
-        }
-    } InterruptOverride;
-
-    typedef struct NMIConfiguration {
+    typedef struct IoNMIConfiguration {
         REDTBLPinPolarity polarity;
         REDTBLTriggerMode triggerMode;
         uint32_t gsi;
-
-        bool operator!=(const NMIConfiguration &other) const {
-            return polarity != other.polarity || triggerMode != other.triggerMode || gsi != other.gsi;
-        }
-    } NMIConfiguration;
+    } IoNMIConfiguration;
 
     typedef struct IoPlatformConfiguration {
         uint8_t version; // Needs to be set after MMIO is available
-        bool needsCompatibilityEOI; // If IoApic has no EOI register, needs to be set after MMIO is available
+        bool hasEOIRegister; // If IoApic has no EOI register, needs to be set after MMIO is available
         uint32_t irqToGsiMappings[16]; // GSIs for PIC IRQs (IRQ is the index)
         uint8_t gsiToIrqMappings[16]; // Inverse of irqToGsiMappings
         Util::Data::ArrayList<IoApicConfiguration *> ioapics;
-        Util::Data::ArrayList<InterruptOverride *> irqOverrides;
-        Util::Data::ArrayList<NMIConfiguration *> ionmis;
+        Util::Data::ArrayList<IoInterruptOverride *> irqOverrides;
+        Util::Data::ArrayList<IoNMIConfiguration *> ionmis;
     } IoPlatformConfiguration;
 
 private:
@@ -210,7 +172,7 @@ private:
      * @param gsi The GSI that's handled by the searched IO APIC
      * @return The IO APIC configuration
      */
-    static IoApicConfiguration *getIoApicConfiguration(Interrupt gsi);
+    static IoApicConfiguration *getIoApicConfiguration(uint8_t gsi);
     static IoApicConfiguration *getIoApicConfiguration(Pic::Interrupt irq);
     static IoApicConfiguration *getIoApicConfiguration(Kernel::InterruptDispatcher::Interrupt vector);
 
@@ -220,7 +182,7 @@ private:
      * @param ioapic The IO APIC which NMI configuration is searched
      * @return The NMI configuration
      */
-    static NMIConfiguration *getNMIConfiguration(IoApicConfiguration *ioapic);
+    static IoNMIConfiguration *getNMIConfiguration(IoApicConfiguration *ioapic);
 
     /**
      * Initialize a single IO APIC.
@@ -228,6 +190,8 @@ private:
      * @param id The ID of the IO APIC to initialize
      */
     static void initializeController(IoApicConfiguration *ioapic);
+
+    static void initializeMMIORegion(IoApicConfiguration *ioapic);
 
     /**
      * Marks every entry in the redirection table as edge-triggered, active high, masked,
@@ -249,11 +213,7 @@ private:
 
     static void writeREDTBL(IoApicConfiguration *ioapic, uint8_t gsi, REDTBLEntry redtbl);
 
-#if HHUOS_IOAPIC_ENABLE_DEBUG == 1
-
-    static void logDebugDump();
-
-#endif
+    static void dumpIoPlatformConfiguration();
 
 private:
     static bool initialized;
