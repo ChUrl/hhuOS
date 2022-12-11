@@ -2,9 +2,10 @@
 #define __LAPIC_include__
 
 #include <cstdint>
-#include "device/cpu/IoPort.h"
-#include "device/interrupt/Pic.h"
+#include "ApicRegisterInterface.h"
 #include "device/interrupt/ModelSpecificRegister.h"
+#include "device/interrupt/Pic.h"
+#include "device/power/acpi/Acpi.h"
 #include "kernel/log/Logger.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 
@@ -15,15 +16,29 @@
 // NOTE: - Pic::Interrupt (Physical IRQ lines on the PIC), referred to as irq
 // NOTE: - LApic::Interrupt (Local interrupt on one of the 7 physical pins on the local APIC), referred to as lint
 // NOTE: - IoApic::Interrupt (Physical IRQ lines on the IO APIC), referred to as gsi (Global System Interrupt)
-// NOTE: - InterruptDispatcher::Interrupt (IDT vector number), referred to as slot
+// NOTE: - InterruptDispatcher::Interrupt (IDT vector number), referred to as vector
+
+// NOTE: When the system is in PIC mode, it receives IRQs, when it's in APIC mode it receives GSIs
+// NOTE: The GSIs range from 0 to 15 (for legacy PIC compatibility), the rest is adjacent and distributed to IO APICs
+
+// TODO: Check ACPI Specification Chapter 5.2.13 for GSI naming scheme (IO APIC pins are calld INTIs)
+//       and rename accordingly
+
+// TODO: Add "unstatic" members to handle multiple local APICS through instances?
+//       I don't want this because I want the handling of variable core amounts to be
+//       contained in this class (otherwise runtime dependent amounts of LApic objects would
+//       have to be managed in the InterruptService.
+
+// TODO: Error handling: An error handler class that implements the handler for the ERROR vector
 
 namespace Device {
 
-// TODO: Most of this is static, is this the preferred way?
 class LApic {
     friend class ApicTimer; // ApicTimer is configured by using LApic registers
+    friend class IoApic; // IoApic disables EOI suppression if it has no EOI register
 
 public:
+    // TODO: Implement allow/forbid for these in the interruptservice?
     // NOTE: The values have nothing to do with physical pins, they are the register offsets for the LVT
     // NOTE: Register::LVT_<...> and Interrupt::<...> is interchangable
     enum Interrupt : uint16_t {
@@ -37,14 +52,25 @@ public:
     };
 
 public:
-    LApic() = delete;
+    LApic() = delete; // Static class
 
     LApic(const LApic &copy) = delete;
 
-    LApic &operator=(const LApic &other) = delete;
+    LApic &operator=(const LApic &copy) = delete;
 
-    ~LApic() = default;
+    LApic(LApic &&move) = delete;
 
+    LApic &operator=(LApic &&move) = delete;
+
+    ~LApic() = delete; // Static class
+
+
+    // TODO: Does not differentiate between multiple CPUs
+    /**
+     * Check if local APIC is initialized.
+     *
+     * @return True, if the local APIC is initialized
+     */
     static bool isInitialized();
 
     /**
@@ -69,13 +95,6 @@ public:
     [[nodiscard]] static bool isX2Apic();
 
     /**
-     * Check if local APIC of the current CPU is HW and SW enabled.
-     *
-     * @return True if APIC is HW and SW enabled
-     */
-    [[nodiscard]] static bool isEnabled();
-
-    /**
      * Get the ID of the local APIC belonging to the current CPU.
      *
      * @return The local APIC's ID
@@ -96,26 +115,14 @@ public:
      *
      * Must not be called with enabled interrupts.
      */
-    static void init();
-
-    /**
-     * Initialize the local APIC of an additional AP (Application Processor).
-     * (MultiProcessor Specification Appendix B.4)
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param destination The local APIC ID of the target CPU
-     * @param startup_routine The physical address of the entry point for the target CPU
-     */
-    static void initAP(uint8_t destination, uint32_t startup_routine) = delete;
+    static void initialize();
 
     /**
      * Unmask a local interrupt in the local APIC of the current CPU.
      *
-     * @param lint The local interrupt to activated
-     * @param slot The vector number of the local interrupt
+     * @param lint The local interrupt to activate
      */
-    static void allow(Interrupt lint, Kernel::InterruptDispatcher::Interrupt slot);
+    static void allow(Interrupt lint);
 
     /**
      * Forbid a local interrupt in the local APIC of the current CPU.
@@ -145,45 +152,9 @@ public:
      */
     static void sendEndOfInterrupt();
 
-    // TODO: To determine if this is available MP/ACPI tables have to be parsed
-    /**
-     * Set the IMCR (Interrupt Mode Control Register) to physically connect the PIC to the BSP.
-     * IMCR is only available on legacy hardware.
-     * Only valid with a single CPU.
-     *
-     * Must not be called with enabled interrupts.
-     */
-    static void enablePicMode() = delete;
-
-    // TODO: To determine if this has to be set MP/ACPI tables have to be parsed
-    /**
-     * Set the IMCR (Interrupt Mode Control Register) to physically connect the APIC to the BSP.
-     * IMCR is only available on legacy hardware.
-     * Only valid with a single CPU.
-     * (QEMU: This is the default mode, PIC mode is not supported.)
-     *
-     * Must not be called with enabled interrupts.
-     */
-    static void enableVirtualWireMode();
-
-    // TODO: To determine if this is available MP/ACPI tables have to be parsed
-    /**
-     * Disables virtual wire mode and configures the local APIC
-     * for SMP mode with the IO APIC.
-     *
-     * Must not be called with enabled interrupts.
-     */
-    static void enableIoApicMode();
-
-    /**
-     * Set the ICR of the current CPU's local APIC to issue an IPI with self destination.
-     *
-     * Must not be called with enabled interrupts.
-     */
-    static void verifyIPI();
-
 private:
     // Offsets, IA-32 Architecture Manual Chapter 10.4.1
+    // NOTE: Omitted entries already in LApic::Interrupt and ApicTimer
     enum Register : uint16_t {
         ID = 0x20, // ID
         VER = 0x30, // Version
@@ -199,222 +170,102 @@ private:
         TMR = 0x180, // Trigger Mode Register (255 bit)
         IRR = 0x200, // Interrupt Request Register (255 bit)
         ESR = 0x280, // Error Status Register
-        LVT_CMCI = 0x2F0, // LVT Corrected Machine Check Interrupt Register
         ICR_LOW = 0x300, // Interrupt Command Register (64 bit)
         ICR_HIGH = 0x310,
-        LVT_TIMER = 0x320, // LVT Timer Register
-        LVT_THERMAL = 0x330, // LVT Thermal Sensor Register
-        LVT_PERFORMANCE = 0x340, // LVT Performance Monitoring Counters Register
-        LVT_LINT0 = 0x350, // LVT LINT0 Register
-        LVT_LINT1 = 0x360, // LVT LINT1 Register
-        LVT_ERROR = 0x370, // LVT Error Register
-        TIMER_INITIAL = 0x380, // Timer Initial Count Register
-        TIMER_CURRENT = 0x390, // Timer Current Count Register
-        TIMER_DIVIDE = 0x3E0 // Timer Divide Configuration Register
     };
 
-    // IA-32 Architecture Manual Chapter 10.4.4
-    typedef struct {
-        bool isBSP;
+    typedef struct LApicConfiguration {
+        uint8_t uid;
+        uint8_t id;
+        bool enabled;
+        bool canEnable; // TODO: Not available in ACPI 1.0?
+
+        // Required because I stuff them into an ArrayList
+        bool operator!=(const LApicConfiguration &other) const {
+            return uid != other.uid || id != other.id || enabled != other.enabled || canEnable != other.canEnable;
+        }
+    } LApicConfiguration;
+
+    typedef struct NMIConfiguration {
+        uint8_t uid;
+        LVTPinPolarity polarity;
+        LVTTriggerMode triggerMode;
+        Interrupt lint;
+
+        // Required because I stuff them into an ArrayList
+        bool operator!=(const NMIConfiguration &other) const {
+            return uid != other.uid || polarity != other.polarity || triggerMode != other.triggerMode
+            || lint != other.lint;
+        };
+    } NMIConfiguration;
+
+    // TODO: Rename LocalPlatformConfiguration
+    /**
+     * This describes the hardware configuration of the system for all local APICs.
+     */
+    typedef struct PlatformConfiguration {
+        bool xApicSupported;
+        bool x2ApicSupported;
         bool isX2Apic;
-        bool isHWEnabled;
-        uint32_t baseField;
-    } MSR_Entry;
-
-    // IA-32 Architecture Manual Chapter 10.9
-    typedef struct {
-        Kernel::InterruptDispatcher::Interrupt spuriousVector;
-        bool isSWEnabled;
-        bool hasFocusProcessorChecking;
-        bool hasEOIBroadcastSuppression;
-    } SVR_Entry;
-
-    // IA-32 Architecture Manual Chapter 10.5.1
-    enum class LVT_Delivery_Mode : uint8_t {
-        FIXED = 0,
-        SMI = 0b10,
-        NMI = 0b100,
-        INIT = 0b101,
-        EXTINT = 0b111
-    };
-    enum class LVT_Delivery_Status : uint8_t {
-        IDLE = 0, PENDING = 1
-    };
-    enum class LVT_Pin_Polarity : uint8_t {
-        HIGH = 0, LOW = 1
-    };
-    enum class LVT_Trigger_Mode : uint8_t {
-        EDGE = 0, LEVEL = 1
-    };
-    enum class LVT_Timer_Mode : uint8_t {
-        ONESHOT = 0, PERIODIC = 1
-    };
-    typedef struct {
-        Kernel::InterruptDispatcher::Interrupt slot;
-        LVT_Delivery_Mode deliveryMode; // All except timer
-        LVT_Delivery_Status deliveryStatus;
-        LVT_Pin_Polarity pinPolarity; // Only LINT0, LINT1
-        LVT_Trigger_Mode triggerMode; // Only LINT0, LINT1
-        bool isMasked;
-        LVT_Timer_Mode timerMode; // Only timer
-    } LVT_Entry;
-
-    // IA-32 Architecture Manual Chapter 10.6.1
-    enum class ICR_Delivery_Mode : uint8_t {
-        FIXED = 0,
-        LOWPRIO = 1, // Model specific
-        SMI = 0b10,
-        NMI = 0b100,
-        INIT = 0b101,
-        STARTUP = 0b110
-    };
-    enum class ICR_Destination_Mode : uint8_t {
-        PHYSICAL = 0, LOGICAL = 1
-    };
-    enum class ICR_Delivery_Status : uint8_t {
-        IDLE = 0, PENDING = 1
-    };
-    enum class ICR_Level : uint8_t {
-        DEASSERT = 0, ASSERT = 1
-    };
-    enum class ICR_Trigger_Mode : uint8_t {
-        EDGE = 0, LEVEL = 1
-    };
-    enum class ICR_Destination_Shorthand : uint8_t { // If used ICR_DESTINATION_FIELD is ignored
-        SELF = 1,
-        ALL = 0b10,
-        ALL_NO_SELF = 0b11
-    };
-    typedef struct {
-        Kernel::InterruptDispatcher::Interrupt slot;
-        ICR_Delivery_Mode deliveryMode;
-        ICR_Destination_Mode destinationMode;
-        ICR_Delivery_Status deliveryStatus;
-        ICR_Level level;
-        ICR_Trigger_Mode triggerMode;
-        ICR_Destination_Shorthand destinationShorthand;
-        uint8_t destinationField;
-    } ICR_Entry;
+        uint8_t version; // Needs to be set after MMIO is available
+        uint32_t address;
+        Util::Data::ArrayList<LApicConfiguration> lapics;
+        Util::Data::ArrayList<NMIConfiguration> lnmis;
+    } PlatformConfiguration;
 
 private:
     /**
-     * Read the APIC MSR.
-     *
-     * @return The read MSR entry
+     * Reads information influencing local APIC initialization from ACPI tables.
      */
-    [[nodiscard]] static MSR_Entry readMSR();
+    static void initializePlatformConfiguration();
+
+    static uint8_t idToUid(uint8_t uid);
+
+    static LApicConfiguration getLApicConfiguration(uint8_t id);
+
+    static NMIConfiguration getNMIConfiguration(uint8_t id); // TODO: return pointer
 
     /**
-     * Write the APIC MSR.
-     *
-     * @param entry The MSR entry to write
+     * Marks every local interrupt in the local vector table as edge-triggered,
+     * active high, masked and fixed delivery mode.
+     * Vector numbers are set to InterruptDispatcher equivalent vectors.
      */
-    static void writeMSR(MSR_Entry entry);
+    static void initializeLVT();
 
     /**
-     * Read a value from a memory mapped register of the current CPU's local APIC.
-     *
-     * @param reg The register (offset) to read from (can use LApic::Register)
-     * @return The value contained in the specified register
-     */
-    [[nodiscard]] static uint32_t readDoubleWord(uint16_t reg);
-
-    /**
-     * Write a value to a memory mapped register of the current CPU's local APIC.
-     *
-     * @param reg The register (offset) to write to (can use LApic::Register)
-     * @param val The value to write
-     */
-    static void writeDoubleWord(uint16_t reg, uint32_t val);
-
-    /**
-     * Read the SVR (Spurious Interrupt Vector Register) of the current CPU's local APIC.
-     *
-     * @return The read SVR entry
-     */
-    [[nodiscard]] static SVR_Entry readSVR();
-
-    /**
-     * Write the SVR (Spurious Interrupt Vector Register) of the current CPU's local APIC.
-     *
-     * @param svr The SVR entry to write
-     */
-    static void writeSVR(SVR_Entry svr);
-
-    /**
-     * Read a LVT (Local Vector Table) entry of the current CPU's local APIC.
-     *
-     * @param lint The local interrupt
-     * @return The read LVT entry belonging to the specified local interrupt
-     */
-    [[nodiscard]] static LVT_Entry readLVT(Interrupt lint);
-
-    /**
-     * Write a LVT (Local Vector Table) entry of the current CPU's local APIC.
-     *
-     * @param lint The local interrupt
-     * @param entry The LVT entry to write belonging to the specified local interrupt
-     */
-    static void writeLVT(Interrupt lint, LVT_Entry entry);
-
-    /**
-     * Read the ICR (Interrupt Command Register) of the current CPU's local APIC.
+     * Initialize the local APIC of an additional AP (Application Processor).
+     * (MultiProcessor Specification Appendix B.4)
      *
      * Must not be called with enabled interrupts.
      *
-     * @return The read ICR entry
+     * @param destination The local APIC ID of the target CPU
+     * @param startup_routine The physical address of the entry point for the target CPU
      */
-    [[nodiscard]] static ICR_Entry readICR();
+    static void initializeApplicationProcessor(uint8_t destination, uint32_t startup_routine) = delete;
 
-    /**
-     * Write the ICR (Interrupt Command Register) of the current CPU's local APIC..
-     * Used to issue IPIs (Interprocessor Interrupts)
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param val The ICR entry to write
-     */
-    static void writeICR(ICR_Entry icr);
+     // NOTE: Reading and writing local APIC's registers.
+     // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
 
-    /**
-     * Set the local APIC MSR_ENABLE and MSR_BSP flags without modifying the MSR_BASE_FIELD.
-     * Only use for the BSP (Bootstrap Processor).
-     */
-    static void enableHW();
+    [[nodiscard]] static MSREntry readBaseMSR(); // Affects all local APICs
 
-    /**
-     * Set the local APIC MSR_BASE_FIELD (IA-32 Architecture Manual Chapter 10.4.5),
-     * MSR_ENABLE and MSR_BSP flags.
-     * Only use for the BSP (Bootstrap Processor).
-     *
-     * @param base_address MMIO registers will be mapped starting at this address
-     */
-    static void enableHW(uint32_t base_address);
+    static void writeBaseMSR(MSREntry entry); // Affects all local APICs
 
-    /**
-     * Unset the APIC MSR_ENABLE flag.
-     * Depending on the architecture the local APIC can't be reenabled without a reset.
-     */
-    static void disableHW();
+    [[nodiscard]] static uint32_t readDoubleWord(uint16_t reg); // Affects current CPU's local APIC
 
-    /**
-     * Check if the local APIC is HW enabled (in the MSR).
-     *
-     * @return True if the local APIC is HW enabled
-     */
-    [[nodiscard]] static bool isEnabledHW();
+    static void writeDoubleWord(uint16_t reg, uint32_t val); // Affects current CPU's local APIC
 
-    /**
-     * Check if the local APIC is SW enabled (in the SVR).
-     *
-     * @return True if the local APIC is SW enabled
-     */
-    [[nodiscard]] static bool isEnabledSW();
+    [[nodiscard]] static SVREntry readSVR();
 
-    /**
-     * Clear the ESR (Error Status Register) of the current CPU's local APIC.
-     */
-    static void clearErrors();
+    static void writeSVR(SVREntry svr);
+
+    [[nodiscard]] static LVTEntry readLVT(Interrupt lint);
+
+    static void writeLVT(Interrupt lint, LVTEntry entry);
+
+    [[nodiscard]] static ICREntry readICR(); // Obtain delivery status of IPI
+
+    // TODO: IPIs can only be sent by the BSP? Or does this only apply when no other cores are started yet?
+    static void writeICR(ICREntry icr); // Issue IPIs
 
 #if HHUOS_LAPIC_ENABLE_DEBUG == 1
 
@@ -424,16 +275,16 @@ private:
 
 private:
     static bool initialized;
-    static uint32_t baseVirtAddress; // The MMIO base address is the same for every local APIC
+    static uint32_t baseVirtAddress; // The same for every local APIC, read/written registers differ
     static Device::ModelSpecificRegister ia32ApicBaseMsr;
 
-    // TODO: The location should be parsed from MP/ACPI tables
-    // IA-32 Architecture Manual Chaper 10.4.1
-    static const constexpr uint32_t APIC_BASE_DEFAULT_PHYS_ADDRESS = 0xFEE00000;
+    // NOTE: I chose to keep this and the contained structs stack allocated
+    // NOTE: because I didn't want the hassle of having heap-allocated static objects.
+    // NOTE: The ArrayLists are only allocated once elements are added.
+    static PlatformConfiguration platformConfiguration; // TODO: Heap allocate
 
-    // IMCR register, MultiProcessor Specification Chapter 3.6.2.1
-    static const IoPort registerSelectorPort;
-    static const IoPort registerDataPort;
+    static Util::Async::Spinlock mmioLock; // TODO
+    static Util::Async::Spinlock ipiLock; // TODO
 
     static Kernel::Logger log;
 };
