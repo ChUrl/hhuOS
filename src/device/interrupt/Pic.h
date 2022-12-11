@@ -55,10 +55,11 @@ public:
      */
     ~Pic() = default;
 
+    // NOTE: Replaced the enum class with regular enum
     /**
      * An enumeration of all interrupt numbers available on the PIC.
      */
-    enum class Interrupt : uint8_t {
+    enum Interrupt : uint8_t {
         PIT = 0x00,
         KEYBOARD = 0x01,
         CASCADE = 0x02,
