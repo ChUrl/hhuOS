@@ -92,6 +92,8 @@ public:
      */
     static bool status(uint8_t gsi);
 
+    static bool status(Pic::Interrupt irq);
+
     /**
      * Send an end of interrupt signal to the IO APIC.
      * Only compatible with IO APIC version >= 0x20.
@@ -193,6 +195,8 @@ private:
      */
     static void initializeREDTBL(IoApicConfiguration *ioapic);
 
+    static void dumpIoPlatformConfiguration();
+
     // NOTE: Reading and writing IO APIC's registers.
     // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
 
@@ -203,8 +207,6 @@ private:
     [[nodiscard]] static REDTBLEntry readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi);
 
     static void writeREDTBL(IoApicConfiguration *ioapic, uint8_t gsi, REDTBLEntry redtbl);
-
-    static void dumpIoPlatformConfiguration();
 
 private:
     static bool initialized;

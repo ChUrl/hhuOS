@@ -188,7 +188,16 @@ private:
 
     static LNMIConfiguration *getNMIConfiguration(LApicConfiguration *lapic);
 
+    // TODO: If initializeApplicationProcessor needs to call this move it down
     static void initializeMMIORegion();
+
+    /**
+     * Initialize the local APIC of an additional AP (Application Processor).
+     * (MultiProcessor Specification Appendix B.4)
+     *
+     * Must not be called with enabled interrupts.
+     */
+    static void initializeApplicationProcessor(LApicConfiguration *lapic);
 
     static void initializeController(LApicConfiguration *lapic);
 
@@ -199,13 +208,7 @@ private:
      */
     static void initializeLVT();
 
-    /**
-     * Initialize the local APIC of an additional AP (Application Processor).
-     * (MultiProcessor Specification Appendix B.4)
-     *
-     * Must not be called with enabled interrupts.
-     */
-    static void initializeApplicationProcessor(LApicConfiguration *lapic);
+    static void dumpLPlatformConfiguration();
 
      // NOTE: Reading and writing local APIC's registers.
      // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
@@ -230,8 +233,6 @@ private:
 
     // TODO: IPIs can only be sent by the BSP? Or does this only apply when no other cores are started yet?
     static void writeICR(ICREntry icr); // Issue IPIs
-
-    static void dumpLPlatformConfiguration();
 
 private:
     static bool initialized;

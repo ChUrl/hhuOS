@@ -14,13 +14,10 @@ Util::Async::Spinlock LApic::ipiLock;
 
 Kernel::Logger LApic::log = Kernel::Logger::get("LApic");
 
+// ! Public member functions start here
 
 bool LApic::isInitialized() {
     return initialized;
-}
-
-uint8_t LApic::getId() {
-    return (readDoubleWord(Register::ID) >> 24) & 0xFF;
 }
 
 void LApic::initialize() {
@@ -82,48 +79,6 @@ void LApic::initialize() {
 #if HHUOS_LAPIC_ENABLE_DEBUG == 1
     dumpLPlatformConfiguration();
 #endif
-}
-
-// TODO: Does this have to be synchronized when initializing other APs?
-//       - Probably not as all of them work in different address spaces?
-//       - Also only one is initialized at a time (and MP init sequence requires acquiring BIOS semaphore...)
-// TODO: IA-32 Architecture Manual Chapter 8.4.3.5: APIC ID has to be signalled to ACPI?
-void LApic::initializeController(LApicConfiguration *lapic) {
-    initializeLVT();
-
-    // Configure the NMI (non maskable interrupt) pin
-    LNMIConfiguration *nmi = getNMIConfiguration(lapic);
-    writeLVT(nmi->lint, {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0), // NMI doesn't have vector
-                         .deliveryMode = LVTDeliveryMode::NMI,
-                         .pinPolarity = nmi->polarity,
-                         .triggerMode = nmi->triggerMode,
-                         .isMasked = false});
-
-    // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
-    // and the SW ENABLE flag.
-    writeSVR({.vector = Kernel::InterruptDispatcher::SPURIOUS,
-              .isSWEnabled = true,
-              .hasEOIBroadcastSuppression = true});
-
-    // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
-    // change a subsequently read value, in fact the register should always be written once before reading)
-    writeDoubleWord(Register::ESR, 0);
-    writeDoubleWord(Register::ESR, 0);
-
-    // Clear other outstanding interrupts
-    sendEndOfInterrupt();
-
-    // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
-    // (IA-32 Architecture Manual Chapter 10.8.3.1)
-    writeDoubleWord(Register::TPR, 0);
-}
-
-void LApic::initializeApplicationProcessor(LApicConfiguration *lapic) {
-    // TODO: Prepare stack for entrycode
-    // TODO: Send INIT and STARTUP interrupts with entry code address
-    // TODO: The entrycode needs to call initializeController to initialize its own local APIC registers
-
-    lapic->enabled = true;
 }
 
 void LApic::allow(Interrupt lint) {
@@ -198,28 +153,8 @@ void LApic::handleErrors() {
 
 // ! Private member functions start here
 
-void LApic::initializeLVT() {
-    // Default values
-    LVTEntry entry = {.deliveryMode = LVTDeliveryMode::FIXED,
-            .pinPolarity = LVTPinPolarity::HIGH,
-            .triggerMode = LVTTriggerMode::EDGE,
-            .isMasked = true};
-
-    // Set all the vector numbers
-    entry.vector = Kernel::InterruptDispatcher::CMCI;
-    writeLVT(CMCI, entry); // TODO: The CMCI might not exist?
-    entry.vector = Kernel::InterruptDispatcher::APICTIMER;
-    writeLVT(TIMER, entry);
-    entry.vector = Kernel::InterruptDispatcher::THERMAL;
-    writeLVT(THERMAL, entry);
-    entry.vector = Kernel::InterruptDispatcher::PERFORMANCE;
-    writeLVT(PERFORMANCE, entry);
-    entry.vector = Kernel::InterruptDispatcher::LINT0;
-    writeLVT(LINT0, entry);
-    entry.vector = Kernel::InterruptDispatcher::LINT1;
-    writeLVT(LINT1, entry);
-    entry.vector = Kernel::InterruptDispatcher::ERROR;
-    writeLVT(ERROR, entry);
+uint8_t LApic::getId() {
+    return (readDoubleWord(Register::ID) >> 24) & 0xFF;
 }
 
 void LApic::initializePlatformConfiguration() {
@@ -331,6 +266,92 @@ void LApic::initializeMMIORegion() {
     platformConfiguration.virtAddress =
             reinterpret_cast<uint32_t>(virtAddress) + platformConfiguration.address % Util::Memory::PAGESIZE;
 }
+
+void LApic::initializeApplicationProcessor(LApicConfiguration *lapic) {
+    // TODO: Prepare stack for entrycode
+    // TODO: Send INIT and STARTUP interrupts with entry code address
+    // TODO: The entrycode needs to call initializeController to initialize its own local APIC registers
+
+    lapic->enabled = true;
+}
+
+// TODO: Does this have to be synchronized when initializing other APs?
+//       - Probably not as all of them work in different address spaces?
+//       - Also only one is initialized at a time (and MP init sequence requires acquiring BIOS semaphore...)
+// TODO: IA-32 Architecture Manual Chapter 8.4.3.5: APIC ID has to be signalled to ACPI?
+void LApic::initializeController(LApicConfiguration *lapic) {
+    initializeLVT();
+
+    // Configure the NMI (non maskable interrupt) pin
+    LNMIConfiguration *nmi = getNMIConfiguration(lapic);
+    writeLVT(nmi->lint, {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0), // NMI doesn't have vector
+            .deliveryMode = LVTDeliveryMode::NMI,
+            .pinPolarity = nmi->polarity,
+            .triggerMode = nmi->triggerMode,
+            .isMasked = false});
+
+    // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
+    // and the SW ENABLE flag.
+    writeSVR({.vector = Kernel::InterruptDispatcher::SPURIOUS,
+                     .isSWEnabled = true,
+                     .hasEOIBroadcastSuppression = true});
+
+    // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
+    // change a subsequently read value, in fact the register should always be written once before reading)
+    writeDoubleWord(Register::ESR, 0);
+    writeDoubleWord(Register::ESR, 0);
+
+    // Clear other outstanding interrupts
+    sendEndOfInterrupt();
+
+    // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
+    // (IA-32 Architecture Manual Chapter 10.8.3.1)
+    writeDoubleWord(Register::TPR, 0);
+}
+
+void LApic::initializeLVT() {
+    // Default values
+    LVTEntry entry = {.deliveryMode = LVTDeliveryMode::FIXED,
+            .pinPolarity = LVTPinPolarity::HIGH,
+            .triggerMode = LVTTriggerMode::EDGE,
+            .isMasked = true};
+
+    // Set all the vector numbers
+    entry.vector = Kernel::InterruptDispatcher::CMCI;
+    writeLVT(CMCI, entry); // TODO: The CMCI might not exist?
+    entry.vector = Kernel::InterruptDispatcher::APICTIMER;
+    writeLVT(TIMER, entry);
+    entry.vector = Kernel::InterruptDispatcher::THERMAL;
+    writeLVT(THERMAL, entry);
+    entry.vector = Kernel::InterruptDispatcher::PERFORMANCE;
+    writeLVT(PERFORMANCE, entry);
+    entry.vector = Kernel::InterruptDispatcher::LINT0;
+    writeLVT(LINT0, entry);
+    entry.vector = Kernel::InterruptDispatcher::LINT1;
+    writeLVT(LINT1, entry);
+    entry.vector = Kernel::InterruptDispatcher::ERROR;
+    writeLVT(ERROR, entry);
+}
+
+void LApic::dumpLPlatformConfiguration() {
+    log.info("Supported modes: %s %s", platformConfiguration.xApicSupported ? "[xApic]" : "[None]", platformConfiguration.x2ApicSupported ? "[x2Apic]" : "");
+    log.info("Selected mode: %s", platformConfiguration.isX2Apic ? "[x2Apic]" : "[xApic]");
+    log.info("Version: [0x%x]", platformConfiguration.version);
+    log.info("MMIO: [0x%x] (phys) -> [0x%x] (virt)", platformConfiguration.address, platformConfiguration.virtAddress);
+    log.info("Cores: [%d]", platformConfiguration.lapics.size());
+
+    log.info("Local Apic status:");
+    for (auto *lapic : platformConfiguration.lapics) {
+        log.info("- Id: [0x%x], Enabled: [%d], Can enable: [%d]", lapic->id, lapic->enabled, lapic->canEnable);
+    }
+
+    log.info("Local NMI status:");
+    for (auto *lnmi : platformConfiguration.lnmis) {
+        log.info("- Id: [0x%x], Lint: [LINT%d]", lnmi->id, lnmi->lint == LINT0 ? 0 : 1);
+    }
+}
+
+// ! Private register member functions start here
 
 // IA-32 Architecture Manual Chapter 10.4.4
 MSREntry LApic::readBaseMSR() {
@@ -466,24 +487,6 @@ void LApic::writeICR(ICREntry icr) {
     // NOTE: Interrupts have to be disabled beforehand
     writeDoubleWord(Register::ICR_HIGH, high);
     writeDoubleWord(Register::ICR_LOW, low); // Last as writing low DW sends the IPI
-}
-
-void LApic::dumpLPlatformConfiguration() {
-    log.info("Supported modes: %s %s", platformConfiguration.xApicSupported ? "[xApic]" : "[None]", platformConfiguration.x2ApicSupported ? "[x2Apic]" : "");
-    log.info("Selected mode: %s", platformConfiguration.isX2Apic ? "[x2Apic]" : "[xApic]");
-    log.info("Version: [0x%x]", platformConfiguration.version);
-    log.info("MMIO: [0x%x] (phys) -> [0x%x] (virt)", platformConfiguration.address, platformConfiguration.virtAddress);
-    log.info("Cores: [%d]", platformConfiguration.lapics.size());
-
-    log.info("Local Apic status:");
-    for (auto *lapic : platformConfiguration.lapics) {
-        log.info("- Id: [0x%x], Enabled: [%d], Can enable: [%d]", lapic->id, lapic->enabled, lapic->canEnable);
-    }
-
-    log.info("Local NMI status:");
-    for (auto *lnmi : platformConfiguration.lnmis) {
-        log.info("- Id: [0x%x], Lint: [LINT%d]", lnmi->id, lnmi->lint == LINT0 ? 0 : 1);
-    }
 }
 
 }
