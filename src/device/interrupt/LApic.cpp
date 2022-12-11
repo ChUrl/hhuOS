@@ -5,10 +5,9 @@
 namespace Device {
 
 bool LApic::initialized = false;
-uint32_t LApic::baseVirtAddress = 0;
 Device::ModelSpecificRegister LApic::ia32ApicBaseMsr = Device::ModelSpecificRegister(0x1B);
 
-LApic::PlatformConfiguration LApic::platformConfiguration;
+LApic::LPlatformConfiguration LApic::platformConfiguration;
 
 Util::Async::Spinlock LApic::mmioLock;
 Util::Async::Spinlock LApic::ipiLock;
@@ -20,49 +19,18 @@ bool LApic::isInitialized() {
     return initialized;
 }
 
-// TODO: Remove these and add to platformConfiguration
-bool LApic::hasApicSupport() {
-    auto features = Util::Cpu::CpuId::getCpuFeatures();
-    for (auto feature: features) {
-        if (feature == Util::Cpu::CpuId::CpuFeature::APIC) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool LApic::hasX2ApicSupport() {
-    auto features = Util::Cpu::CpuId::getCpuFeatures();
-    for (auto feature: features) {
-        if (feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// IA-32 Architecture Manual Chapter 10.12.1
-bool LApic::isX2Apic() {
-    return readBaseMSR().isX2Apic;
-}
-
 uint8_t LApic::getId() {
     return (readDoubleWord(Register::ID) >> 24) & 0xFF;
 }
 
-uint8_t LApic::getVersion() {
-    return readDoubleWord(Register::VER) & 0xFF;
-}
-
-// TODO: Does this have to be synchronized when initializing other APs?
-//       Probably not as all of them work in different address spaces?
 void LApic::initialize() {
-    if (!Acpi::isAvailable()) {
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): ACPI support not present!");
-    }
-    if (!hasApicSupport()) {
+    // Read system information from ACPI
+    initializePlatformConfiguration();
+
+    if (!platformConfiguration.xApicSupported) {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): xApic support not present!");
     }
+
     if (!readBaseMSR().isBSP) {
         // TODO: I think architectural MSRs are shared between cores/they exist only once,
         //       but what does the BSP flag mean then?
@@ -74,44 +42,63 @@ void LApic::initialize() {
     }
 
     // x2Apic doesn't have MMIO register access (x2Apic uses MSRs)
-    if (hasX2ApicSupport() && isX2Apic()) {
+    if (platformConfiguration.x2ApicSupported && platformConfiguration.isX2Apic) {
         MSREntry msr = readBaseMSR();
-        msr.isX2Apic = false;
+        msr.isX2Apic = false; // Operate in xApic compatibility mode // TODO: Test this
         writeBaseMSR(msr);
     }
 
-    // Read system information from ACPI
-    initializePlatformConfiguration();
+    // TODO: Does every AP has to call this before initializing its local APIC?
+    //       - Every AP writes/reads the same physical address, but different registers are affected
+    //       - How does paging work in MP? Do I have to mapIO the same physical address multiple times?
+    //         - Probably not if there is only a single kernel address space
+    //       - Every AP has its own MMU, but are page tables shared or individual?
+    //         - It would make sense to keep the kernel addresses only once
+    //         - I guess the TLB at least has to be consistent over APs regarding kernel address space?
+    initializeMMIORegion();
 
-    // TODO: MMIO function?
-    // TODO: mapIO strong uncacheable?
-    // Allocate memory (4 kb) for the memory mapped registers (without relocation)
-    // The address returned is page aligned, if the size crosses page boundary an additional page will be allocated.
-    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(platformConfiguration.address, Util::Memory::PAGESIZE, true);
+    platformConfiguration.version = readDoubleWord(Register::VER) & 0xFF;
 
-    if (virtAddress == nullptr) {
-        Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY,
-                                        "LApic::initialize(): Not enough space left on kernel heap!");
+    // Initialize the local APIC of the BSP before initializing any APs
+    initializeController(getLApicConfiguration(getId()));
+
+    // TODO: Should probably not do this automatically inside LApic::initialize()...
+    for (auto *lapic : platformConfiguration.lapics) {
+        // TODO: Could better use if (!lapic->enabled) and check if (lapic->canEnable)
+        //       - Need to check if canEnable is available and when enabled gets set
+        if (lapic->id == getId()) { // Skip current processor, it's already running
+            continue;
+        }
+
+        initializeApplicationProcessor(lapic);
     }
 
-    // Use this address to access the local APIC's memory mapped registers
-    baseVirtAddress = reinterpret_cast<uint32_t>(virtAddress) + platformConfiguration.address % Util::Memory::PAGESIZE;
+    // TODO: Mask all the PIC interrupts in the PIC aswell (they should still be all masked though...)
 
+    initialized = true;
+
+#if HHUOS_LAPIC_ENABLE_DEBUG == 1
+    dumpLPlatformConfiguration();
+#endif
+}
+
+// TODO: Does this have to be synchronized when initializing other APs?
+//       - Probably not as all of them work in different address spaces?
+//       - Also
+// TODO: IA-32 Architecture Manual Chapter 8.4.3.5: APIC ID has to be signalled to ACPI?
+void LApic::initializeController(LApicConfiguration *lapic) {
     initializeLVT();
 
     // Configure the NMI (non maskable interrupt) pin
-    NMIConfiguration nmi = getNMIConfiguration(getId());
-    writeLVT(nmi.lint, {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0), // NMI doesn't have vector
-                        .deliveryMode = LVTDeliveryMode::NMI,
-                        .pinPolarity = nmi.polarity,
-                        .triggerMode = nmi.triggerMode,
-                        .isMasked = false});
-    log.debug("NMI set to LINT%d", nmi.lint == LINT0 ? 0 : 1);
+    LNMIConfiguration *nmi = getNMIConfiguration(lapic);
+    writeLVT(nmi->lint, {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0), // NMI doesn't have vector
+                         .deliveryMode = LVTDeliveryMode::NMI,
+                         .pinPolarity = nmi->polarity,
+                         .triggerMode = nmi->triggerMode,
+                         .isMasked = false});
 
-    // TODO: Set EOI suppression depending on IO APIC version
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
-    // and the SW ENABLE flag. Also allow EOI broadcasting to IO APICs if necessary
+    // and the SW ENABLE flag.
     writeSVR({.vector = Kernel::InterruptDispatcher::SPURIOUS,
               .isSWEnabled = true,
               .hasEOIBroadcastSuppression = true});
@@ -127,14 +114,14 @@ void LApic::initialize() {
     // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
     // (IA-32 Architecture Manual Chapter 10.8.3.1)
     writeDoubleWord(Register::TPR, 0);
+}
 
-    // TODO: Mask all the PIC interrupts in the PIC aswell (they should still be all masked though...)
+void LApic::initializeApplicationProcessor(LApicConfiguration *lapic) {
+    // TODO: Prepare stack for entrycode
+    // TODO: Send INIT and STARTUP interrupts with entry code address
+    // TODO: The entrycode needs to call initializeController to initialize its own local APIC registers
 
-    initialized = true;
-
-#if HHUOS_LAPIC_ENABLE_DEBUG == 1
-    logDebugDump();
-#endif
+    lapic->enabled = true;
 }
 
 void LApic::allow(Interrupt lint) {
@@ -184,7 +171,22 @@ void LApic::initializeLVT() {
 }
 
 void LApic::initializePlatformConfiguration() {
-    platformConfiguration.address = reinterpret_cast<const Acpi::Madt *>(&Acpi::getTable("APIC"))->localApicAddress;
+    if (!Acpi::isAvailable()) {
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): ACPI support not present!");
+    }
+
+    auto features = Util::Cpu::CpuId::getCpuFeatures();
+    for (auto feature: features) {
+        if (feature == Util::Cpu::CpuId::CpuFeature::APIC) {
+            platformConfiguration.xApicSupported = true;
+        }
+        if (feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
+            platformConfiguration.x2ApicSupported = true;
+        }
+    }
+
+    platformConfiguration.isX2Apic = readBaseMSR().isX2Apic;
+    platformConfiguration.address = Acpi::getTable<Acpi::Madt>("APIC")->localApicAddress;
 
     if (platformConfiguration.address == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
@@ -201,13 +203,13 @@ void LApic::initializePlatformConfiguration() {
                                         "LApic::initializePlatformConfiguration(): Didn't find local APIC(s)!");
     }
     if (nmiConfigurations.size() == 0) {
-        // TODO: Are nmiConfigurations mandatory?
+        // TODO: Are nmiConfigurations mandatory? I guess there should be at least 1
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
                                         "LApic::initializePlatformConfiguration(): Didn't find NMI configuration(s)!");
     }
 
     for (auto lapic : processorLocalApics) {
-        platformConfiguration.lapics.add({
+        platformConfiguration.lapics.add(new LApicConfiguration {
             .uid = lapic->acpiProcessorUid,
             .id = lapic->apicId,
             .enabled = static_cast<bool>(lapic->flags & Acpi::ProcessorFlag::ENABLED),
@@ -216,8 +218,9 @@ void LApic::initializePlatformConfiguration() {
     }
 
     for (auto nmi : nmiConfigurations) {
-        platformConfiguration.lnmis.add({
+        platformConfiguration.lnmis.add(new LNMIConfiguration {
             .uid = nmi->acpiProcessorUid,
+            .id = static_cast<uint8_t>(nmi->acpiProcessorUid == 0xFF ? 0xFF : uidToId(nmi->acpiProcessorUid)),
             .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTPinPolarity::HIGH : LVTPinPolarity::LOW,
             .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTTriggerMode::EDGE : LVTTriggerMode::LEVEL,
             .lint = nmi->localApicLint == 0 ? LINT0 : LINT1
@@ -225,10 +228,10 @@ void LApic::initializePlatformConfiguration() {
     }
 }
 
-uint8_t LApic::idToUid(uint8_t id) {
-    for (auto lapic : platformConfiguration.lapics) {
-        if (lapic.id == id) {
-            return lapic.uid;
+uint8_t LApic::uidToId(uint8_t uid) {
+    for (auto *lapic : platformConfiguration.lapics) {
+        if (lapic->uid == uid) {
+            return lapic->id;
         }
     }
 
@@ -236,10 +239,21 @@ uint8_t LApic::idToUid(uint8_t id) {
                                     "LApic::idToUid(): Didn't find local APIC matching UID!");
 }
 
+LApic::LApicConfiguration *LApic::getLApicConfiguration(uint8_t id) {
+    for (auto *lapic : platformConfiguration.lapics) {
+        if (lapic->id == id) {
+            return lapic;
+        }
+    }
+
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                    "LApic::getLApicConfiguration(): Didn't find configuration matching ID!");
+}
+
 // There is a maximum of 1 NMI configuration per core
-LApic::NMIConfiguration LApic::getNMIConfiguration(uint8_t id) {
-    for (auto nmi : platformConfiguration.lnmis) {
-        if (nmi.uid == 0xFF || nmi.uid == idToUid(id)) { // 0xFF means all CPUs
+LApic::LNMIConfiguration *LApic::getNMIConfiguration(LApicConfiguration *lapic) {
+    for (auto *nmi : platformConfiguration.lnmis) {
+        if (nmi->uid == 0xFF || nmi->id == lapic->id) { // 0xFF means all CPUs
             return nmi;
         }
     }
@@ -247,6 +261,23 @@ LApic::NMIConfiguration LApic::getNMIConfiguration(uint8_t id) {
     // TODO: Not every core has to have one, so don't throw up (use/implement optional?)
     Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
                                     "LApic::getNMIConfiguration(): Didn't find NMI configuration matching ID!");
+}
+
+void LApic::initializeMMIORegion() {
+    // TODO: mapIO strong uncacheable?
+    // Allocate memory (4 kb) for the memory mapped registers (without relocation)
+    // The address returned is page aligned, if the size crosses page boundary an additional page will be allocated.
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+    void *virtAddress = memoryService.mapIO(platformConfiguration.address, Util::Memory::PAGESIZE, true);
+
+    if (virtAddress == nullptr) {
+        Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY,
+                                        "LApic::initialize(): Not enough space left on kernel heap!");
+    }
+
+    // Use this address to access the local APIC's memory mapped registers
+    platformConfiguration.virtAddress =
+            reinterpret_cast<uint32_t>(virtAddress) + platformConfiguration.address % Util::Memory::PAGESIZE;
 }
 
 // IA-32 Architecture Manual Chapter 10.4.4
@@ -280,12 +311,7 @@ void LApic::writeBaseMSR(MSREntry entry) {
 //         different registers would be written
 //       - If an accepted interrupt can change register values interrupts would have to be disabled
 uint32_t LApic::readDoubleWord(uint16_t reg) {
-    if (baseVirtAddress == 0) {
-        Util::Exception::throwException(Util::Exception::NULL_POINTER,
-                                        "LApic::readDoubleWord(): APIC MMIO not initialized!");
-    }
-
-    volatile auto *regAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + reg);
+    volatile auto *regAddr = reinterpret_cast<uint32_t *>(platformConfiguration.virtAddress + reg);
     volatile auto val = *regAddr;
 
     return val;
@@ -293,12 +319,7 @@ uint32_t LApic::readDoubleWord(uint16_t reg) {
 
 // TODO: Needs spinlock?
 void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
-    if (baseVirtAddress == 0) {
-        Util::Exception::throwException(Util::Exception::NULL_POINTER,
-                                        "LApic::writeDoubleWord(): APIC MMIO not initialized!");
-    }
-
-    volatile auto *regAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + reg);
+    volatile auto *regAddr = reinterpret_cast<uint32_t *>(platformConfiguration.virtAddress + reg);
     *regAddr = val;
 }
 
@@ -395,20 +416,22 @@ void LApic::writeICR(ICREntry icr) {
     writeDoubleWord(Register::ICR_LOW, low); // Last as writing low DW sends the IPI
 }
 
-#if HHUOS_LAPIC_ENABLE_DEBUG == 1
+void LApic::dumpLPlatformConfiguration() {
+    log.info("Supported modes: %s %s", platformConfiguration.xApicSupported ? "[xApic]" : "[None]", platformConfiguration.x2ApicSupported ? "[x2Apic]" : "");
+    log.info("Selected mode: %s", platformConfiguration.isX2Apic ? "[x2Apic]" : "[xApic]");
+    log.info("Version: [0x%x]", platformConfiguration.version);
+    log.info("MMIO: [0x%x] (phys) -> [0x%x] (virt)", platformConfiguration.address, platformConfiguration.virtAddress);
+    log.info("Cores: [%d]", platformConfiguration.lapics.size());
 
-void LApic::logDebugDump() {
-    uint8_t id = getId();
-    uint8_t version = getVersion();
+    log.info("Local Apic status:");
+    for (auto *lapic : platformConfiguration.lapics) {
+        log.info("- Id: [0x%x], Enabled: [%d], Can enable: [%d]", lapic->id, lapic->enabled, lapic->canEnable);
+    }
 
-    // TODO:
-    log.debug("Has Apic Support: %u", hasApicSupport());
-    log.debug("Has x2Apic Support: %u (Is x2Apic: %u)", hasX2ApicSupport(), isX2Apic());
-    log.debug("Local APIC ID: %u", id);
-    log.debug("Local APIC VER: 0x%x (Integrated APIC: %u)", version, 0x10 <= version && version <= 0x15);
-    log.debug("Local APIC Spurious interrupt vector: 0x%x", readSVR().vector);
+    log.info("Local NMI status:");
+    for (auto *lnmi : platformConfiguration.lnmis) {
+        log.info("- Id: [0x%x], Lint: [LINT%d]", lnmi->id, lnmi->lint == LINT0 ? 0 : 1);
+    }
 }
-
-#endif
 
 }
