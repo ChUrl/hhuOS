@@ -1,82 +1,33 @@
 #include "IoApic.h"
 #include "kernel/system/System.h"
-#include "kernel/paging/Paging.h"
 #include "device/interrupt/LApic.h"
 
 namespace Device {
 
 bool IoApic::initialized = false;
-uint8_t IoApic::version = 0;
-uint8_t IoApic::maxREDTBLEntry = 0;
-uint32_t IoApic::baseVirtAddress = 0;
+
+IoApic::IoPlatformConfiguration IoApic::platformConfiguration;
+
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 
-/*
- * Public Member Functions
- */
 
 bool IoApic::isInitialized() {
     return initialized;
 }
 
-uint8_t IoApic::getId() {
-    return (readDoubleWord(Indirect_Register::ID) >> 24) & 0xFF;
-}
-
-uint8_t IoApic::getVersion() {
-    // Save the version as it could potentially be queried for every EOI
-    if (!initialized) {
-        return readDoubleWord(Indirect_Register::VER) & 0xFF;
+void IoApic::initialize() {
+    if (!Acpi::isAvailable()) {
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): ACPI support not present!");
     }
-
-    return version;
-}
-
-// https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
-bool IoApic::hasEOIRegister() {
-    return getVersion() >= 0x20;
-}
-
-void IoApic::init() {
-    // TODO: Check if IO APIC supported (is this possible without MP/ACPI?)
-
-    // TODO: Does the LApic even have to be initialized before?
     if (!LApic::isInitialized()) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                        "IoApic::init(): Local APIC is not initialized!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "IoApic::initialize(): Local APIC is not initialized!");
     }
 
-    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    auto &pageDirectory = memoryService.getKernelAddressSpace().getPageDirectory();
+    initializePlatformConfiguration();
 
-    // TODO: The IO APIC MMIO registers could cross a page boundary and don't have to be 4kb aligned
-    //       If unaligned add the offset to virtAddress (virtAddress += physAddress % PAGESIZE)
-    //       If page boundary crossed allocate 2 pages
-    // NOTE: The default physical address is 4kb aligned and thus doesn't cross pages
-    // NOTE: IO memory region is 0xEEE00000 - 0xFFFFFFFF, so it contains the default physical address
-    // NOTE: (https://hhuos.github.io/docs/paging_mm#the-virtual-memory-layout-in-hhuos)
-    void *virtAddress = memoryService.mapIO(IOAPIC_BASE_DEFAULT_PHYS_ADDRESS, Util::Memory::PAGESIZE, true);
-
-    if (virtAddress == nullptr) {
-        Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY,
-                                        "IoApic::init(): Not enough space left on kernel heap!");
+    for (auto *ioapic : platformConfiguration.ioapics) {
+        initializeController(ioapic);
     }
-
-    // Use this addresses to access the IO APIC's memory mapped registers
-    baseVirtAddress = reinterpret_cast<uint32_t>(virtAddress);
-
-    maxREDTBLEntry = getMaxREDTBLEntry();
-    version = getVersion();
-
-    // TODO: Check possible valid IRQ amounts, for now we need at least 16 for PIC compatibility
-    if (maxREDTBLEntry < 15) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                        "ioApic::init(): IO APIC needs to support at least 16 IRQs!");
-    }
-
-    // Initialize legacy IRQs, IRQ2 is PIC master-slave cascade and thus is ignored
-    // TODO: To know if PIC IRQs are mapped 1:1 to IO APIC IRQs MP/ACPI tables have to be parsed
-    initREDTBL();
 
     initialized = true;
 
@@ -85,34 +36,50 @@ void IoApic::init() {
 #endif
 }
 
-// TODO: Do I have to check if 0 <= gsi <= 23? Or is this excessive
-void IoApic::allow(Interrupt gsi, uint8_t destination) {
-    REDTBL_Entry entry = readREDTBL(gsi);
-    entry.isMasked = false;
-    entry.destination = destination;
-    writeREDTBL(gsi, entry);
+// TODO: Need to set the IO APIC ID in the ID register (it's set to 0 on power up)
+//       Copy the value from ACPI? Or is this value 0 aswell?
+void IoApic::initializeController(IoApicConfiguration *ioapic) {
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+    void *virtAddress = memoryService.mapIO(ioapic->address, Util::Memory::PAGESIZE, true);
+
+    if (virtAddress == nullptr) {
+        Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY,
+                                        "IoApic::initializeController(): Not enough space left on kernel heap!");
+    }
+
+    // Use this addresses to access this IO APIC's memory mapped registers
+    ioapic->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + ioapic->address % Util::Memory::PAGESIZE;
+
+    // NOTE: This value is overwritten for each IO APIC but this doesn't matter as they are equal
+    // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
+    platformConfiguration.version = readDoubleWord(ioapic, Indirect_Register::VER) & 0xFF;
+    platformConfiguration.needsCompatibilityEOI = platformConfiguration.version < 0x20;
+
+    // NOTE: With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
+    // NOTE: With ICH5 (and other ICHs?) it is always 24
+    ioapic->redtblEntries = ((readDoubleWord(ioapic, Indirect_Register::VER) >> 16) & 0xFF) + 1;
+    initializeREDTBL(ioapic);
 }
 
 void IoApic::allow(Interrupt gsi) {
-    allow(gsi, LApic::getId()); // Currently running CPU as destination
-}
+    IoApicConfiguration *ioapic = getIoApicConfiguration(gsi);
 
-void IoApic::allow(Pic::Interrupt irq, uint8_t destination) {
-    if (irq == Pic::Interrupt::CASCADE) {
-        return;
-    }
-
-    allow(getIrqToGsiMapping(irq), destination);
+    REDTBLEntry entry = readREDTBL(ioapic, gsi);
+    entry.isMasked = false;
+    writeREDTBL(ioapic, gsi, entry);
 }
 
 void IoApic::allow(Pic::Interrupt irq) {
-    allow(getIrqToGsiMapping(irq), LApic::getId()); // Currently running CPU as destination
+    // TODO: Don't use currently running CPU for all interrupts
+    allow(static_cast<Interrupt>(platformConfiguration.irqToGsiMappings[static_cast<uint8_t>(irq)]));
 }
 
 void IoApic::forbid(Interrupt gsi) {
-    REDTBL_Entry entry = readREDTBL(gsi);
+    IoApicConfiguration *ioapic = getIoApicConfiguration(gsi);
+
+    REDTBLEntry entry = readREDTBL(ioapic, gsi);
     entry.isMasked = true;
-    writeREDTBL(gsi, entry);
+    writeREDTBL(ioapic, gsi, entry);
 }
 
 void IoApic::forbid(Pic::Interrupt irq) {
@@ -120,187 +87,240 @@ void IoApic::forbid(Pic::Interrupt irq) {
         return;
     }
 
-    forbid(getIrqToGsiMapping(irq));
+    forbid(static_cast<Interrupt>(platformConfiguration.irqToGsiMappings[static_cast<uint8_t>(irq)]));
 }
 
 bool IoApic::status(Interrupt gsi) {
-    return readREDTBL(gsi).isMasked;
+    IoApicConfiguration *ioapic = getIoApicConfiguration(gsi);
+
+    return readREDTBL(ioapic, gsi).isMasked;
 }
 
+// NOTE: Do not allocate memory here, that also means no iterators!
+// TODO: Kind of suboptimal that for every EOI the corresponding ioapic config has to be searched?
+// TODO: Compatibility mode
 // Intel ICH5 Datasheet Chapter 9.5.5
-void IoApic::sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt interrupt) {
-    // TODO: This is called very often, is checking here a problem?
-    if (!hasEOIRegister()) {
+void IoApic::sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt vector) {
+    IoApicConfiguration *ioapic = getIoApicConfiguration(vector);
+
+    volatile auto *regAddr = reinterpret_cast<uint32_t *>(ioapic->virtAddress + Register::EOI);
+    *regAddr = static_cast<uint8_t>(vector);
+}
+
+// ! Private member functions start here
+
+void IoApic::initializePlatformConfiguration() {
+    // Default is identity mapping
+    for (uint8_t irq = 0; irq < 16; ++irq) {
+        platformConfiguration.irqToGsiMappings[irq] = irq;
+        platformConfiguration.gsiToIrqMappings[irq] = irq;
+    }
+
+    Util::Data::ArrayList<const Acpi::IoApic *> ioApics;
+    Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> interruptSourceOverrides;
+    Util::Data::ArrayList<const Acpi::NMISource *> nmiConfigurations;
+    Acpi::getApicStructures(&ioApics, Acpi::IO_APIC);
+    Acpi::getApicStructures(&interruptSourceOverrides, Acpi::INTERRUPT_SOURCE_OVERRIDE);
+    Acpi::getApicStructures(&nmiConfigurations, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
+
+    if (ioApics.size() == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                        "IoApic::sendEndOfInterrupt(): IoApic doesn't have EOI register!");
+                                        "IoApic::initializePlatformConfiguration(): Didn't find IO APIC(s)!");
+    }
+    // TODO: I think nmiConfigurations are optional for the IO APIC?
+
+    for (auto ioapic : ioApics) {
+        platformConfiguration.ioapics.add(new IoApicConfiguration {
+            .id = ioapic->ioApicId,
+            .address = ioapic->ioApicAddress,
+            .gsiBase = ioapic->globalSystemInterruptBase
+        });
     }
 
-    volatile auto *regAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + Register::EOI);
-    *regAddr = static_cast<uint8_t>(interrupt);
-}
+    for (auto irqOverride : interruptSourceOverrides) {
+        platformConfiguration.irqOverrides.add(new InterruptOverride {
+            .bus = irqOverride->bus,
+            .source = static_cast<Pic::Interrupt>(irqOverride->source),
+            .gsi = irqOverride->globalSystemInterrupt,
+            .polarity = irqOverride->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLPinPolarity::HIGH : REDTBLPinPolarity::LOW,
+            .triggerMode = irqOverride->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLTriggerMode::EDGE : REDTBLTriggerMode::LEVEL
+        });
 
-/*
- * Private Member Functions
- */
-
-uint8_t IoApic::getMaxREDTBLEntry() {
-    if (!initialized) {
-        return (readDoubleWord(Indirect_Register::VER) >> 16) & 0xFF;
+        // TODO: Remove old entry with the destination another entry was remapped to?
+        //       If PIT gets remapped from GSI 0 to 2, irqMappings[2] and gsiMappings[2] also point to 2
+        // Update mappings
+        platformConfiguration.irqToGsiMappings[irqOverride->source] = irqOverride->globalSystemInterrupt;
+        platformConfiguration.gsiToIrqMappings[irqOverride->globalSystemInterrupt] = irqOverride->source;
     }
 
-    return maxREDTBLEntry;
+    for (auto nmi : nmiConfigurations) {
+        platformConfiguration.ionmis.add(new NMIConfiguration {
+            .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLPinPolarity::HIGH : REDTBLPinPolarity::LOW,
+            .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLTriggerMode::EDGE : REDTBLTriggerMode::LEVEL,
+            .gsi = nmi->globalSystemInterrupt
+        });
+    }
 }
 
-uint32_t IoApic::readDoubleWord(uint8_t reg) {
-    if (baseVirtAddress == 0) {
+IoApic::IoApicConfiguration *IoApic::getIoApicConfiguration(Interrupt gsi) {
+    // NOTE: Using an iterator here would allocate heap memory, don't do that!
+    IoApicConfiguration *ioapic;
+    for (uint32_t i = 0; i < platformConfiguration.ioapics.size(); ++i) {
+        ioapic = platformConfiguration.ioapics.get(i);
+        if (gsi >= ioapic->gsiBase && gsi <= ioapic->gsiBase + ioapic->redtblEntries) {
+            return ioapic;
+        }
+    }
+
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                    "LApic::getIoApicConfiguration(): Didn't find configuration matching GSI!");
+}
+
+// NOTE: The GSIs and IRQs are not identity mapped
+IoApic::IoApicConfiguration *IoApic::getIoApicConfiguration(Pic::Interrupt irq) {
+    return getIoApicConfiguration(static_cast<Interrupt>(platformConfiguration.irqToGsiMappings[static_cast<uint8_t>(irq)]));
+}
+
+// NOTE: The GSIs and vectors are identity mapped, translated by 32
+IoApic::IoApicConfiguration *IoApic::getIoApicConfiguration(Kernel::InterruptDispatcher::Interrupt vector) {
+    return getIoApicConfiguration(static_cast<Interrupt>(vector - 32));
+}
+
+// TODO: Can a single IO APIC have multiple NMIs?
+IoApic::NMIConfiguration *IoApic::getNMIConfiguration(IoApicConfiguration *ioapic) {
+    uint32_t gsiBase = ioapic->gsiBase;
+    uint32_t gsiEnd = gsiBase + ioapic->redtblEntries;
+
+    // Check if a NMI exists assigned to one of this IO APICs pins
+    for (auto *nmi : platformConfiguration.ionmis) {
+        if (nmi->gsi >= gsiBase && nmi->gsi < gsiEnd) {
+            return nmi;
+        }
+    }
+
+    // TODO: Does not need to exist, so don't throw up (use/implement optional?)
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                    "LApic::getNMIConfiguration(): Didn't find configuration matching ID!");
+}
+
+// TODO: Spinlock?
+// TODO: Use Indirect_Register type and overload the name with a function accepting Register type
+uint32_t IoApic::readDoubleWord(IoApicConfiguration *ioapic, uint8_t reg) {
+    if (ioapic->virtAddress == 0) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER,
                                         "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
     }
 
-    volatile auto *indAddr = reinterpret_cast<uint8_t *>(baseVirtAddress + Register::IND);
-    volatile auto *datAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + Register::DAT);
+    volatile auto *indAddr = reinterpret_cast<uint8_t *>(ioapic->virtAddress + Register::IND);
+    volatile auto *datAddr = reinterpret_cast<uint32_t *>(ioapic->virtAddress + Register::DAT);
 
     // NOTE: Interrupts have to be disabled beforehand
     *indAddr = static_cast<uint8_t>(reg); // Select register
     return *datAddr; // Read value indirectly
 }
 
-void IoApic::writeDoubleWord(uint8_t reg, uint32_t val) {
-    if (baseVirtAddress == 0) {
+// TODO: Spinlock?
+// TODO: Use Indirect_Register type
+void IoApic::writeDoubleWord(IoApicConfiguration *ioapic, uint8_t reg, uint32_t val) {
+    if (ioapic->virtAddress == 0) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER,
                                         "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
     }
 
-    volatile auto *indAddr = reinterpret_cast<uint8_t *>(baseVirtAddress + Register::IND);
-    volatile auto *datAddr = reinterpret_cast<uint32_t *>(baseVirtAddress + Register::DAT);
+    volatile auto *indAddr = reinterpret_cast<uint8_t *>(ioapic->virtAddress + Register::IND);
+    volatile auto *datAddr = reinterpret_cast<uint32_t *>(ioapic->virtAddress + Register::DAT);
 
     // NOTE: Interrupts have to be disabled beforehand
     *indAddr = static_cast<uint8_t>(reg); // Select register
     *datAddr = val; // Write value indirectly
 }
 
-IoApic::REDTBL_Entry IoApic::readREDTBL(uint8_t gsi) {
-    if (gsi > maxREDTBLEntry) {
+// TODO: Spinlock?
+// TODO: Use Interrupt type
+REDTBLEntry IoApic::readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi) {
+    if (gsi < ioapic->gsiBase || gsi >= ioapic->gsiBase + ioapic->redtblEntries) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT,
-                                        "IoApic::readREDTBL(): REDTBL only has 24 entries!");
+                                        "IoApic::readREDTBL(): GSI is handled by different IO APIC!");
     }
 
     // NOTE: Interrupts have to be disabled beforehand
     // The first register is the low DW, the second register is the high DW
+    uint8_t entry = gsi - ioapic->gsiBase;
     uint32_t low, high;
-    low = readDoubleWord(Indirect_Register::REDTBL + 2 * gsi);
-    high = readDoubleWord(Indirect_Register::REDTBL + 2 * gsi + 1);
+    low = readDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry);
+    high = readDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry + 1);
 
     // Intel ICH5 Datasheet Chapter 9.5.8
     return {
-            .slot = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
-            .deliveryMode = static_cast<Delivery_Mode>((low & (0b111 << 8)) >> 8), // Mask is <<, result is shifted back
-            .destinationMode = static_cast<Destination_Mode>((low & (1 << 11)) >> 11),
-            .deliveryStatus = static_cast<Delivery_Status>((low & (1 << 12)) >> 12),
-            .pinPolarity = static_cast<Pin_Polarity>((low & (1 << 13)) >> 13),
-            .triggerMode = static_cast<Trigger_Mode>((low & (1 << 15)) >> 15),
-            .isMasked = static_cast<bool>((low & (1 << 16)) >> 16),
+            .vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
+            .deliveryMode = static_cast<REDTBLDeliveryMode>((low & (0b111 << 8)) >> 8), // Mask is <<, result is shifted back
+            .destinationMode = static_cast<REDTBLDestinationMode>((low & (1 << 11)) >> 11),
+            .deliveryStatus = static_cast<REDTBLDeliveryStatus>((low & (1 << 12)) >> 12),
+            .pinPolarity = static_cast<REDTBLPinPolarity>((low & (1 << 13)) >> 13),
+            .triggerMode = static_cast<REDTBLTriggerMode>((low & (1 << 15)) >> 15),
+            .isMasked = static_cast<bool>(low & (1 << 16)),
             .destination = static_cast<uint8_t>(high >> 24)
     };
 }
 
-void IoApic::writeREDTBL(uint8_t gsi, REDTBL_Entry entry) {
-    if (gsi > maxREDTBLEntry) {
+// TODO: Spinlock?
+// TODO: Use Interrupt type
+void IoApic::writeREDTBL(IoApicConfiguration *ioapic, uint8_t gsi, REDTBLEntry redtbl) {
+    if (gsi < ioapic->gsiBase || gsi >= ioapic->gsiBase + ioapic->redtblEntries) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT,
-                                        "IoApic::readREDTBL(): REDTBL only has 24 entries!");
+                                        "IoApic::readREDTBL(): GSI is handled by different IO APIC!");
     }
 
     // Intel ICH5 Datasheet Chapter 9.5.8
     uint32_t low, high;
-    low = static_cast<uint32_t>(entry.slot)
-          | static_cast<uint32_t>(entry.deliveryMode) << 8
-          | static_cast<uint32_t>(entry.destinationMode) << 11
-          | static_cast<uint32_t>(entry.pinPolarity) << 13
-          | static_cast<uint32_t>(entry.triggerMode) << 15
-          | static_cast<uint32_t>(entry.isMasked) << 16;
-    high = entry.destination << 24;
+    low = static_cast<uint32_t>(redtbl.vector)
+          | static_cast<uint32_t>(redtbl.deliveryMode) << 8
+          | static_cast<uint32_t>(redtbl.destinationMode) << 11
+          | static_cast<uint32_t>(redtbl.pinPolarity) << 13
+          | static_cast<uint32_t>(redtbl.triggerMode) << 15
+          | static_cast<uint32_t>(redtbl.isMasked) << 16;
+    high = redtbl.destination << 24;
 
     // NOTE: Interrupts have to be disabled beforehand
     // The first register is the low DW, the second register is the high DW
-    writeDoubleWord(Indirect_Register::REDTBL + 2 * gsi, low);
-    writeDoubleWord(Indirect_Register::REDTBL + 2 * gsi + 1, high);
+    uint8_t entry = gsi - ioapic->gsiBase;
+    writeDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry, low);
+    writeDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry + 1, high);
 }
 
-// TODO: For real hardware the MP/ACPI tables have to be parsed to get the mapping
-// NOTE: In QEMU the IRQ/GSI mappings match (except PIT)
-// NOTE: (https://github.com/qemu/qemu/blob/master/hw/intc/ioapic.c#L153)
-IoApic::Interrupt IoApic::getIrqToGsiMapping(Pic::Interrupt irq) {
-    if (irq == Pic::Interrupt::CASCADE) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT,
-                                        "IoApic::getIrqToGsiMapping(): IoApic doesn't have CASCADE IRQ!");
-    }
+void IoApic::initializeREDTBL(IoApicConfiguration *ioapic) {
+    uint8_t id = LApic::getId(); // TODO: Don't send all interrupts to one cpu
 
-    if (irq == Pic::Interrupt::PIT) {
-        return Interrupt::PIT;
-    }
+    for (uint32_t entry = 0; entry < ioapic->redtblEntries; ++entry) {
+        uint8_t gsi = entry + ioapic->gsiBase;
 
-    return static_cast<Interrupt>(irq);
-}
+        Kernel::InterruptDispatcher::Interrupt vector;
+        if (gsi <= Pic::Interrupt::SECONDARY_ATA) {
+            // GSIs 0 to 15 are mapped depending on the InterruptOverride structures
+            vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(platformConfiguration.gsiToIrqMappings[gsi] + 32);
+        } else {
+            // Rest of GSIs are identity mapped but translated by 32
+            vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(gsi + 32);
+        }
 
-Kernel::InterruptDispatcher::Interrupt IoApic::getGsiToSlotMapping(Interrupt gsi) {
-    // PIT is mapped to GSI 2 but slot 32
-    if (gsi == Interrupt::PIT) {
-        return Kernel::InterruptDispatcher::PIT;
-    }
-
-    // Other IRQs are mapped to slots 32 - 47
-    if (gsi <= Interrupt::SECONDARY_ATA && gsi != Interrupt::FREE0) {
-        return static_cast<Kernel::InterruptDispatcher::Interrupt>(gsi + Kernel::InterruptDispatcher::PIT);
-    }
-
-    // Rest is mapped arbitrarily
-    switch (gsi) {
-        case FREE0:
-            return Kernel::InterruptDispatcher::FREE0;
-        case FREE4:
-        case FREE5:
-        case FREE6:
-        case FREE7:
-        case FREE8:
-        case FREE9:
-        case FREE10:
-        case FREE11:
-            return static_cast<Kernel::InterruptDispatcher::Interrupt>(gsi + 156);
-    }
-}
-
-void IoApic::initREDTBL() {
-    if (baseVirtAddress == 0) {
-        Util::Exception::throwException(Util::Exception::NULL_POINTER,
-                                        "IoApic::initREDTBL(): IoApic MMIO not initialized!");
-    }
-
-    // NOTE: The id corresponds to the current CPU (the BSP if other cores get started after this)
-    uint8_t id = LApic::getId();
-    for (uint8_t gsi = 0; gsi <= maxREDTBLEntry; ++gsi) {
         // NOTE: Interrupts have to be disabled beforehand
-        writeREDTBL(gsi, {
-                .slot = getGsiToSlotMapping(static_cast<Interrupt>(gsi)),
-                .deliveryMode = Delivery_Mode::FIXED,
-                .destinationMode = Destination_Mode::PHYSICAL,
-                .pinPolarity = Pin_Polarity::HIGH,
-                .triggerMode = Trigger_Mode::EDGE,
+        writeREDTBL(ioapic, gsi, {
+                .vector = vector,
+                .deliveryMode = REDTBLDeliveryMode::FIXED, // TODO
+                .destinationMode = REDTBLDestinationMode::PHYSICAL, // TODO
+                .pinPolarity = REDTBLPinPolarity::HIGH,
+                .triggerMode = REDTBLTriggerMode::EDGE,
                 .isMasked = true,
-                .destination = id});
+                .destination = id
+        });
     }
 
 }
 
 #if HHUOS_IOAPIC_ENABLE_DEBUG == 1
 
+// TODO
 void IoApic::logDebugDump() {
-    uint8_t id = getId();
-
-    log.debug("IO APIC Base Phys Address: 0x%x", IOAPIC_BASE_DEFAULT_PHYS_ADDRESS);
-    log.debug("IO APIC Base Virt Address: 0x%x", baseVirtAddress);
-    log.debug("IO APIC ID: %u", id);
-    log.debug("IO APIC VER: 0x%x (Has EOI Register: %u)", getVersion(), hasEOIRegister());
-    log.debug("IO APIC REDTLB Entries: %u", maxREDTBLEntry + 1);
 }
 
 #endif

@@ -2,6 +2,7 @@
 #define __IOAPIC_include__
 
 #include <cstdint>
+#include "ApicRegisterInterface.h"
 #include "kernel/log/Logger.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "device/interrupt/Pic.h"
@@ -15,8 +16,14 @@ namespace Device {
 //       Currently I just assume that one IO APIC exists, which is true for QEMU with +apic
 //       This code doesn't account for multiple IO APICs at all
 
+// TODO: Add "unstatic" members to handle multiple IO APICS through instances?
+
+// TODO: Crosscheck references to the original IO APIC Datasheet with Intel ICH5 Datasheet
+
 class IoApic {
 public:
+    // TODO: Remove this, set the mapping in an array in the platformConfiguration
+    // TODO: Unify the PIC/IO APIC interrupt structs
     enum Interrupt : uint8_t {
         FREE0 = 0x00,
         KEYBOARD = 0x01,
@@ -35,7 +42,7 @@ public:
         PRIMARY_ATA = 0x0E,
         SECONDARY_ATA = 0x0F,
 
-        // TODO: Technically depends on max REDTBL
+        // TODO: Depends on how many GSIs the system supports
         FREE4 = 0x10,
         FREE5 = 0x11,
         FREE6 = 0x12,
@@ -47,34 +54,21 @@ public:
     };
 
 public:
-    IoApic() = delete;
+    IoApic() = delete; // Static class
 
     IoApic(const IoApic &copy) = delete;
 
-    IoApic &operator=(const IoApic &other) = delete;
+    IoApic &operator=(const IoApic &copy) = delete;
 
-    ~IoApic() = default;
+    IoApic(IoApic &&move) = delete;
 
+    IoApic &operator=(IoApic &&move) = delete;
+
+    ~IoApic() = delete; // Static class
+
+
+    // TODO: Does not account for multiple IO APICs
     static bool isInitialized();
-
-    [[nodiscard]] static uint8_t getId();
-
-    // NOTE: Intel ICH2, ICH5 Datasheets Chapter 9.5.7 describe version 0x20
-    /**
-     * Determine the IO APIC's version.
-     *
-     * @return The IO APIC's version
-     */
-    [[nodiscard]] static uint8_t getVersion();
-
-    // NOTE: IO APICs with version below 0x20 don't support EOI register (QEMU reports 0x20)
-    // NOTE: (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
-    /**
-     * Determine if the IO APIC supports sending EOIs.
-     *
-     * @return True if sendinf EOIs is supported
-     */
-    [[nodiscard]] static bool hasEOIRegister();
 
     // NOTE: This only initializes the IO APIC at the default physical address
     // TODO: If there are multiple IO APICs the MMIO addresses have to be read from MP/ACPI tables
@@ -83,17 +77,7 @@ public:
      *
      * Must not be called with enabled interrupts.
      */
-    static void init();
-
-    /**
-     * Unmask an interrupt in the IO APIC.
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param gsi The number of the interrupt to activated
-     * @param destination Target CPU to send the interrupt to
-     */
-    static void allow(Interrupt gsi, uint8_t destination);
+    static void initialize();
 
     /**
      * Unmask an interrupt in the IO APIC.
@@ -104,16 +88,6 @@ public:
      * @param gsi The number of the interrupt to activated
      */
     static void allow(Interrupt gsi);
-
-    /**
-     * Unmask an interrupt in the IO APIC.
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param irq The number of the interrupt to activated
-     * @param destination Target CPU to send the interrupt to
-     */
-    static void allow(Pic::Interrupt irq, uint8_t destination); // Destination means CPU
 
     /**
      * Unmask an interrupt in the IO APIC.
@@ -157,9 +131,9 @@ public:
      * (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
      * (Intel ICH5 Datasheet Chapter 9.5.5)
      *
-     * @param interrupt The vector number of the interrupt that is marked as completed
+     * @param vector The vector number of the interrupt that is marked as completed
      */
-    static void sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt interrupt);
+    static void sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt vector);
 
 private:
     // Offsets, Intel ICH5 Datasheet Chapter 9.5.1 Table 144
@@ -178,117 +152,102 @@ private:
         REDTBL = 0x10 // Redirection table base address (24x 64 bit entry)
     };
 
-    enum class Delivery_Mode : uint8_t {
-        FIXED = 0,
-        LOWPRIO = 1,
-        SMI = 0b10,
-        NMI = 0b100,
-        INIT = 0b101,
-        EXTINT = 0b111
-    };
-    enum class Destination_Mode : uint8_t {
-        PHYSICAL = 0, LOGICAL = 1
-    };
-    enum class Delivery_Status : uint8_t {
-        IDLE = 0, PENDING = 1
-    };
-    enum class Pin_Polarity : uint8_t {
-        HIGH = 0, LOW = 1
-    };
-    enum class Trigger_Mode : uint8_t {
-        EDGE = 0, LEVEL = 1
-    };
-    typedef struct {
-        Kernel::InterruptDispatcher::Interrupt slot;
-        Delivery_Mode deliveryMode;
-        Destination_Mode destinationMode;
-        Delivery_Status deliveryStatus;
-        Pin_Polarity pinPolarity;
-        Trigger_Mode triggerMode;
-        bool isMasked;
-        uint8_t destination;
-    } REDTBL_Entry;
+    typedef struct IoApicConfiguration {
+        uint8_t id;
+        uint32_t address;
+        uint32_t virtAddress; // Needs to be set when initializing MMIO for this IO APIC
+        uint32_t gsiBase; // GSI where IO APIC interrupt inputs start
+        uint32_t redtblEntries; // Needs to be set after MMIO is available
+
+        bool operator!=(const IoApicConfiguration &other) const {
+            return id != other.id || address != other.address || virtAddress != other.virtAddress
+            || gsiBase != other.gsiBase || redtblEntries != other.redtblEntries;
+        }
+    } IoApicConfiguration;
+
+    typedef struct InterruptOverride {
+        uint8_t bus;
+        Pic::Interrupt source;
+        uint32_t gsi;
+        REDTBLPinPolarity polarity;
+        REDTBLTriggerMode triggerMode;
+
+        bool operator!=(const InterruptOverride &other) const {
+            return bus != other.bus || source != other.source || gsi != other.gsi || polarity != other.polarity
+            || triggerMode != other.triggerMode;
+        }
+    } InterruptOverride;
+
+    typedef struct NMIConfiguration {
+        REDTBLPinPolarity polarity;
+        REDTBLTriggerMode triggerMode;
+        uint32_t gsi;
+
+        bool operator!=(const NMIConfiguration &other) const {
+            return polarity != other.polarity || triggerMode != other.triggerMode || gsi != other.gsi;
+        }
+    } NMIConfiguration;
+
+    typedef struct IoPlatformConfiguration {
+        uint8_t version; // Needs to be set after MMIO is available
+        bool needsCompatibilityEOI; // If IoApic has no EOI register, needs to be set after MMIO is available
+        uint32_t irqToGsiMappings[16]; // GSIs for PIC IRQs (IRQ is the index)
+        uint8_t gsiToIrqMappings[16]; // Inverse of irqToGsiMappings
+        Util::Data::ArrayList<IoApicConfiguration *> ioapics;
+        Util::Data::ArrayList<InterruptOverride *> irqOverrides;
+        Util::Data::ArrayList<NMIConfiguration *> ionmis;
+    } IoPlatformConfiguration;
 
 private:
-    // TODO: Under what circumstances is this different from 24? Every datasheet lists 24 REDTBL entries...
     /**
-     * Determine the number of GSIs this IO APIC supports.
-     *
-     * @return The number of supported GSIs - 1
+     * Reads information influencing IO APIC initialization from ACPI tables.
      */
-    [[nodiscard]] static uint8_t getMaxREDTBLEntry();
-
-    // NOTE: This only works for the IO APIC at the default physical address
-    // NOTE: If there are multiple IO APICs the MMIO addresses have to be read from MP/ACPI tables
-    /**
-     * Read a value from an indirect IO APIC register.
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param reg The register (offset) to read from (same as IoApic::Indirect_Register)
-     * @return The value contained in the specified register
-     */
-    [[nodiscard]] static uint32_t readDoubleWord(uint8_t reg);
-
-    // NOTE: This only works for the IO APIC at the default physical address
-    // NOTE: If there are multiple IO APICs the MMIO addresses have to be read from MP/ACPI tables
-    /**
-     * Write a value to an indirect IO APIC register.
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param reg The register (offset) to write to (same as IoApic::Indirect_Register)
-     * @param val The value to write
-     */
-    static void writeDoubleWord(uint8_t reg, uint32_t val);
+    static void initializePlatformConfiguration();
 
     /**
-     * Read an entry from the redirection table.
+     * Get the configuration structure of the IO APIC that handles a specific GSI.
      *
-     * Must not be called with enabled interrupts.
-     *
-     * @param entry The number of the entry to read (same as IoApic::Interrupt)
-     * @return The redirection table entry
+     * @param gsi The GSI that's handled by the searched IO APIC
+     * @return The IO APIC configuration
      */
-    [[nodiscard]] static REDTBL_Entry readREDTBL(uint8_t gsi);
+    static IoApicConfiguration *getIoApicConfiguration(Interrupt gsi);
+    static IoApicConfiguration *getIoApicConfiguration(Pic::Interrupt irq);
+    static IoApicConfiguration *getIoApicConfiguration(Kernel::InterruptDispatcher::Interrupt vector);
 
     /**
-     * Write an entry to the redirection table.
+     * Get the configuration structure that describes the NMI of a specific IO APIC.
      *
-     * Must not be called with enabled interrupts.
-     *
-     * @param entry The number of the entry to write (same as IoApic::Interrupt)
-     * @param entry The redirection table entry value
+     * @param ioapic The IO APIC which NMI configuration is searched
+     * @return The NMI configuration
      */
-    static void writeREDTBL(uint8_t gsi, REDTBL_Entry entry);
+    static NMIConfiguration *getNMIConfiguration(IoApicConfiguration *ioapic);
 
     /**
-     * Return a corresponding IO APIC GSI for a legacy PIC IRQ.
+     * Initialize a single IO APIC.
      *
-     * @param irq PIC IRQ to map
-     * @return Corresponding IO APIC GSI
+     * @param id The ID of the IO APIC to initialize
      */
-    static Interrupt getIrqToGsiMapping(Pic::Interrupt irq);
+    static void initializeController(IoApicConfiguration *ioapic);
 
     /**
-     * Return a corresponding vector number for an IO APIC GSI.
-     *
-     * @param gsi IO APIC GSI to map
-     * @return Corresponding vector number
-     */
-    static Kernel::InterruptDispatcher::Interrupt getGsiToSlotMapping(Interrupt gsi);
-
-    /**
-     * Marks every GSI in the redirection table as edge-triggered, active high, masked,
-     * physical destination mode to local APIC of BSP and fixed delivery mode.
-     * Vector numbers are set to InterruptDispatcher equivalent vectors.
+     * Marks every entry in the redirection table as edge-triggered, active high, masked,
+     * physical destination mode to local APIC of the current CPU and fixed delivery mode.
+     * Sets vector numbers to corresponding InterruptDispatcher::Interrupt.
      *
      * Must not be called with enabled interrupts.
      */
-    static void initREDTBL();
+    static void initializeREDTBL(IoApicConfiguration *ioapic);
 
-    // TODO: Functions to write REDTBL more easily
-    // TODO: Just use a function that reads REDTBL and returns a struct (no bitfields) and the same for writing
+    // NOTE: Reading and writing IO APIC's registers.
+    // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
+
+    [[nodiscard]] static uint32_t readDoubleWord(IoApicConfiguration *ioapic, uint8_t reg);
+
+    static void writeDoubleWord(IoApicConfiguration *ioapic, uint8_t reg, uint32_t val);
+
+    [[nodiscard]] static REDTBLEntry readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi);
+
+    static void writeREDTBL(IoApicConfiguration *ioapic, uint8_t gsi, REDTBLEntry redtbl);
 
 #if HHUOS_IOAPIC_ENABLE_DEBUG == 1
 
@@ -298,16 +257,11 @@ private:
 
 private:
     static bool initialized;
-    static uint8_t version;
-    static uint8_t maxREDTBLEntry;
-    static uint32_t baseVirtAddress;
 
-    // TODO: Crosscheck references to the original IO APIC Datasheet with Intel ICH5 Datasheet
-
-    // TODO: Byte 2 is determined by the APIC Base Address Relocation Register if IO APIC is located in PIIX3 bridge
-    //       The location could also be parsed from MP/ACPI tables
-    // MMIO, IOAPIC Datasheet Chapter 3.0 Table 1
-    static const constexpr uint32_t IOAPIC_BASE_DEFAULT_PHYS_ADDRESS = 0xFEC00000;
+    // NOTE: I chose to keep this and the contained structs stack allocated
+    // NOTE: because I didn't want the hassle of having heap-allocated static objects.
+    // NOTE: The ArrayLists are only allocated once elements are added.
+    static IoPlatformConfiguration platformConfiguration;
 
     static Kernel::Logger log;
 };
