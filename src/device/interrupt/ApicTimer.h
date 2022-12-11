@@ -32,6 +32,7 @@ public:
 
     ~ApicTimer() override = default;
 
+
     /**
      * Overriding function from InterruptHandler.
      */
