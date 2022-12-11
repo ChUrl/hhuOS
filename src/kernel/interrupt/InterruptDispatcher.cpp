@@ -32,6 +32,7 @@
 #include "lib/util/io/stream/PrintStream.h"
 #include "lib/util/base/System.h"
 #include "device/interrupt/LApic.h"
+#include "device/interrupt/IoApic.h"
 
 namespace Kernel {
 
@@ -91,14 +92,23 @@ uint32_t InterruptDispatcher::getInterruptDepth() const {
 }
 
 bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrupt slot) {
-    // Hardware interrupts
+    // Hardware (PIC) interrupts
     if (slot >= PIT && slot <= SECONDARY_ATA) {
         return false;
     }
 
+    // TODO: Only do if ACPI + APIC available
 #if HHUOS_LAPIC_ENABLE == 1
-    // NOTE: I chose vectors 0xAA to 0xFF for APIC interrupts
-    if (slot >= APICTIMER && slot <= SPURIOUS) {
+    // Local APIC interrupts
+    if (slot >= CMCI && slot <= SPURIOUS) {
+        return false;
+    }
+#endif
+
+#if HHUOS_LAPIC_ENABLE == 1 && HHUOS_IOAPIC_ENABLE == 1
+    // TODO: These might not exist, needs to be determined from IoApic
+    // Additional IO APIC interrupts
+    if (slot >= IO1 && slot <= IO8) {
         return false;
     }
 #endif
