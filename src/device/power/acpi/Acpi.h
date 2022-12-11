@@ -255,8 +255,14 @@ public:
 
     static bool hasTable(const char *signature);
 
-    // TODO: Can I modify the interface to *getTable<T>(const char *signature)?
     static const SdtHeader& getTable(const char *signature);
+
+    // TODO: Is this okay?
+    // Convenience function to directly receive pointer to specific table
+    template<typename T = SdtHeader>
+    static const T *getTable(const char *signature) {
+        return reinterpret_cast<const T *>(&getTable(signature));
+    }
 
     static Util::Array<Util::String> getAvailableTables();
 
