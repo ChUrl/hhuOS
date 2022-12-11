@@ -23,6 +23,4 @@ target_sources(device PUBLIC
         # TODO: This doesn't belong here, needs to be moved to x86/i386 folder
         ${HHUOS_SRC_DIR}/device/interrupt/ModelSpecificRegister.cpp
         # TODO: Does this belong to device/time? Thechnically it is part of the local APIC...
-        ${HHUOS_SRC_DIR}/device/interrupt/ApicTimer.cpp
-        # TODO: Remove the tests?
-        ${HHUOS_SRC_DIR}/device/interrupt/IpiTest.cpp)
+        ${HHUOS_SRC_DIR}/device/interrupt/ApicTimer.cpp)
