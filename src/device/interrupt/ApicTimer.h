@@ -16,6 +16,9 @@
 
 // TODO: This code doesn't account for multi core systems
 
+// NOTE: If the ApicTimer would be used exclusively the PIT handler could be reused, but I don't want
+// NOTE: to exclude the possibility of using both (PIT for time, ApicTimer for scheduling)
+
 namespace Device {
 
 class ApicTimer : public Kernel::InterruptHandler, public TimeProvider {
@@ -45,6 +48,13 @@ public:
     [[nodiscard]] Util::Time::Timestamp getTime() override;
 
 private:
+    // Offsets, IA-32 Architecture Manual Chapter 10.4.1
+    enum Register : uint16_t {
+        TIMER_INITIAL = 0x380, // Timer Initial Count Register
+        TIMER_CURRENT = 0x390, // Timer Current Count Register
+        TIMER_DIVIDE = 0x3E0 // Timer Divide Configuration Register
+    };
+
     // IA-32 Architecture Manual Chapter 10.5.4
     enum Divide : uint32_t {
         BY_1 = 0b1011,
