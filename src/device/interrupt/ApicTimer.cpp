@@ -3,7 +3,6 @@
 #include "ApicRegisterInterface.h"
 #include "kernel/service/TimeService.h"
 #include "lib/util/async/Thread.h"
-#include "device/cpu/Cpu.h"
 
 namespace Device {
 
@@ -21,11 +20,10 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInte
     setInterruptRate(timerInterval);
 }
 
-// TODO: Investigate LVT TIMER showing vector 0 in QEMU monitor
 void ApicTimer::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::APICTIMER, *this);
-    LApic::allow(LApic::TIMER); // TODO: This in interruptservice
+    LApic::allow(LApic::TIMER); // TODO: This in interruptservice?
 }
 
 void ApicTimer::trigger(const Kernel::InterruptFrame &frame) {

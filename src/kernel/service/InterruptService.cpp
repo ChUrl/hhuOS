@@ -35,7 +35,7 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
 void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) {
     // TODO: Only do if ACPI + APIC available
 #if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // TODO: Is disabling interrupts like this safe? Or better use spinlock?
+    // TODO: Is disabling interrupts like this safe? Or better use spinlock? Is it even necessary?
     Device::Cpu::disableInterrupts();
     Device::IoApic::allow(interrupt);
     Device::Cpu::enableInterrupts();
@@ -47,7 +47,7 @@ void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) 
 void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt) {
     // TODO: Only do if ACPI + APIC available
 #if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // TODO: Is disabling interrupts like this safe?
+    // TODO: Is disabling interrupts like this safe? Is it even necessary?
     Device::Cpu::disableInterrupts();
     Device::IoApic::forbid(interrupt);
     Device::Cpu::enableInterrupts();
@@ -69,7 +69,7 @@ void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interru
 #if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
     // TODO: <= IO8 depends on how many GSIs are supported by the system
-    if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::IO8) {
+    if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::IO8) { // TODO: Change IO8 to maxGsi
         Device::LApic::sendEndOfInterrupt(); // TODO: Do IO APIC GSIs need local APIC EOI?
         Device::IoApic::sendEndOfInterrupt(interrupt);
     }

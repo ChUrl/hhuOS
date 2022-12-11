@@ -311,10 +311,10 @@ void LApic::initializeController(LApicConfiguration *lapic) {
 
 void LApic::initializeLVT() {
     // Default values
-    LVTEntry entry = {.deliveryMode = LVTDeliveryMode::FIXED,
-            .pinPolarity = LVTPinPolarity::HIGH,
-            .triggerMode = LVTTriggerMode::EDGE,
-            .isMasked = true};
+    LVTEntry entry = {.deliveryMode = LVTDeliveryMode::FIXED, // TODO
+                      .pinPolarity = LVTPinPolarity::HIGH,
+                      .triggerMode = LVTTriggerMode::EDGE,
+                      .isMasked = true};
 
     // Set all the vector numbers
     entry.vector = Kernel::InterruptDispatcher::CMCI;

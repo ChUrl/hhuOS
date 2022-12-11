@@ -92,11 +92,6 @@ uint32_t InterruptDispatcher::getInterruptDepth() const {
 }
 
 bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrupt slot) {
-    // Hardware (PIC) interrupts
-    if (slot >= PIT && slot <= SECONDARY_ATA) {
-        return false;
-    }
-
     // TODO: Only do if ACPI + APIC available
 #if HHUOS_LAPIC_ENABLE == 1
     // Local APIC interrupts
@@ -108,7 +103,12 @@ bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrup
 #if HHUOS_LAPIC_ENABLE == 1 && HHUOS_IOAPIC_ENABLE == 1
     // TODO: These might not exist, needs to be determined from IoApic
     // Additional IO APIC interrupts
-    if (slot >= IO1 && slot <= IO8) {
+    if (slot >= PIT && slot <= IO8) { // TODO: Replace IO8 with maxGSI from IoPlatformConfiguration
+        return false;
+    }
+#else
+    // Hardware (PIC) interrupts
+    if (slot >= PIT && slot <= SECONDARY_ATA) {
         return false;
     }
 #endif

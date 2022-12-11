@@ -210,16 +210,17 @@ private:
 
     static void dumpLPlatformConfiguration();
 
-     // NOTE: Reading and writing local APIC's registers.
+     // NOTE: Reading and writing local APIC's registers
      // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
+     // NOTE: Only registers of currently running CPU will be affected
 
-    [[nodiscard]] static MSREntry readBaseMSR(); // Affects all local APICs
+    [[nodiscard]] static MSREntry readBaseMSR(); // TODO: Affects all local APICs?
 
-    static void writeBaseMSR(MSREntry entry); // Affects all local APICs
+    static void writeBaseMSR(MSREntry entry); // TODO: Affects all local APICs?
 
-    [[nodiscard]] static uint32_t readDoubleWord(uint16_t reg); // Affects current CPU's local APIC
+    [[nodiscard]] static uint32_t readDoubleWord(uint16_t reg);
 
-    static void writeDoubleWord(uint16_t reg, uint32_t val); // Affects current CPU's local APIC
+    static void writeDoubleWord(uint16_t reg, uint32_t val);
 
     [[nodiscard]] static SVREntry readSVR();
 

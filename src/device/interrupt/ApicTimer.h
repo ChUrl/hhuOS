@@ -9,21 +9,23 @@
 
 #define HHUOS_APICTIMER_ENABLE 1
 
-// NOTE: The APIC Timer's counter is decremented at external CPU frequency (bus frequency)
-// NOTE: divided by the divisor specified in the divide register (thus Divide::BY_1 is the fastest)
-
-// NOTE: The PIT is configured with an interval of 1ms by default
-
 // TODO: This code doesn't account for multi core systems
+//       - The calibration only has to be done once, but the registers have to be written
+//         for every core (do before APs get initialized and set registers in AP init sequence?)
+//       - I think it wouldn't make sense to use the APICTIMER for timekeeping then
+//         because every CPU core would influence the timestamp (if it was static) or have
+//         an individual timestamp
 
 // NOTE: If the ApicTimer would be used exclusively the PIT handler could be reused, but I don't want
 // NOTE: to exclude the possibility of using both (PIT for time, ApicTimer for scheduling)
+
+// NOTE: The APIC Timer's counter is decremented at external CPU frequency (bus frequency)
+// NOTE: divided by the divisor specified in the divide register (thus Divide::BY_1 is the fastest)
 
 namespace Device {
 
 class ApicTimer : public Kernel::InterruptHandler, public TimeProvider {
 public:
-    // TODO: Parameters for interval, calibration source etc.
     explicit ApicTimer(uint32_t timerInterval = 1000000, uint32_t yieldInterval = 10);
 
     ApicTimer(const ApicTimer &copy) = delete;
@@ -76,6 +78,7 @@ private:
      */
     void setInterruptRate(uint32_t interval);
 
+private:
     Util::Time::Timestamp time{};
     uint32_t timerInterval = 0;
     uint32_t yieldInterval;
