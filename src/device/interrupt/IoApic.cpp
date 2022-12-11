@@ -191,6 +191,8 @@ void IoApic::initializeController(IoApicConfiguration *ioapic) {
     // NOTE: With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
     // NOTE: With ICH5 (and other ICHs?) it is always 24
     ioapic->redtblEntries = ((readDoubleWord(ioapic, Indirect_Register::VER) >> 16) & 0xFF) + 1;
+    platformConfiguration.maxGsi = ioapic->gsiBase + ioapic->redtblEntries - 1 > platformConfiguration.maxGsi
+            ? ioapic->gsiBase + ioapic->redtblEntries - 1 : platformConfiguration.maxGsi;
     initializeREDTBL(ioapic);
 
     // Configure NMI if it exists
@@ -253,6 +255,7 @@ void IoApic::initializeREDTBL(IoApicConfiguration *ioapic) {
 void IoApic::dumpIoPlatformConfiguration() {
     log.info("Version: [0x%x]", platformConfiguration.version);
     log.info("Has EOI register: [%d]", platformConfiguration.hasEOIRegister);
+    log.info("System max GSI: [%d]", platformConfiguration.maxGsi);
 
     log.info("Io Apic status:");
     for (auto *ioapic : platformConfiguration.ioapics) {

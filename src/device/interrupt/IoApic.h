@@ -124,9 +124,9 @@ private:
     typedef struct IoApicConfiguration {
         uint8_t id;
         uint32_t address;
-        uint32_t virtAddress; // Needs to be set when initializing MMIO for this IO APIC
+        uint32_t virtAddress; // Set when initializing MMIO for this IO APIC
         uint32_t gsiBase; // GSI where IO APIC interrupt inputs start
-        uint32_t redtblEntries; // Needs to be set after MMIO is available
+        uint32_t redtblEntries; // Set after MMIO is available // TODO: Change to maxGsi that this IO APIC can handle
     } IoApicConfiguration;
 
     typedef struct IoInterruptOverride {
@@ -144,10 +144,11 @@ private:
     } IoNMIConfiguration;
 
     typedef struct IoPlatformConfiguration {
-        uint8_t version; // Needs to be set after MMIO is available
-        bool hasEOIRegister; // If IoApic has no EOI register, needs to be set after MMIO is available
+        uint8_t version; // Set after MMIO is available
+        bool hasEOIRegister; // If IoApic has no EOI register, set after MMIO is available
         uint32_t irqToGsiMappings[16]; // GSIs for PIC IRQs (IRQ is the index)
         uint8_t gsiToIrqMappings[16]; // Inverse of irqToGsiMappings
+        uint8_t maxGsi; // Systemwide max gsi
         Util::Data::ArrayList<IoApicConfiguration *> ioapics;
         Util::Data::ArrayList<IoInterruptOverride *> irqOverrides;
         Util::Data::ArrayList<IoNMIConfiguration *> ionmis;
@@ -199,6 +200,7 @@ private:
 
     // NOTE: Reading and writing IO APIC's registers.
     // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
+    // NOTE: Affects the registers of the passed IO APIC
 
     [[nodiscard]] static uint32_t readDoubleWord(IoApicConfiguration *ioapic, uint8_t reg);
 
