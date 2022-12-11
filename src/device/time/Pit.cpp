@@ -23,6 +23,8 @@
 #include "kernel/log/Logger.h"
 #include "kernel/service/SchedulerService.h"
 #include "lib/util/base/Exception.h"
+#include "device/interrupt/LApic.h"
+#include "device/interrupt/ApicTimer.h"
 
 namespace Kernel {
 struct InterruptFrame;
@@ -59,7 +61,8 @@ void Pit::plugin() {
 void Pit::trigger(const Kernel::InterruptFrame &frame) {
     time.addNanoseconds(timerInterval);
 
-#if HHUOS_APICTIMER_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
+    // TODO: Only do if ACPI + APIC available
+#if !(HHUOS_APICTIMER_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1)
     // Don't use PIT for scheduling when APIC Timer is enabled
     if (time.toMilliseconds() % yieldInterval == 0) {
         Kernel::System::getService<Kernel::SchedulerService>().yield();
