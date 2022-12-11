@@ -20,7 +20,7 @@ readonly CONST_QEMU_BIN_I386="qemu-system-i386"
 readonly CONST_QEMU_BIN_X86_64="qemu-system-x86_64"
 readonly CONST_QEMU_MACHINE_PC="pc"
 readonly CONST_QEMU_MACHINE_PC_KVM="pc,accel=kvm,kernel-irqchip=split"
-readonly CONST_QEMU_CPU_I386="base,+fpu,+tsc,+cmov,+fxsr,+mmx,+sse"
+readonly CONST_QEMU_CPU_I386="base,+fpu,+tsc,+cmov,+fxsr,+mmx,+sse,+apic" # added +apic
 readonly CONST_QEMU_CPU_X86_64="qemu64"
 readonly CONST_QEMU_DEFAULT_RAM="128M"
 readonly CONST_QEMU_BIOS_PC=""
@@ -30,7 +30,9 @@ readonly CONST_QEMU_DEFAULT_BOOT_DEVICE="-drive driver=raw,node-name=boot,file.d
 readonly CONST_QEMU_STORAGE_ARGS="-drive driver=raw,index=0,if=floppy,file=floppy0.img -drive driver=raw,node-name=hdd0,file.driver=file,file.filename=hdd0.img"
 readonly CONST_QEMU_FIRMWARE_CONFIGURATION_ARGS="-fw_cfg name=opt/bin/echo,file=initrd/bin/echo"
 readonly CONST_QEMU_NETWORK_ARGS="-nic model=rtl8139,id=eth0,hostfwd=udp::1797-:1797 -object filter-dump,id=filter0,netdev=eth0,file=eth0.dump"
-readonly CONST_QEMU_ARGS="-boot d -vga std -monitor stdio -rtc base=localtime -device isa-debug-exit"
+# NOTE: -serial stdio or -monitor stdio
+# NOTE: -smp 2 for multicore (and MP tables)
+readonly CONST_QEMU_ARGS="-boot d -vga std -serial stdio -rtc base=localtime -device isa-debug-exit"
 readonly CONST_QEMU_OLD_AUDIO_ARGS="-soundhw pcspk"
 readonly CONST_QEMU_NEW_AUDIO_ARGS="-audiodev id=pa,driver=pa -machine pcspk-audiodev=pa"
 
@@ -160,15 +162,18 @@ parse_cpu() {
 parse_debug() {
   local port=$1
 
+  # NOTE: Added tui enable and breakpoint
   echo "set architecture i386
       set disassembly-flavor intel
-      target remote 127.0.0.1:${port}" >/tmp/gdbcommands."$(id -u)"
+      target remote 127.0.0.1:${port}
+      tui enable
+      break GatesOfHell::enter()" >/tmp/gdbcommands."$(id -u)"
 
   QEMU_GDB_PORT="${port}"
 }
 
 start_gdb() {
-  gdb -x "/tmp/gdbcommands.$(id -u)" "loader/boot/hhuOS.bin"
+  gdb -x "/tmp/gdbcommands.$(id -u)" "loader/towboot/hhuOS.bin" # NOTE: Changed boot to towboot
   exit $?
 }
 
