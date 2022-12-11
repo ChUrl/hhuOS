@@ -139,6 +139,88 @@ public:
         uint32_t flags;
     } __attribute__ ((packed));
 
+    // TODO: Differs for different ACPI versions
+    // TODO: Keep here, move into acpi/Madt class or move into APIC classes?
+    // NOTE: APIC tables I added (ACPI Specification Chapter 5.2.12):
+    enum ApicStructureType : uint8_t {
+        PROCESSOR_LOCAL_APIC = 0x0,
+        IO_APIC = 0x1,
+        INTERRUPT_SOURCE_OVERRIDE = 0x2,
+        NON_MASKABLE_INTERRUPT_SOURCE = 0x3,
+        LOCAL_APIC_NMI = 0x4,
+        LOCAL_APIC_ADDRESS_OVERRIDE = 0x5,
+        IO_SAPIC = 0x6,
+        LOCAL_SAPIC = 0x7,
+        PLATFORM_INTERRUPT_SOURCES = 0x8,
+        PROCESSOR_LOCAL_X2APIC = 0x9,
+        LOCAL_X2APIC_NMI = 0xa,
+        GIC_CPU_INTERFACE = 0xb,
+        GIC_DISTRIBUTOR = 0xc,
+        GIC_MSI_FRAME = 0xd,
+        GIC_REDISTRIBUTOR = 0xe,
+        GIC_INTERRUPT_TRANSLATION_SERVICE = 0xf
+    };
+
+    enum IntiFlag : uint8_t {
+        ACTIVE_HIGH = 0x1,
+        ACTIVE_LOW = 0x3,
+        EDGE_TRIGGERED = 0x4,
+        LEVEL_TRIGGERED = 0xc
+    };
+
+    enum ProcessorFlag : uint8_t {
+        ENABLED = 0x1,
+        ONLINE_CAPABLE = 0x2
+    };
+
+    struct ApicStructureHeader {
+        ApicStructureType type;
+        uint8_t length;
+    } __attribute__ ((packed));
+
+    struct ProcessorLocalApic {
+        ApicStructureHeader header;
+        uint8_t acpiProcessorUid;
+        uint8_t apicId;
+        uint32_t flags;
+    } __attribute__ ((packed));
+
+    struct IoApic {
+        ApicStructureHeader header;
+        uint8_t ioApicId;
+        uint8_t reserved;
+        uint32_t ioApicAddress;
+        uint32_t globalSystemInterruptBase;
+    } __attribute__ ((packed));
+
+    struct InterruptSourceOverride {
+        ApicStructureHeader header;
+        uint8_t bus;
+        uint8_t source;
+        uint32_t globalSystemInterrupt;
+        uint16_t flags;
+    } __attribute__ ((packed));
+
+    struct NMISource {
+        ApicStructureHeader header;
+        uint16_t flags;
+        uint32_t globalSystemInterrupt;
+    } __attribute__ ((packed));
+
+    struct LocalApicNMI {
+        ApicStructureHeader header;
+        uint8_t acpiProcessorUid;
+        uint16_t flags;
+        uint8_t localApicLint;
+    } __attribute__ ((packed));
+
+    struct Madt {
+        SdtHeader header;
+        uint32_t localApicAddress;
+        uint32_t flags;
+        ApicStructureHeader apicStructure; // NOTE: Is a list
+    } __attribute__ ((packed));
+
     /**
      * Default Constructor.
      * Deleted, as this class has only static members.
@@ -173,9 +255,35 @@ public:
 
     static bool hasTable(const char *signature);
 
+    // TODO: Can I modify the interface to *getTable<T>(const char *signature)?
     static const SdtHeader& getTable(const char *signature);
 
     static Util::Array<Util::String> getAvailableTables();
+
+    // TODO: Move?
+    template<typename T>
+    static void getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type) {
+        auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
+        auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
+
+        auto *pos = reinterpret_cast<const uint8_t *>(&madt->apicStructure);
+        const ApicStructureHeader *header;
+        while (pos < madtEndAddress) {
+            header = reinterpret_cast<const ApicStructureHeader *>(pos);
+
+            if (header->length == 0) {
+                // If this happens there is a bug in this function o_O
+                Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                                "Acpi::getApicStructures(): Header length must not be 0!");
+            }
+
+            if (header->type == type) {
+                structures->add(reinterpret_cast<const T *>(header));
+            }
+
+            pos += header->length;
+        }
+    }
 
 private:
 
