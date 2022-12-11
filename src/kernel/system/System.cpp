@@ -54,7 +54,6 @@
 #include "device/interrupt/ApicTimer.h"
 #include "device/interrupt/LApic.h"
 #include "device/interrupt/IoApic.h"
-#include "device/interrupt/IpiTest.h"
 
 namespace Kernel {
 class Service;
@@ -115,32 +114,23 @@ void System::initializeSystem() {
 
     initialized = true;
 
+    // TODO: Only do if ACPI + APIC available
 #if HHUOS_LAPIC_ENABLE == 1
     // NOTE: Enable APIC
     log.info("Initializing local APIC");
-    Device::LApic::init();
-    Device::LApic::enableVirtualWireMode();
+    Device::LApic::initialize();
 #endif
 
+    // TODO: Only do if ACPI + APIC available
 #if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // NOTE: Enable IO APIC
     log.info("Initializing IO APIC");
-    Device::IoApic::init();
-    Device::LApic::enableIoApicMode();
+    Device::IoApic::initialize();
 #endif
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
     Device::Cpu::enableInterrupts();
-
-#if HHUOS_IPITEST_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // NOTE: Verify IPI
-    auto* ipitest = new IpiTest();
-    ipitest->plugin();
-    Device::Cpu::disableInterrupts();
-    Device::LApic::verifyIPI();
-    Device::Cpu::enableInterrupts();
-#endif
 
     // Setup time and date devices
     log.info("Initializing PIT");
@@ -162,6 +152,7 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
+    // TODO: Only do if ACPI + APIC available
 #if HHUOS_APICTIMER_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
     // NOTE: Enable APIC Timer
     log.info("Initializing APIC Timer");
