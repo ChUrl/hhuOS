@@ -42,12 +42,15 @@ struct InterruptFrame;
 class InterruptDispatcher {
 
 public:
-
+    // NOTE: These don't correspong to GSI order but to IRQ order (that's why ACPI Interrupt Source Override exists)
     enum Interrupt : uint8_t {
         DEVICE_NOT_AVAILABLE = 7,
         PAGEFAULT = 14,
+
+        // PIC interrupts
         PIT = 32,
         KEYBOARD = 33,
+        // NOTE: CASCADE
         COM2 = 35,
         COM1 = 36,
         LPT2 = 37,
@@ -61,24 +64,29 @@ public:
         FPU = 45,
         PRIMARY_ATA = 46,
         SECONDARY_ATA = 47,
+
+        // TODO: Just as example, depends on how many GSIs are supported by the system
+        // NOTE: There should be no gap here as I calculate the vector number by adding 32 to GSI number
+        // IoApic interrupts, added to support at least 24
+        IO1 = 48,
+        IO2 = 49,
+        IO3 = 50,
+        IO4 = 51,
+        IO5 = 52,
+        IO6 = 53,
+        IO7 = 54,
+        IO8 = 55,
+
         SYSTEM_CALL = 0x86,
 
-        // TODO: This is arbitrary, should I change it?
-        // NOTE: 0xAA - 0xFF are APIC interrupts
-        APICTIMER = 0xAA,
-        FREE0 = 0xAB,
-        FREE4 = 0xAC,
-        FREE5 = 0xAD,
-        FREE6 = 0xAE,
-        FREE7 = 0xAF,
-        FREE8 = 0xB0,
-        FREE9 = 0xB1,
-        FREE10 = 0xB2,
-        FREE11 = 0xB3,
-
-        IPITEST = 0xF0, // TODO: Remove
-        // TODO: Map PIT (GSI2) to IOTEST initially, remap it to InterruptDispatcher::PIT in the IOTEST handler?
-        IOTEST = 0xF1, // TODO: Remove
+        // Local APIC interrupts
+        CMCI = 0xF8,
+        APICTIMER = 0xF9,
+        THERMAL = 0xFA,
+        PERFORMANCE = 0xFB,
+        LINT0 = 0xFC,
+        LINT1 = 0xFD,
+        ERROR = 0xFE,
         SPURIOUS = 0xFF
     };
 
