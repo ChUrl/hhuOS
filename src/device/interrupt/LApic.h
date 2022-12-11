@@ -22,14 +22,6 @@
 // NOTE: when it's in APIC mode it receives GSIs (regularly up to
 // NOTE: The GSIs range from 0 to 15 (for legacy PIC compatibility), the rest is adjacent and distributed to IO APICs
 
-// TODO: Check ACPI Specification Chapter 5.2.13 for GSI naming scheme (IO APIC pins are calld INTIs)
-//       and rename accordingly
-
-// TODO: Add "unstatic" members to handle multiple local APICS through instances?
-//       I don't want this because I want the handling of variable core amounts to be
-//       contained in this class (otherwise runtime dependent amounts of LApic objects would
-//       have to be managed in the InterruptService.
-
 // TODO: Error handling: An error handler class that implements the handler for the ERROR vector
 
 // TODO: 64 Bit needs ACPI APIC Address Override structure
@@ -68,7 +60,8 @@ public:
     ~LApic() = delete; // Static class
 
 
-    // TODO: Does not differentiate between multiple CPUs
+    // TODO: Differentiate between different cores (put initialized in the LApicConfiguration struct?)
+    // NOTE: Currently if this is true this also means that all other APs were initialized
     /**
      * Check if local APIC is initialized.
      *
@@ -76,6 +69,7 @@ public:
      */
     static bool isInitialized();
 
+    // TODO: Currently also initializes all APs, should probably remove that
     /**
      * Initialize the local APIC with all local APIC interrupts masked and
      * EOI broadcasting disabled.
@@ -120,6 +114,8 @@ public:
      */
     static void sendEndOfInterrupt();
 
+    static void handleErrors();
+
 private:
     // Offsets, IA-32 Architecture Manual Chapter 10.4.1
     // NOTE: Omitted entries already in LApic::Interrupt and ApicTimer
@@ -142,11 +138,11 @@ private:
         ICR_HIGH = 0x310,
     };
 
-    // TODO: Add contents of MSR if MSR exists for every core individually
+    // TODO: Add contents of MSR if MSR exists for every core individually?
     typedef struct LApicConfiguration {
         uint8_t uid; // ACPI also stores this // TODO: Do I need this
         uint8_t id; // TODO: Check if ACPI sets this by itself of if the ID reg values have to be signalled to ACPI
-        bool enabled; // TODO: Check when this is set in ACPI, does BSP has this already?
+        bool enabled; // Should always be true for BSP
         bool canEnable; // TODO: Not available in ACPI 1.0?
     } LApicConfiguration;
 
@@ -164,7 +160,7 @@ private:
     typedef struct LPlatformConfiguration {
         bool xApicSupported;
         bool x2ApicSupported;
-        bool isX2Apic; // TODO: Disable this when running in compatibilitymode? Atleast indicate used mode
+        bool isX2Apic; // Indicates mode currently running in
         uint8_t version; // Needs to be set after MMIO is available
         uint32_t address;
         uint32_t virtAddress;

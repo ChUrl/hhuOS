@@ -12,12 +12,6 @@
 
 namespace Device {
 
-// TODO: In order to detect IO APIC(s), MP/ACPI tables have to be parsed.
-//       Currently I just assume that one IO APIC exists, which is true for QEMU with +apic
-//       This code doesn't account for multiple IO APICs at all
-
-// TODO: Add "unstatic" members to handle multiple IO APICS through instances?
-
 // TODO: Crosscheck references to the original IO APIC Datasheet with Intel ICH5 Datasheet
 
 // TODO: Do IO APIC GSIs have to be continuous (could there be gaps between IO APICs)?
@@ -43,11 +37,8 @@ public:
     ~IoApic() = delete; // Static class
 
 
-    // TODO: Does not account for multiple IO APICs
     static bool isInitialized();
 
-    // NOTE: This only initializes the IO APIC at the default physical address
-    // TODO: If there are multiple IO APICs the MMIO addresses have to be read from MP/ACPI tables
     /**
      * Initialize the IO APIC.
      *
@@ -218,9 +209,6 @@ private:
 private:
     static bool initialized;
 
-    // NOTE: I chose to keep this and the contained structs stack allocated
-    // NOTE: because I didn't want the hassle of having heap-allocated static objects.
-    // NOTE: The ArrayLists are only allocated once elements are added.
     static IoPlatformConfiguration platformConfiguration;
 
     static Kernel::Logger log;

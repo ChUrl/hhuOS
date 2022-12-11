@@ -46,6 +46,7 @@ void LApic::initialize() {
         MSREntry msr = readBaseMSR();
         msr.isX2Apic = false; // Operate in xApic compatibility mode // TODO: Test this
         writeBaseMSR(msr);
+        platformConfiguration.isX2Apic = false;
     }
 
     // TODO: Does every AP has to call this before initializing its local APIC?
@@ -64,13 +65,14 @@ void LApic::initialize() {
 
     // TODO: Should probably not do this automatically inside LApic::initialize()...
     for (auto *lapic : platformConfiguration.lapics) {
-        // TODO: Could better use if (!lapic->enabled) and check if (lapic->canEnable)
-        //       - Need to check if canEnable is available and when enabled gets set
-        if (lapic->id == getId()) { // Skip current processor, it's already running
+        if (lapic->enabled) { // Skip already running processors
             continue;
         }
 
-        initializeApplicationProcessor(lapic);
+        // TODO: Only for ACPI version >= 2?
+        if (lapic->canEnable) {
+            initializeApplicationProcessor(lapic);
+        }
     }
 
     // TODO: Mask all the PIC interrupts in the PIC aswell (they should still be all masked though...)
@@ -84,7 +86,7 @@ void LApic::initialize() {
 
 // TODO: Does this have to be synchronized when initializing other APs?
 //       - Probably not as all of them work in different address spaces?
-//       - Also
+//       - Also only one is initialized at a time (and MP init sequence requires acquiring BIOS semaphore...)
 // TODO: IA-32 Architecture Manual Chapter 8.4.3.5: APIC ID has to be signalled to ACPI?
 void LApic::initializeController(LApicConfiguration *lapic) {
     initializeLVT();
@@ -103,8 +105,8 @@ void LApic::initializeController(LApicConfiguration *lapic) {
               .isSWEnabled = true,
               .hasEOIBroadcastSuppression = true});
 
-    // TODO: Why is this written twice in xv6?
-    // Clear possible error interrupts
+    // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
+    // change a subsequently read value, in fact the register should always be written once before reading)
     writeDoubleWord(Register::ESR, 0);
     writeDoubleWord(Register::ESR, 0);
 
@@ -142,6 +144,56 @@ bool LApic::status(Interrupt lint) {
 
 void LApic::sendEndOfInterrupt() {
     writeDoubleWord(Register::EOI, 0);
+}
+
+// TODO: Make sure this is called by the correct processor?
+//       - Should happen anyway because the CPU that received the ERROR interrupt also runs the handler
+void LApic::handleErrors() {
+    // Write before read (read/write register, IA-32 Architecture Manual Chapter 10.5.3)
+    writeDoubleWord(Register::ESR, 0);
+    uint32_t errors = readDoubleWord(Register::ESR);
+
+    // Errors for all CPUs
+    bool illegalVectorReceived = errors & (1 << 6);
+    bool illegalVectorSent = errors & (1 << 5);
+
+    // Errors reserved on original Pentium CPUs
+    bool illegalRegisterAccess = errors & (1 << 7);
+
+    // Errors reserved on Core, P4, Xeon CPUs
+    bool receiveAcceptError = errors & (1 << 3);
+    bool sendAcceptError = errors & (1 << 2);
+    bool receiveChecksumError = errors & (1 << 1);
+    bool sendChecksumError = errors & 1;
+
+    // TODO: Don't know how to handle, for now just log
+    // TODO: Can I log here? This happens during the ERROR interrupt handler
+    if (illegalVectorReceived) {
+        log.error("ERROR: Illegal vector received!");
+    }
+    if (illegalVectorSent) {
+        log.error("ERROR: Illegal vector sent!");
+    }
+    if (illegalRegisterAccess) {
+        log.error("ERROR: Illegal register access!");
+    }
+    if (receiveAcceptError) {
+        log.error("ERROR: Receive accept error!");
+    }
+    if (sendAcceptError) {
+        log.error("ERROR: Send accept error!");
+    }
+    if (receiveChecksumError) {
+        log.error("ERROR: Receive checksum error!");
+    }
+    if (sendChecksumError) {
+        log.error("ERROR: Send checksum error!");
+    }
+
+
+    // Clear errors
+    writeDoubleWord(Register::ESR, 0);
+    writeDoubleWord(Register::ESR, 0);
 }
 
 // ! Private member functions start here
