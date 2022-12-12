@@ -5,10 +5,11 @@
 namespace Device {
 
 bool IoApic::initialized = false;
-
 IoApic::IoPlatformConfiguration IoApic::platformConfiguration;
-
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
+
+// TODO: Should I arbitrarily assign IDs like this or does ACPI already contain valid IDs?
+uint8_t ioApicId = 0; // IoApics don't start with an assigned id
 
 // ! Public member functions start here
 
@@ -103,7 +104,6 @@ void IoApic::initializePlatformConfiguration() {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
                                         "IoApic::initializePlatformConfiguration(): Didn't find IO APIC(s)!");
     }
-    // TODO: I think nmiConfigurations are optional for the IO APIC?
 
     for (auto ioapic : ioApics) {
         platformConfiguration.ioapics.add(new IoApicConfiguration {
@@ -144,7 +144,7 @@ IoApic::IoApicConfiguration *IoApic::getIoApicConfiguration(uint8_t gsi) {
     IoApicConfiguration *ioapic;
     for (uint32_t i = 0; i < platformConfiguration.ioapics.size(); ++i) {
         ioapic = platformConfiguration.ioapics.get(i);
-        if (gsi >= ioapic->gsiBase && gsi <= ioapic->gsiBase + ioapic->redtblEntries) {
+        if (gsi >= ioapic->gsiBase && gsi <= ioapic->gsiMax) {
             return ioapic;
         }
     }
@@ -165,12 +165,9 @@ IoApic::IoApicConfiguration *IoApic::getIoApicConfiguration(Kernel::InterruptDis
 
 // TODO: Can a single IO APIC have multiple NMIs?
 IoApic::IoNMIConfiguration *IoApic::getNMIConfiguration(IoApicConfiguration *ioapic) {
-    uint32_t gsiBase = ioapic->gsiBase;
-    uint32_t gsiEnd = gsiBase + ioapic->redtblEntries;
-
     // Check if a NMI exists assigned to one of this IO APICs pins
     for (auto *nmi : platformConfiguration.ionmis) {
-        if (nmi->gsi >= gsiBase && nmi->gsi < gsiEnd) {
+        if (nmi->gsi >= ioapic->gsiBase && nmi->gsi <= ioapic->gsiMax) {
             return nmi;
         }
     }
@@ -190,9 +187,9 @@ void IoApic::initializeController(IoApicConfiguration *ioapic) {
 
     // NOTE: With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
     // NOTE: With ICH5 (and other ICHs?) it is always 24
-    ioapic->redtblEntries = ((readDoubleWord(ioapic, Indirect_Register::VER) >> 16) & 0xFF) + 1;
-    platformConfiguration.maxGsi = ioapic->gsiBase + ioapic->redtblEntries - 1 > platformConfiguration.maxGsi
-            ? ioapic->gsiBase + ioapic->redtblEntries - 1 : platformConfiguration.maxGsi;
+    ioapic->gsiMax = ioapic->gsiBase + (readDoubleWord(ioapic, Indirect_Register::VER) >> 16) & 0xFF;
+    platformConfiguration.systemGsiMax = ioapic->gsiMax > platformConfiguration.systemGsiMax
+                                         ? ioapic->gsiMax : platformConfiguration.systemGsiMax;
     initializeREDTBL(ioapic);
 
     // Configure NMI if it exists
@@ -226,9 +223,7 @@ void IoApic::initializeMMIORegion(IoApicConfiguration *ioapic) {
 void IoApic::initializeREDTBL(IoApicConfiguration *ioapic) {
     uint8_t id = LApic::getId(); // TODO: Don't send all interrupts to one cpu
 
-    for (uint32_t entry = 0; entry < ioapic->redtblEntries; ++entry) {
-        uint8_t gsi = entry + ioapic->gsiBase;
-
+    for (uint32_t gsi = ioapic->gsiBase; gsi <= ioapic->gsiMax; ++gsi) {
         Kernel::InterruptDispatcher::Interrupt vector;
         if (gsi <= Pic::Interrupt::SECONDARY_ATA) {
             // GSIs 0 to 15 are mapped depending on the InterruptOverride structures
@@ -255,12 +250,12 @@ void IoApic::initializeREDTBL(IoApicConfiguration *ioapic) {
 void IoApic::dumpIoPlatformConfiguration() {
     log.info("Version: [0x%x]", platformConfiguration.version);
     log.info("Has EOI register: [%d]", platformConfiguration.hasEOIRegister);
-    log.info("System max GSI: [%d]", platformConfiguration.maxGsi);
+    log.info("System max GSI: [%d]", platformConfiguration.systemGsiMax);
 
     log.info("Io Apic status:");
     for (auto *ioapic : platformConfiguration.ioapics) {
-        log.info("- Id: [0x%x], MMIO: [0x%x] (phys) -> [0x%x] (virt), GSI base: [%d], REDTBL entries: [%d]",
-                 ioapic->id, ioapic->address, ioapic->virtAddress, ioapic->gsiBase, ioapic->redtblEntries);
+        log.info("- Id: [0x%x], MMIO: [0x%x] (phys) -> [0x%x] (virt), GSI base: [%d], GSI max: [%d]",
+                 ioapic->id, ioapic->address, ioapic->virtAddress, ioapic->gsiBase, ioapic->gsiMax);
     }
 
     log.info("Io IRQ overrides:");
@@ -310,7 +305,7 @@ void IoApic::writeDoubleWord(IoApicConfiguration *ioapic, uint8_t reg, uint32_t 
 
 // TODO: Spinlock?
 REDTBLEntry IoApic::readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi) {
-    if (gsi < ioapic->gsiBase || gsi >= ioapic->gsiBase + ioapic->redtblEntries) {
+    if (gsi < ioapic->gsiBase || gsi > ioapic->gsiMax) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT,
                                         "IoApic::readREDTBL(): GSI is handled by different IO APIC!");
     }
@@ -338,7 +333,7 @@ REDTBLEntry IoApic::readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi) {
 // TODO: Spinlock?
 // TODO: Use Interrupt type
 void IoApic::writeREDTBL(IoApicConfiguration *ioapic, uint8_t gsi, REDTBLEntry redtbl) {
-    if (gsi < ioapic->gsiBase || gsi >= ioapic->gsiBase + ioapic->redtblEntries) {
+    if (gsi < ioapic->gsiBase || gsi > ioapic->gsiMax) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT,
                                         "IoApic::readREDTBL(): GSI is handled by different IO APIC!");
     }

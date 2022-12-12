@@ -126,7 +126,7 @@ private:
         uint32_t address;
         uint32_t virtAddress; // Set when initializing MMIO for this IO APIC
         uint32_t gsiBase; // GSI where IO APIC interrupt inputs start
-        uint32_t redtblEntries; // Set after MMIO is available // TODO: Change to maxGsi that this IO APIC can handle
+        uint32_t gsiMax; // Set after MMIO is available
     } IoApicConfiguration;
 
     typedef struct IoInterruptOverride {
@@ -148,7 +148,7 @@ private:
         bool hasEOIRegister; // If IoApic has no EOI register, set after MMIO is available
         uint32_t irqToGsiMappings[16]; // GSIs for PIC IRQs (IRQ is the index)
         uint8_t gsiToIrqMappings[16]; // Inverse of irqToGsiMappings
-        uint8_t maxGsi; // Systemwide max gsi
+        uint8_t systemGsiMax; // Systemwide max gsi
         Util::Data::ArrayList<IoApicConfiguration *> ioapics;
         Util::Data::ArrayList<IoInterruptOverride *> irqOverrides;
         Util::Data::ArrayList<IoNMIConfiguration *> ionmis;
@@ -212,9 +212,7 @@ private:
 
 private:
     static bool initialized;
-
     static IoPlatformConfiguration platformConfiguration;
-
     static Kernel::Logger log;
 };
 

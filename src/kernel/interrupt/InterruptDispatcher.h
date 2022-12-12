@@ -65,9 +65,9 @@ public:
         PRIMARY_ATA = 46,
         SECONDARY_ATA = 47,
 
-        // TODO: Just as example, depends on how many GSIs are supported by the system
+        // TODO: Just as example to have 24 names, depends on how many GSIs are supported by the system
         // NOTE: There should be no gap here as I calculate the vector number by adding 32 to GSI number
-        // IoApic interrupts, added to support at least 24
+        // IoApic interrupts
         IO1 = 48,
         IO2 = 49,
         IO3 = 50,
