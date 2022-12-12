@@ -6,7 +6,12 @@
 
 // TODO: Is it fine to keep this here? As the structs are now no longer "hidden" behind the class name
 
-// NOTE: I chose this approach instead of bitfields because the ordering of bitfields is not fixed
+// TODO: I could implement implicit conversion from uin32_t for the entries?
+
+// NOTE: I chose this approach instead of bitfields because the ordering of bitfields is not fixed (?)
+// NOTE: __attribute__ ((packed)) only guarantees that there are no gaps
+// NOTE: C99 Standard 7.1.2.13 says ordering in structs is fixed?
+// NOTE: So if I use a plain C struct without any C++ additions it should work?
 
 namespace Device {
 
@@ -16,24 +21,24 @@ namespace Device {
 /**
  * Information obtainable from the local APIC's model specific register.
  */
-typedef struct MSREntry {
+struct MSREntry {
     bool isBSP;
     bool isX2Apic;
     bool isHWEnabled;
     uint32_t baseField;
-} MSREntry;
+};
 
 // IA-32 Architecture Manual Chapter 10.9
 /**
  * Information obtainable from the spurious interrupt vector register of the
  * current CPU's local APIC.
  */
-typedef struct SVREntry {
+struct SVREntry {
     Kernel::InterruptDispatcher::Interrupt vector;
     bool isSWEnabled;
     bool hasFocusProcessorChecking;
     bool hasEOIBroadcastSuppression;
-} SVREntry;
+};
 
 // IA-32 Architecture Manual Chapter 10.5.1
 enum class LVTDeliveryMode : uint8_t {
@@ -60,15 +65,15 @@ enum class LVTTimerMode : uint8_t {
  * Information obtainable from the local vector table of the current CPU's local APIC.
  * Affects handling of local interrupts.
  */
-typedef struct LVTEntry {
+struct LVTEntry {
     Kernel::InterruptDispatcher::Interrupt vector;
     LVTDeliveryMode deliveryMode; // All except timer
-    LVTDeliveryStatus deliveryStatus;
+    LVTDeliveryStatus deliveryStatus; // RO
     LVTPinPolarity pinPolarity; // Only LINT0, LINT1
     LVTTriggerMode triggerMode; // Only LINT0, LINT1
     bool isMasked;
     LVTTimerMode timerMode; // Only timer
-} LVTEntry;
+};
 
 // IA-32 Architecture Manual Chapter 10.6.1
 enum class ICRDeliveryMode : uint8_t {
@@ -101,16 +106,16 @@ enum class ICRDestinationShorthand : uint8_t { // If used ICR_DESTINATION_FIELD 
  * Information obtainable from the interrupt command register of the current CPU's local APIC.
  * Affects what interprocessor interrupt is issued.
  */
-typedef struct ICREntry {
+struct ICREntry {
     Kernel::InterruptDispatcher::Interrupt vector;
     ICRDeliveryMode deliveryMode;
     ICRDestinationMode destinationMode;
-    ICRDeliveryStatus deliveryStatus;
+    ICRDeliveryStatus deliveryStatus; // RO
     ICRLevel level;
     ICRTriggerMode triggerMode;
     ICRDestinationShorthand destinationShorthand;
     uint8_t destination;
-} ICREntry;
+};
 
 // ! IoApic register interface
 
@@ -134,16 +139,16 @@ enum class REDTBLPinPolarity : uint8_t {
 enum class REDTBLTriggerMode : uint8_t {
     EDGE = 0, LEVEL = 1
 };
-typedef struct REDTBLEntry {
+struct REDTBLEntry {
     Kernel::InterruptDispatcher::Interrupt vector;
     REDTBLDeliveryMode deliveryMode;
     REDTBLDestinationMode destinationMode;
-    REDTBLDeliveryStatus deliveryStatus;
+    REDTBLDeliveryStatus deliveryStatus; // RO
     REDTBLPinPolarity pinPolarity;
     REDTBLTriggerMode triggerMode;
     bool isMasked;
     uint8_t destination;
-} REDTBLEntry;
+};
 
 }
 

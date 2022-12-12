@@ -17,7 +17,7 @@ namespace Device {
 
 // TODO: Find the chapter where this is described in some manual (the range is mentioned in ICH5,
 //       but I remember to have seen it somewhere else aswell...)
-// NOTE: IO APIC REDTBL vectors range between 0x10 and 0xFE
+// NOTE: Valid IO APIC REDTBL vectors range between 0x10 and 0xFE
 
 // NOTE: SAPIC/IO SAPIC is not supported
 
@@ -122,29 +122,29 @@ private:
         REDTBL = 0x10 // Redirection table base address (24x 64 bit entry)
     };
 
-    typedef struct IoApicConfiguration {
+    struct IoApicConfiguration {
         uint8_t id;
         uint32_t address;
         uint32_t virtAddress; // Set when initializing MMIO for this IO APIC
         uint32_t gsiBase; // GSI where IO APIC interrupt inputs start
         uint32_t gsiMax; // Set after MMIO is available
-    } IoApicConfiguration;
+    };
 
-    typedef struct IoInterruptOverride {
+    struct IoInterruptOverride {
         uint8_t bus; // TODO: What is this
         Pic::Interrupt source;
         uint32_t gsi;
         REDTBLPinPolarity polarity;
         REDTBLTriggerMode triggerMode;
-    } IoInterruptOverride;
+    };
 
-    typedef struct IoNMIConfiguration {
+    struct IoNMIConfiguration {
         REDTBLPinPolarity polarity;
         REDTBLTriggerMode triggerMode;
         uint32_t gsi;
-    } IoNMIConfiguration;
+    };
 
-    typedef struct IoPlatformConfiguration {
+    struct IoPlatformConfiguration {
         uint8_t version; // Set after MMIO is available
         bool hasEOIRegister; // If IoApic has no EOI register, set after MMIO is available
         uint32_t irqToGsiMappings[16]; // GSIs for PIC IRQs (IRQ is the index)
@@ -153,7 +153,7 @@ private:
         Util::Data::ArrayList<IoApicConfiguration *> ioapics;
         Util::Data::ArrayList<IoInterruptOverride *> irqOverrides;
         Util::Data::ArrayList<IoNMIConfiguration *> ionmis;
-    } IoPlatformConfiguration;
+    };
 
 private:
     /**

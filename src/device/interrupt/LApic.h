@@ -24,6 +24,7 @@
 // TODO: Error handling: An error handler class that implements the handler for the ERROR vector
 
 // TODO: 64 Bit needs ACPI APIC Address Override structure (but current code is not 64 bit compatible anyways)
+//       Also: ACPI 1.0b doesn't have this structure
 
 namespace Device {
 
@@ -62,7 +63,7 @@ public:
     static bool isSupported();
 
     // TODO: Differentiate between different cores (put initialized in the LApicConfiguration struct?)
-    // NOTE: Currently if this is true this also means that all other APs were initialized
+    // NOTE: Currently if this is true this means that all APs were initialized
     /**
      * Check if local APIC is initialized.
      *
@@ -70,7 +71,7 @@ public:
      */
     static bool isInitialized();
 
-    // TODO: Currently also initializes all APs, should probably remove that
+    // TODO: Currently also initializes all APs, should probably remove that?
     /**
      * Initialize the local APIC with all local APIC interrupts masked and
      * EOI broadcasting disabled.
@@ -142,25 +143,25 @@ private:
     // NOTE: I chose to store parsed information like this to be able to initialize it from different sources
     // NOTE: (like ACPI 1.0b, ACPI >= 2.0, MP tables)
     // TODO: Add contents of MSR if MSR exists for every core individually?
-    typedef struct LApicConfiguration {
-        uint8_t uid; // ACPI also stores this // TODO: Do I need this
+    struct LApicConfiguration {
+        uint8_t acpiId; // ACPI also stores this // TODO: Do I need this
         uint8_t id; // TODO: Check if ACPI sets this by itself of if the ID reg values have to be signalled to ACPI
         // TODO: Does this mean the processor can't be used currently but could be started? Or can't be started at all?
         bool enabled; // If false the operating system can't use this processor
-    } LApicConfiguration;
+    };
 
-    typedef struct LNMIConfiguration {
-        uint8_t uid; // 0xFF means all CPUs
-        uint8_t id; // Added for convenience, 0xFF means all CPUs
+    struct LNMIConfiguration {
+        uint8_t acpiId; // 0xFF means all CPUs
+        uint8_t id; // Added for convenience (matches LApicConfiguration::id), 0xFF means all CPUs
         LVTPinPolarity polarity;
         LVTTriggerMode triggerMode;
         Interrupt lint;
-    } LNMIConfiguration;
+    };
 
     /**
      * This describes the hardware configuration of the system for all local APICs.
      */
-    typedef struct LPlatformConfiguration {
+    struct LPlatformConfiguration {
         bool xApicSupported;
         bool x2ApicSupported;
         bool isX2Apic; // Indicates mode currently running in
@@ -169,7 +170,7 @@ private:
         uint32_t virtAddress;
         Util::Data::ArrayList<LApicConfiguration *> lapics;
         Util::Data::ArrayList<LNMIConfiguration *> lnmis;
-    } LPlatformConfiguration;
+    };
 
 private:
     /**
@@ -217,9 +218,9 @@ private:
      // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
      // NOTE: Only registers of currently running CPU will be affected
 
-    [[nodiscard]] static MSREntry readBaseMSR(); // TODO: Affects all local APICs?
+    [[nodiscard]] static MSREntry readBaseMSR();
 
-    static void writeBaseMSR(MSREntry entry); // TODO: Affects all local APICs?
+    static void writeBaseMSR(MSREntry entry);
 
     [[nodiscard]] static uint32_t readDoubleWord(uint16_t reg);
 
@@ -240,13 +241,8 @@ private:
 
 private:
     static bool initialized;
-    static Device::ModelSpecificRegister ia32ApicBaseMsr;
-
+    static Device::ModelSpecificRegister ia32ApicBaseMsr; // NOTE: Is core unique
     static LPlatformConfiguration platformConfiguration;
-
-    static Util::Async::Spinlock mmioLock; // TODO
-    static Util::Async::Spinlock ipiLock; // TODO
-
     static Kernel::Logger log;
 };
 

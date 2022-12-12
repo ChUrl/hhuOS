@@ -6,18 +6,14 @@ namespace Device {
 
 bool LApic::initialized = false;
 Device::ModelSpecificRegister LApic::ia32ApicBaseMsr = Device::ModelSpecificRegister(0x1B);
-
 LApic::LPlatformConfiguration LApic::platformConfiguration;
-
-Util::Async::Spinlock LApic::mmioLock;
-Util::Async::Spinlock LApic::ipiLock;
-
 Kernel::Logger LApic::log = Kernel::Logger::get("LApic");
 
 // ! Public member functions start here
 
 bool LApic::isSupported() {
     auto features = Util::Cpu::CpuId::getCpuFeatures();
+    // TODO: Can x2Apic exist without xApic?
     for (auto feature: features) {
         if (feature == Util::Cpu::CpuId::CpuFeature::APIC || feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
             return true;
@@ -38,23 +34,9 @@ void LApic::initialize() {
     if (!platformConfiguration.xApicSupported) {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): xApic support not present!");
     }
-
     if (!readBaseMSR().isBSP) {
-        // TODO: I think architectural MSRs are shared between cores/they exist only once,
-        //       but what does the BSP flag mean then?
-        // TODO: I think I misunderstood what BSP even means, investigate IA-32 Architecture Manual Chapter 8.4.3.4
-        // TODO: If multiple APIC MSRs exist, can local APICs be individually enabled/disabled/relocated?
-        //       Answer: Yes, at least they can be individually relocated. This doesn't have to mean that
-        //               there are multiple APIC MSRs though...
+        // NOTE: IA32_APIC_BASE_MSR is unique (every core has its own)
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): May only be called by BSP!");
-    }
-
-    // x2Apic doesn't have MMIO register access (x2Apic uses MSRs)
-    if (platformConfiguration.x2ApicSupported && platformConfiguration.isX2Apic) {
-        MSREntry msr = readBaseMSR();
-        msr.isX2Apic = false; // Operate in xApic compatibility mode // TODO: Test this
-        writeBaseMSR(msr);
-        platformConfiguration.isX2Apic = false;
     }
 
     // TODO: Does every AP has to call this before initializing its local APIC?
@@ -66,10 +48,11 @@ void LApic::initialize() {
     //         - I guess the TLB at least has to be consistent over APs regarding kernel address space?
     initializeMMIORegion();
 
-    platformConfiguration.version = readDoubleWord(Register::VER) & 0xFF;
-
     // Initialize the local APIC of the BSP before initializing any APs
+    // Enables xApic compatibility mode if necessary
     initializeController(getLApicConfiguration(getId()));
+
+    platformConfiguration.version = readDoubleWord(Register::VER) & 0xFF;
 
     // TODO: Should probably not do this automatically inside LApic::initialize()...
     for (auto *lapic : platformConfiguration.lapics) {
@@ -118,6 +101,7 @@ void LApic::handleErrors() {
     writeDoubleWord(Register::ESR, 0);
     uint32_t errors = readDoubleWord(Register::ESR);
 
+    // TODO: This is architecture dependent...
     // Errors for all CPUs
     bool illegalVectorReceived = errors & (1 << 6);
     bool illegalVectorSent = errors & (1 << 5);
@@ -133,28 +117,13 @@ void LApic::handleErrors() {
 
     // TODO: Don't know how to handle, for now just log
     // TODO: Can I log here? This happens during the ERROR interrupt handler
-    if (illegalVectorReceived) {
-        log.error("ERROR: Illegal vector received!");
-    }
-    if (illegalVectorSent) {
-        log.error("ERROR: Illegal vector sent!");
-    }
-    if (illegalRegisterAccess) {
-        log.error("ERROR: Illegal register access!");
-    }
-    if (receiveAcceptError) {
-        log.error("ERROR: Receive accept error!");
-    }
-    if (sendAcceptError) {
-        log.error("ERROR: Send accept error!");
-    }
-    if (receiveChecksumError) {
-        log.error("ERROR: Receive checksum error!");
-    }
-    if (sendChecksumError) {
-        log.error("ERROR: Send checksum error!");
-    }
-
+    if (illegalVectorReceived) { log.error("ERROR: Illegal vector received!"); }
+    if (illegalVectorSent) { log.error("ERROR: Illegal vector sent!"); }
+    if (illegalRegisterAccess) { log.error("ERROR: Illegal register access!"); }
+    if (receiveAcceptError) { log.error("ERROR: Receive accept error!"); }
+    if (sendAcceptError) { log.error("ERROR: Send accept error!"); }
+    if (receiveChecksumError) { log.error("ERROR: Receive checksum error!"); }
+    if (sendChecksumError) { log.error("ERROR: Send checksum error!"); }
 
     // Clear errors
     writeDoubleWord(Register::ESR, 0);
@@ -186,8 +155,7 @@ void LApic::initializePlatformConfiguration() {
     platformConfiguration.address = Acpi::getTable<Acpi::Madt>("APIC")->localApicAddress;
 
     if (platformConfiguration.address == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                        "LApic::initializePlatformConfiguration(): Didn't find local APIC address!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::initializePlatformConfiguration(): Didn't find local APIC address!");
     }
 
     Util::Data::ArrayList<const Acpi::ProcessorLocalApic *> processorLocalApics;
@@ -196,18 +164,16 @@ void LApic::initializePlatformConfiguration() {
     Acpi::getApicStructures<Acpi::LocalApicNMI>(&nmiConfigurations, Acpi::LOCAL_APIC_NMI);
 
     if (processorLocalApics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                        "LApic::initializePlatformConfiguration(): Didn't find local APIC(s)!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::initializePlatformConfiguration(): Didn't find local APIC(s)!");
     }
     if (nmiConfigurations.size() == 0) {
         // TODO: Are nmiConfigurations mandatory? I guess there should be at least 1 (max 1 per core?)
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                        "LApic::initializePlatformConfiguration(): Didn't find NMI configuration(s)!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::initializePlatformConfiguration(): Didn't find NMI configuration(s)!");
     }
 
     for (auto lapic : processorLocalApics) {
         platformConfiguration.lapics.add(new LApicConfiguration {
-            .uid = lapic->acpiProcessorId,
+            .acpiId = lapic->acpiProcessorId,
             .id = lapic->apicId,
             .enabled = static_cast<bool>(lapic->flags & 0x1),
         });
@@ -215,7 +181,7 @@ void LApic::initializePlatformConfiguration() {
 
     for (auto nmi : nmiConfigurations) {
         platformConfiguration.lnmis.add(new LNMIConfiguration {
-            .uid = nmi->acpiProcessorId,
+            .acpiId = nmi->acpiProcessorId,
             .id = static_cast<uint8_t>(nmi->acpiProcessorId == 0xFF ? 0xFF : uidToId(nmi->acpiProcessorId)),
             .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTPinPolarity::HIGH : LVTPinPolarity::LOW,
             .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTTriggerMode::EDGE : LVTTriggerMode::LEVEL,
@@ -226,13 +192,12 @@ void LApic::initializePlatformConfiguration() {
 
 uint8_t LApic::uidToId(uint8_t uid) {
     for (auto *lapic : platformConfiguration.lapics) {
-        if (lapic->uid == uid) {
+        if (lapic->acpiId == uid) {
             return lapic->id;
         }
     }
 
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                    "LApic::idToUid(): Didn't find local APIC matching UID!");
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::idToUid(): Didn't find local APIC matching UID!");
 }
 
 LApic::LApicConfiguration *LApic::getLApicConfiguration(uint8_t id) {
@@ -242,21 +207,19 @@ LApic::LApicConfiguration *LApic::getLApicConfiguration(uint8_t id) {
         }
     }
 
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                    "LApic::getLApicConfiguration(): Didn't find configuration matching ID!");
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::getLApicConfiguration(): Didn't find configuration matching ID!");
 }
 
 // There is a maximum of 1 NMI configuration per core
 LApic::LNMIConfiguration *LApic::getNMIConfiguration(LApicConfiguration *lapic) {
     for (auto *nmi : platformConfiguration.lnmis) {
-        if (nmi->uid == 0xFF || nmi->id == lapic->id) { // 0xFF means all CPUs
+        if (nmi->acpiId == 0xFF || nmi->id == lapic->id) { // 0xFF means all CPUs
             return nmi;
         }
     }
 
     // TODO: Not every core has to have one, so don't throw up (use/implement optional?)
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                    "LApic::getNMIConfiguration(): Didn't find NMI configuration matching ID!");
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::getNMIConfiguration(): Didn't find NMI configuration matching ID!");
 }
 
 void LApic::initializeMMIORegion() {
@@ -267,13 +230,11 @@ void LApic::initializeMMIORegion() {
     void *virtAddress = memoryService.mapIO(platformConfiguration.address, Util::Memory::PAGESIZE, true);
 
     if (virtAddress == nullptr) {
-        Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY,
-                                        "LApic::initialize(): Not enough space left on kernel heap!");
+        Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY, "LApic::initialize(): Not enough space left on kernel heap!");
     }
 
     // Use this address to access the local APIC's memory mapped registers
-    platformConfiguration.virtAddress =
-            reinterpret_cast<uint32_t>(virtAddress) + platformConfiguration.address % Util::Memory::PAGESIZE;
+    platformConfiguration.virtAddress = reinterpret_cast<uint32_t>(virtAddress) + platformConfiguration.address % Util::Memory::PAGESIZE;
 }
 
 void LApic::initializeApplicationProcessor(LApicConfiguration *lapic) {
@@ -289,21 +250,29 @@ void LApic::initializeApplicationProcessor(LApicConfiguration *lapic) {
 //       - Also only one is initialized at a time (and MP init sequence requires acquiring BIOS semaphore...)
 // TODO: IA-32 Architecture Manual Chapter 8.4.3.5: APIC ID has to be signalled to ACPI?
 void LApic::initializeController(LApicConfiguration *lapic) {
+    // x2Apic doesn't have MMIO register access (x2Apic uses MSRs)
+    if (platformConfiguration.x2ApicSupported && platformConfiguration.isX2Apic) {
+        MSREntry msr = readBaseMSR();
+        msr.isX2Apic = false; // Operate in xApic compatibility mode // TODO: Test this
+        writeBaseMSR(msr);
+        platformConfiguration.isX2Apic = false;
+    }
+
     initializeLVT();
 
     // Configure the NMI (non maskable interrupt) pin
     LNMIConfiguration *nmi = getNMIConfiguration(lapic);
     writeLVT(nmi->lint, {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0), // NMI doesn't have vector
-            .deliveryMode = LVTDeliveryMode::NMI,
-            .pinPolarity = nmi->polarity,
-            .triggerMode = nmi->triggerMode,
-            .isMasked = false});
+                         .deliveryMode = LVTDeliveryMode::NMI,
+                         .pinPolarity = nmi->polarity,
+                         .triggerMode = nmi->triggerMode,
+                         .isMasked = false});
 
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
     // and the SW ENABLE flag.
     writeSVR({.vector = Kernel::InterruptDispatcher::SPURIOUS,
-                     .isSWEnabled = true,
-                     .hasEOIBroadcastSuppression = true});
+              .isSWEnabled = true,
+              .hasEOIBroadcastSuppression = true});
 
     // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
     // change a subsequently read value, in fact the register should always be written once before reading)
@@ -366,12 +335,10 @@ void LApic::dumpLPlatformConfiguration() {
 MSREntry LApic::readBaseMSR() {
     uint64_t val = ia32ApicBaseMsr.readQuadWord(); // Atomic read
 
-    return {
-            .isBSP = static_cast<bool>(val & (1 << 8)),
+    return {.isBSP = static_cast<bool>(val & (1 << 8)),
             .isX2Apic = static_cast<bool>(val & (1 << 10)),
             .isHWEnabled = static_cast<bool>(val & (1 << 11)),
-            .baseField = static_cast<uint32_t>(val & 0xFFFFF000)
-    };
+            .baseField = static_cast<uint32_t>(val & 0xFFFFF000)};
 }
 
 // IA-32 Architecture Manual Chapter 10.4.4
@@ -409,12 +376,10 @@ void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
 SVREntry LApic::readSVR() {
     uint32_t val = readDoubleWord(Register::SVR);
 
-    return {
-            .vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
+    return {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
             .isSWEnabled = static_cast<bool>(val & (1 << 8)),
             .hasFocusProcessorChecking = static_cast<bool>(val & (1 << 9)),
-            .hasEOIBroadcastSuppression = static_cast<bool>(val & (1 << 12))
-    };
+            .hasEOIBroadcastSuppression = static_cast<bool>(val & (1 << 12))};
 }
 
 // IA-32 Architecture Manual Chapter 10.9
@@ -431,15 +396,13 @@ void LApic::writeSVR(SVREntry svr) {
 LVTEntry LApic::readLVT(Interrupt lint) {
     uint32_t val = readDoubleWord(lint);
 
-    return {
-            .vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
+    return {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
             .deliveryMode = static_cast<LVTDeliveryMode>((val & (0b111 << 8)) >> 8),
             .deliveryStatus = static_cast<LVTDeliveryStatus>((val & (1 << 12)) >> 12),
             .pinPolarity = static_cast<LVTPinPolarity>((val & (1 << 13)) >> 13),
             .triggerMode = static_cast<LVTTriggerMode>((val & (1 << 15)) >> 15),
             .isMasked = static_cast<bool>(val & (1 << 16)),
-            .timerMode = static_cast<LVTTimerMode>((val & (0b11 << 17)) >> 17)
-    };
+            .timerMode = static_cast<LVTTimerMode>((val & (0b11 << 17)) >> 17)};
 }
 
 // TODO: Check if it is a problem to write to readonly/reserved areas
@@ -468,16 +431,14 @@ ICREntry LApic::readICR() {
     low = readDoubleWord(Register::ICR_LOW);
     high = readDoubleWord(Register::ICR_HIGH);
 
-    return {
-            .vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
+    return {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
             .deliveryMode = static_cast<ICRDeliveryMode>((low & (0b111 << 8)) >> 8),
             .destinationMode = static_cast<ICRDestinationMode>((low & (1 << 11)) >> 11),
             .deliveryStatus = static_cast<ICRDeliveryStatus>((low & (1 << 12)) >> 12),
             .level = static_cast<ICRLevel>((low & (1 << 14)) >> 14),
             .triggerMode = static_cast<ICRTriggerMode>((low & (1 << 15)) >> 15),
             .destinationShorthand = static_cast<ICRDestinationShorthand>((low & (0b11 << 18)) >> 18),
-            .destination = static_cast<uint8_t>(high >> 24)
-    };
+            .destination = static_cast<uint8_t>(high >> 24)};
 }
 
 // TODO: Needs spinlock?
