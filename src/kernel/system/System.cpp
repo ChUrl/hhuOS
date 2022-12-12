@@ -54,6 +54,7 @@
 #include "device/interrupt/ApicTimer.h"
 #include "device/interrupt/LApic.h"
 #include "device/interrupt/IoApic.h"
+#include "device/interrupt/LApicErrorHandler.h"
 
 namespace Kernel {
 class Service;
@@ -117,6 +118,8 @@ void System::initializeSystem() {
     if (Device::Acpi::isAvailable() && Device::LApic::isSupported()) {
         log.info("APIC support detected -> Initializing local APIC");
         Device::LApic::initialize();
+        auto *lapicErrorHandler = new Device::LApicErrorHandler();
+        lapicErrorHandler->plugin();
     }
 
     if (Device::LApic::isInitialized()) {
