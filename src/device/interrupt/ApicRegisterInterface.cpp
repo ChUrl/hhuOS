@@ -2,6 +2,12 @@
 
 namespace Device {
 
+// ! LApic register interface
+
+/*
+ * IA-32 Architecture Manual Chapter 10.12.1
+ */
+
 MSREntry::MSREntry(uint64_t registerValue) {
     isBSP = registerValue & (1 << 8);
     isX2Apic = registerValue & (1 << 10);
@@ -16,6 +22,10 @@ MSREntry::operator uint64_t() const {
     | static_cast<uint64_t>(baseField) << 12;
 }
 
+/*
+ * IA-32 Architecture Manual Chapter 10.9
+ */
+
 SVREntry::SVREntry(uint32_t registerValue) {
     vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(registerValue & 0xFF);
     isSWEnabled = registerValue & (1 << 8);
@@ -29,6 +39,10 @@ SVREntry::operator uint32_t() const {
     | static_cast<uint32_t>(hasFocusProcessorChecking) << 9
     | static_cast<uint32_t>(hasEOIBroadcastSuppression) << 12;
 }
+
+/*
+ * IA-32 Architecture Manual Chapter 10.5.1
+ */
 
 LVTEntry::LVTEntry(uint32_t registerValue) {
     vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(registerValue & 0xFF);
@@ -48,6 +62,10 @@ LVTEntry::operator uint32_t() const {
     | static_cast<uint32_t>(isMasked) << 16
     | static_cast<uint32_t>(timerMode) << 17;
 }
+
+/*
+ * IA-32 Architecture Manual Chapter 10.6.1
+ */
 
 ICREntry::ICREntry(uint64_t registerValue) {
     vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(registerValue & 0xFF);
@@ -70,6 +88,12 @@ ICREntry::operator uint64_t() const {
     | static_cast<uint64_t>(destinationShorthand) << 18
     | static_cast<uint64_t>(destination) << 56;
 }
+
+// ! IoApic register interface
+
+/*
+ * Intel ICH5 Specification Chapter 9.5.8
+ */
 
 REDTBLEntry::REDTBLEntry(uint64_t registerValue) {
     vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(registerValue & 0xFF);

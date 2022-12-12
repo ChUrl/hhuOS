@@ -4,20 +4,20 @@
 #include <cstdint>
 #include "kernel/interrupt/InterruptDispatcher.h"
 
-// TODO: Is it fine to keep this here? As the structs are now no longer "hidden" behind the class name
+// TODO: Enforce read-only fields? If I const them the default constructor will disappear...
 
-// TODO: I could implement implicit conversion from uin32_t for the entries?
-
-// NOTE: I chose this approach instead of bitfields because the ordering of bitfields is not fixed (?)
-// NOTE: __attribute__ ((packed)) only guarantees that there are no gaps
-// NOTE: C99 Standard 7.1.2.13 says ordering in structs is fixed?
-// NOTE: So if I use a plain C struct without any C++ additions it should work?
+/*
+ * I chose to implement the APIC register interaction this way because:
+ * 1. It's very easy to use
+ * 2. Only standard C bitfields have guaranteed ordering, as soon as the "struct" becomes a C++ "class",
+ *    the ordering is implementation defined, GCC's __attribute__ ((packed)) doesn't help there
+ * 3. Bitfields would also make it very easy to do partial writes to registers, which I wanted to prevent
+ */
 
 namespace Device {
 
 // ! LApic register interface
 
-// IA-32 Architecture Manual Chapter 10.4.4
 /**
  * Information obtainable from the local APIC's model specific register.
  */
@@ -32,7 +32,6 @@ struct MSREntry {
     explicit operator uint64_t() const;
 };
 
-// IA-32 Architecture Manual Chapter 10.9
 /**
  * Information obtainable from the spurious interrupt vector register of the
  * current CPU's local APIC.
@@ -53,7 +52,6 @@ struct SVREntry {
  * Affects handling of local interrupts.
  */
 struct LVTEntry {
-    // IA-32 Architecture Manual Chapter 10.5.1
     enum class DeliveryMode : uint8_t {
         FIXED = 0,
         SMI = 0b10,
@@ -92,7 +90,6 @@ struct LVTEntry {
  * Affects what interprocessor interrupt is issued.
  */
 struct ICREntry {
-    // IA-32 Architecture Manual Chapter 10.6.1
     enum class DeliveryMode : uint8_t {
         FIXED = 0,
         LOWPRIO = 1, // Model specific

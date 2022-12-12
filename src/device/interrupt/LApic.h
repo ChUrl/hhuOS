@@ -237,12 +237,11 @@ private:
 
     [[nodiscard]] static ICREntry readICR(); // Obtain delivery status of IPI
 
-    // TODO: IPIs can only be sent by the BSP? Or does this only apply when no other cores are started yet?
     static void writeICR(ICREntry icrEntry); // Issue IPIs
 
 private:
     static bool initialized;
-    static Device::ModelSpecificRegister ia32ApicBaseMsr; // NOTE: Is core unique
+    static Device::ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR
     static LPlatformConfiguration platformConfiguration;
     static Kernel::Logger log;
 };
