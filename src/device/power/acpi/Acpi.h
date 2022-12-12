@@ -139,26 +139,15 @@ public:
         uint32_t flags;
     } __attribute__ ((packed));
 
-    // TODO: Differs for different ACPI versions
     // TODO: Keep here, move into acpi/Madt class or move into APIC classes?
-    // NOTE: APIC tables I added (ACPI Specification Chapter 5.2.12):
+    // NOTE: Only ACPI 1.0b, later versions have significantly more stuff
+    // NOTE: APIC tables I added:
     enum ApicStructureType : uint8_t {
         PROCESSOR_LOCAL_APIC = 0x0,
         IO_APIC = 0x1,
         INTERRUPT_SOURCE_OVERRIDE = 0x2,
         NON_MASKABLE_INTERRUPT_SOURCE = 0x3,
         LOCAL_APIC_NMI = 0x4,
-        LOCAL_APIC_ADDRESS_OVERRIDE = 0x5,
-        IO_SAPIC = 0x6,
-        LOCAL_SAPIC = 0x7,
-        PLATFORM_INTERRUPT_SOURCES = 0x8,
-        PROCESSOR_LOCAL_X2APIC = 0x9,
-        LOCAL_X2APIC_NMI = 0xa,
-        GIC_CPU_INTERFACE = 0xb,
-        GIC_DISTRIBUTOR = 0xc,
-        GIC_MSI_FRAME = 0xd,
-        GIC_REDISTRIBUTOR = 0xe,
-        GIC_INTERRUPT_TRANSLATION_SERVICE = 0xf
     };
 
     enum IntiFlag : uint8_t {
@@ -168,11 +157,6 @@ public:
         LEVEL_TRIGGERED = 0xc
     };
 
-    enum ProcessorFlag : uint8_t {
-        ENABLED = 0x1,
-        ONLINE_CAPABLE = 0x2
-    };
-
     struct ApicStructureHeader {
         ApicStructureType type;
         uint8_t length;
@@ -180,9 +164,9 @@ public:
 
     struct ProcessorLocalApic {
         ApicStructureHeader header;
-        uint8_t acpiProcessorUid;
+        uint8_t acpiProcessorId;
         uint8_t apicId;
-        uint32_t flags;
+        uint32_t flags; // Enabled flag
     } __attribute__ ((packed));
 
     struct IoApic {
@@ -195,29 +179,29 @@ public:
 
     struct InterruptSourceOverride {
         ApicStructureHeader header;
-        uint8_t bus;
+        uint8_t bus; // "0 - Constant, meaning ISA"
         uint8_t source;
         uint32_t globalSystemInterrupt;
-        uint16_t flags;
+        uint16_t flags; // INTI Flags
     } __attribute__ ((packed));
 
     struct NMISource {
         ApicStructureHeader header;
-        uint16_t flags;
+        uint16_t flags; // INTI Flags
         uint32_t globalSystemInterrupt;
     } __attribute__ ((packed));
 
     struct LocalApicNMI {
         ApicStructureHeader header;
-        uint8_t acpiProcessorUid;
-        uint16_t flags;
+        uint8_t acpiProcessorId;
+        uint16_t flags; // INTI Flags
         uint8_t localApicLint;
     } __attribute__ ((packed));
 
     struct Madt {
         SdtHeader header;
         uint32_t localApicAddress;
-        uint32_t flags;
+        uint32_t flags; // PCAT compat flag
         ApicStructureHeader apicStructure; // NOTE: Is a list
     } __attribute__ ((packed));
 

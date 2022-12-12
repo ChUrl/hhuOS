@@ -62,17 +62,16 @@ void LApic::initialize() {
 
     // TODO: Should probably not do this automatically inside LApic::initialize()...
     for (auto *lapic : platformConfiguration.lapics) {
-        if (lapic->enabled) { // Skip already running processors
+        // TODO: !lapic->enabled == true could also mean that the cpu is just not initialized yet...
+        if (!lapic->enabled || lapic->id == getId()) { // Skip BSP and unavailable processors
             continue;
         }
 
-        // TODO: Only for ACPI version >= 2?
-        if (lapic->canEnable) {
-            initializeApplicationProcessor(lapic);
-        }
+        initializeApplicationProcessor(lapic);
     }
 
     // TODO: Mask all the PIC interrupts in the PIC aswell (they should still be all masked though...)
+    // TODO: Make some PIC functions (allow, forbid, status) static so I can just call them?
 
     initialized = true;
 
@@ -190,24 +189,23 @@ void LApic::initializePlatformConfiguration() {
                                         "LApic::initializePlatformConfiguration(): Didn't find local APIC(s)!");
     }
     if (nmiConfigurations.size() == 0) {
-        // TODO: Are nmiConfigurations mandatory? I guess there should be at least 1
+        // TODO: Are nmiConfigurations mandatory? I guess there should be at least 1 (max 1 per core?)
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
                                         "LApic::initializePlatformConfiguration(): Didn't find NMI configuration(s)!");
     }
 
     for (auto lapic : processorLocalApics) {
         platformConfiguration.lapics.add(new LApicConfiguration {
-            .uid = lapic->acpiProcessorUid,
+            .uid = lapic->acpiProcessorId,
             .id = lapic->apicId,
-            .enabled = static_cast<bool>(lapic->flags & Acpi::ProcessorFlag::ENABLED),
-            .canEnable = static_cast<bool>(lapic->flags & Acpi::ProcessorFlag::ONLINE_CAPABLE)
+            .enabled = static_cast<bool>(lapic->flags & 0x1),
         });
     }
 
     for (auto nmi : nmiConfigurations) {
         platformConfiguration.lnmis.add(new LNMIConfiguration {
-            .uid = nmi->acpiProcessorUid,
-            .id = static_cast<uint8_t>(nmi->acpiProcessorUid == 0xFF ? 0xFF : uidToId(nmi->acpiProcessorUid)),
+            .uid = nmi->acpiProcessorId,
+            .id = static_cast<uint8_t>(nmi->acpiProcessorId == 0xFF ? 0xFF : uidToId(nmi->acpiProcessorId)),
             .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTPinPolarity::HIGH : LVTPinPolarity::LOW,
             .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTTriggerMode::EDGE : LVTTriggerMode::LEVEL,
             .lint = nmi->localApicLint == 0 ? LINT0 : LINT1
@@ -342,7 +340,7 @@ void LApic::dumpLPlatformConfiguration() {
 
     log.info("Local Apic status:");
     for (auto *lapic : platformConfiguration.lapics) {
-        log.info("- Id: [0x%x], Enabled: [%d], Can enable: [%d]", lapic->id, lapic->enabled, lapic->canEnable);
+        log.info("- Id: [0x%x], Enabled: [%d]", lapic->id, lapic->enabled);
     }
 
     log.info("Local NMI status:");

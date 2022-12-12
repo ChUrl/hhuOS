@@ -24,7 +24,7 @@
 
 // TODO: Error handling: An error handler class that implements the handler for the ERROR vector
 
-// TODO: 64 Bit needs ACPI APIC Address Override structure
+// TODO: 64 Bit needs ACPI APIC Address Override structure (but current code is not 64 bit compatible anyways)
 
 namespace Device {
 
@@ -138,12 +138,14 @@ private:
         ICR_HIGH = 0x310,
     };
 
+    // NOTE: I chose to store parsed information like this to be able to initialize it from different sources
+    // NOTE: (like ACPI 1.0b, ACPI >= 2.0, MP tables)
     // TODO: Add contents of MSR if MSR exists for every core individually?
     typedef struct LApicConfiguration {
         uint8_t uid; // ACPI also stores this // TODO: Do I need this
         uint8_t id; // TODO: Check if ACPI sets this by itself of if the ID reg values have to be signalled to ACPI
-        bool enabled; // Should always be true for BSP
-        bool canEnable; // TODO: Not available in ACPI 1.0?
+        // TODO: Does this mean the processor can't be used currently but could be started? Or can't be started at all?
+        bool enabled; // If false the operating system can't use this processor
     } LApicConfiguration;
 
     typedef struct LNMIConfiguration {
