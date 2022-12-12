@@ -26,6 +26,10 @@ struct MSREntry {
     bool isX2Apic;
     bool isHWEnabled;
     uint32_t baseField;
+
+    MSREntry() = default;
+    explicit MSREntry(uint64_t registerValue);
+    explicit operator uint64_t() const;
 };
 
 // IA-32 Architecture Manual Chapter 10.9
@@ -38,27 +42,10 @@ struct SVREntry {
     bool isSWEnabled;
     bool hasFocusProcessorChecking;
     bool hasEOIBroadcastSuppression;
-};
 
-// IA-32 Architecture Manual Chapter 10.5.1
-enum class LVTDeliveryMode : uint8_t {
-    FIXED = 0,
-    SMI = 0b10,
-    NMI = 0b100,
-    INIT = 0b101,
-    EXTINT = 0b111
-};
-enum class LVTDeliveryStatus : uint8_t {
-    IDLE = 0, PENDING = 1
-};
-enum class LVTPinPolarity : uint8_t {
-    HIGH = 0, LOW = 1
-};
-enum class LVTTriggerMode : uint8_t {
-    EDGE = 0, LEVEL = 1
-};
-enum class LVTTimerMode : uint8_t {
-    ONESHOT = 0, PERIODIC = 1
+    SVREntry() = default;
+    explicit SVREntry(uint32_t registerValue);
+    explicit operator uint32_t() const;
 };
 
 /**
@@ -66,40 +53,38 @@ enum class LVTTimerMode : uint8_t {
  * Affects handling of local interrupts.
  */
 struct LVTEntry {
-    Kernel::InterruptDispatcher::Interrupt vector;
-    LVTDeliveryMode deliveryMode; // All except timer
-    LVTDeliveryStatus deliveryStatus; // RO
-    LVTPinPolarity pinPolarity; // Only LINT0, LINT1
-    LVTTriggerMode triggerMode; // Only LINT0, LINT1
-    bool isMasked;
-    LVTTimerMode timerMode; // Only timer
-};
+    // IA-32 Architecture Manual Chapter 10.5.1
+    enum class DeliveryMode : uint8_t {
+        FIXED = 0,
+        SMI = 0b10,
+        NMI = 0b100,
+        INIT = 0b101,
+        EXTINT = 0b111
+    };
+    enum class DeliveryStatus : uint8_t {
+        IDLE = 0, PENDING = 1
+    };
+    enum class PinPolarity : uint8_t {
+        HIGH = 0, LOW = 1
+    };
+    enum class TriggerMode : uint8_t {
+        EDGE = 0, LEVEL = 1
+    };
+    enum class TimerMode : uint8_t {
+        ONESHOT = 0, PERIODIC = 1
+    };
 
-// IA-32 Architecture Manual Chapter 10.6.1
-enum class ICRDeliveryMode : uint8_t {
-    FIXED = 0,
-    LOWPRIO = 1, // Model specific
-    SMI = 0b10,
-    NMI = 0b100,
-    INIT = 0b101,
-    STARTUP = 0b110
-};
-enum class ICRDestinationMode : uint8_t {
-    PHYSICAL = 0, LOGICAL = 1
-};
-enum class ICRDeliveryStatus : uint8_t {
-    IDLE = 0, PENDING = 1
-};
-enum class ICRLevel : uint8_t {
-    DEASSERT = 0, ASSERT = 1
-};
-enum class ICRTriggerMode : uint8_t {
-    EDGE = 0, LEVEL = 1
-};
-enum class ICRDestinationShorthand : uint8_t { // If used ICR_DESTINATION_FIELD is ignored
-    SELF = 1,
-    ALL = 0b10,
-    ALL_NO_SELF = 0b11
+    Kernel::InterruptDispatcher::Interrupt vector;
+    DeliveryMode deliveryMode; // All except timer
+    DeliveryStatus deliveryStatus; // RO
+    PinPolarity pinPolarity; // Only LINT0, LINT1
+    TriggerMode triggerMode; // Only LINT0, LINT1
+    bool isMasked;
+    TimerMode timerMode; // Only timer
+
+    LVTEntry() = default;
+    explicit LVTEntry(uint32_t registerValue);
+    explicit operator uint32_t() const;
 };
 
 /**
@@ -107,47 +92,83 @@ enum class ICRDestinationShorthand : uint8_t { // If used ICR_DESTINATION_FIELD 
  * Affects what interprocessor interrupt is issued.
  */
 struct ICREntry {
+    // IA-32 Architecture Manual Chapter 10.6.1
+    enum class DeliveryMode : uint8_t {
+        FIXED = 0,
+        LOWPRIO = 1, // Model specific
+        SMI = 0b10,
+        NMI = 0b100,
+        INIT = 0b101,
+        STARTUP = 0b110
+    };
+    enum class DestinationMode : uint8_t {
+        PHYSICAL = 0, LOGICAL = 1
+    };
+    enum class DeliveryStatus : uint8_t {
+        IDLE = 0, PENDING = 1
+    };
+    enum class Level : uint8_t {
+        DEASSERT = 0, ASSERT = 1
+    };
+    enum class TriggerMode : uint8_t {
+        EDGE = 0, LEVEL = 1
+    };
+    enum class DestinationShorthand : uint8_t { // If used ICR_DESTINATION_FIELD is ignored
+        SELF = 1,
+        ALL = 0b10,
+        ALL_NO_SELF = 0b11
+    };
+
     Kernel::InterruptDispatcher::Interrupt vector;
-    ICRDeliveryMode deliveryMode;
-    ICRDestinationMode destinationMode;
-    ICRDeliveryStatus deliveryStatus; // RO
-    ICRLevel level;
-    ICRTriggerMode triggerMode;
-    ICRDestinationShorthand destinationShorthand;
+    DeliveryMode deliveryMode;
+    DestinationMode destinationMode;
+    DeliveryStatus deliveryStatus; // RO
+    Level level;
+    TriggerMode triggerMode;
+    DestinationShorthand destinationShorthand;
     uint8_t destination;
+
+    ICREntry() = default;
+    explicit ICREntry(uint64_t registerValue);
+    explicit operator uint64_t() const;
 };
 
 // ! IoApic register interface
 
-enum class REDTBLDeliveryMode : uint8_t {
-    FIXED = 0,
-    LOWPRIO = 1,
-    SMI = 0b10,
-    NMI = 0b100,
-    INIT = 0b101,
-    EXTINT = 0b111
-};
-enum class REDTBLDestinationMode : uint8_t {
-    PHYSICAL = 0, LOGICAL = 1
-};
-enum class REDTBLDeliveryStatus : uint8_t {
-    IDLE = 0, PENDING = 1
-};
-enum class REDTBLPinPolarity : uint8_t {
-    HIGH = 0, LOW = 1
-};
-enum class REDTBLTriggerMode : uint8_t {
-    EDGE = 0, LEVEL = 1
-};
 struct REDTBLEntry {
+    enum class DeliveryMode : uint8_t {
+        FIXED = 0,
+        LOWPRIO = 1,
+        SMI = 0b10,
+        NMI = 0b100,
+        INIT = 0b101,
+        EXTINT = 0b111
+    };
+    enum class DestinationMode : uint8_t {
+        PHYSICAL = 0, LOGICAL = 1
+    };
+    enum class DeliveryStatus : uint8_t {
+        IDLE = 0, PENDING = 1
+    };
+    enum class PinPolarity : uint8_t {
+        HIGH = 0, LOW = 1
+    };
+    enum class TriggerMode : uint8_t {
+        EDGE = 0, LEVEL = 1
+    };
+
     Kernel::InterruptDispatcher::Interrupt vector;
-    REDTBLDeliveryMode deliveryMode;
-    REDTBLDestinationMode destinationMode;
-    REDTBLDeliveryStatus deliveryStatus; // RO
-    REDTBLPinPolarity pinPolarity;
-    REDTBLTriggerMode triggerMode;
+    DeliveryMode deliveryMode;
+    DestinationMode destinationMode;
+    DeliveryStatus deliveryStatus; // RO
+    PinPolarity pinPolarity;
+    TriggerMode triggerMode;
     bool isMasked;
     uint8_t destination;
+
+    REDTBLEntry() = default;
+    explicit REDTBLEntry(uint64_t registerValue);
+    explicit operator uint64_t() const;
 };
 
 }

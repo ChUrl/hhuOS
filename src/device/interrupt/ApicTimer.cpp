@@ -14,7 +14,7 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInte
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
     LApic::writeDoubleWord(Register::TIMER_DIVIDE, Divide::BY_1); // TODO: What divider?
     LVTEntry lvtEntry = LApic::readLVT(LApic::TIMER);
-    lvtEntry.timerMode = LVTTimerMode::PERIODIC;
+    lvtEntry.timerMode = LVTEntry::TimerMode::PERIODIC;
     LApic::writeLVT(LApic::TIMER, lvtEntry);
 
     setInterruptRate(timerInterval);

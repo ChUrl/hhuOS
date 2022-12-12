@@ -134,13 +134,13 @@ private:
         uint8_t bus; // TODO: What is this
         Pic::Interrupt source;
         uint32_t gsi;
-        REDTBLPinPolarity polarity;
-        REDTBLTriggerMode triggerMode;
+        REDTBLEntry::PinPolarity polarity;
+        REDTBLEntry::TriggerMode triggerMode;
     };
 
     struct IoNMIConfiguration {
-        REDTBLPinPolarity polarity;
-        REDTBLTriggerMode triggerMode;
+        REDTBLEntry::PinPolarity polarity;
+        REDTBLEntry::TriggerMode triggerMode;
         uint32_t gsi;
     };
 

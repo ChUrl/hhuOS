@@ -33,6 +33,7 @@ class LApic {
     friend class IoApic; // IoApic disables EOI suppression if it has no EOI register
 
 public:
+    // TODO: Rename to differentiate between GlobalSystemInterrupt and local interrupt pins?
     // TODO: Implement allow/forbid for these in the interruptservice?
     // NOTE: The values have nothing to do with physical pins, they are the register offsets for the LVT
     // NOTE: Register::LVT_<...> and Interrupt::<...> is interchangable
@@ -144,7 +145,7 @@ private:
     // NOTE: (like ACPI 1.0b, ACPI >= 2.0, MP tables)
     // TODO: Add contents of MSR if MSR exists for every core individually?
     struct LApicConfiguration {
-        uint8_t acpiId; // ACPI also stores this // TODO: Do I need this
+        uint8_t acpiId; // ACPI also stores this
         uint8_t id; // TODO: Check if ACPI sets this by itself of if the ID reg values have to be signalled to ACPI
         // TODO: Does this mean the processor can't be used currently but could be started? Or can't be started at all?
         bool enabled; // If false the operating system can't use this processor
@@ -153,8 +154,8 @@ private:
     struct LNMIConfiguration {
         uint8_t acpiId; // 0xFF means all CPUs
         uint8_t id; // Added for convenience (matches LApicConfiguration::id), 0xFF means all CPUs
-        LVTPinPolarity polarity;
-        LVTTriggerMode triggerMode;
+        LVTEntry::PinPolarity polarity;
+        LVTEntry::TriggerMode triggerMode;
         Interrupt lint;
     };
 
@@ -218,26 +219,26 @@ private:
      // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
      // NOTE: Only registers of currently running CPU will be affected
 
-    [[nodiscard]] static MSREntry readBaseMSR();
-
-    static void writeBaseMSR(MSREntry entry);
-
     [[nodiscard]] static uint32_t readDoubleWord(uint16_t reg);
 
     static void writeDoubleWord(uint16_t reg, uint32_t val);
 
+    [[nodiscard]] static MSREntry readBaseMSR();
+
+    static void writeBaseMSR(MSREntry msrEntry);
+
     [[nodiscard]] static SVREntry readSVR();
 
-    static void writeSVR(SVREntry svr);
+    static void writeSVR(SVREntry svrEntry);
 
     [[nodiscard]] static LVTEntry readLVT(Interrupt lint);
 
-    static void writeLVT(Interrupt lint, LVTEntry entry);
+    static void writeLVT(Interrupt lint, LVTEntry lvtEntry);
 
     [[nodiscard]] static ICREntry readICR(); // Obtain delivery status of IPI
 
     // TODO: IPIs can only be sent by the BSP? Or does this only apply when no other cores are started yet?
-    static void writeICR(ICREntry icr); // Issue IPIs
+    static void writeICR(ICREntry icrEntry); // Issue IPIs
 
 private:
     static bool initialized;

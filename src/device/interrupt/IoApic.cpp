@@ -122,8 +122,8 @@ void IoApic::initializePlatformConfiguration() {
             .bus = override->bus,
             .source = static_cast<Pic::Interrupt>(override->source),
             .gsi = override->globalSystemInterrupt,
-            .polarity = override->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLPinPolarity::HIGH : REDTBLPinPolarity::LOW,
-            .triggerMode = override->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLTriggerMode::EDGE : REDTBLTriggerMode::LEVEL
+            .polarity = override->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
+            .triggerMode = override->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL
         });
 
         // TODO: Remove old entry with the destination another entry was remapped to?
@@ -135,8 +135,8 @@ void IoApic::initializePlatformConfiguration() {
 
     for (auto nmi : nmiConfigurations) {
         platformConfiguration.ionmis.add(new IoNMIConfiguration {
-            .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLPinPolarity::HIGH : REDTBLPinPolarity::LOW,
-            .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLTriggerMode::EDGE : REDTBLTriggerMode::LEVEL,
+            .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
+            .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL,
             .gsi = nmi->globalSystemInterrupt
         });
     }
@@ -198,13 +198,15 @@ void IoApic::initializeController(IoApicConfiguration *ioapic) {
     // Configure NMI if it exists
     auto *nmi = getNMIConfiguration(ioapic);
     if (nmi != nullptr) {
-        writeREDTBL(ioapic, nmi->gsi, {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0),
-                                       .deliveryMode = REDTBLDeliveryMode::NMI,
-                                       .destinationMode = REDTBLDestinationMode::PHYSICAL, // TODO: What to set here?
-                                       .pinPolarity = nmi->polarity,
-                                       .triggerMode = nmi->triggerMode,
-                                       .isMasked = false,
-                                       .destination = LApic::getId()});
+        REDTBLEntry redtblEntry {};
+        redtblEntry.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0);
+        redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::NMI;
+        redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL; // TODO: What to set here?
+        redtblEntry.pinPolarity = nmi->polarity;
+        redtblEntry.triggerMode = nmi->triggerMode;
+        redtblEntry.isMasked = false;
+        redtblEntry.destination = LApic::getId();
+        writeREDTBL(ioapic, nmi->gsi, redtblEntry);
     }
 }
 
@@ -236,13 +238,15 @@ void IoApic::initializeREDTBL(IoApicConfiguration *ioapic) {
         }
 
         // NOTE: Interrupts have to be disabled beforehand
-        writeREDTBL(ioapic, gsi, {.vector = vector,
-                                  .deliveryMode = REDTBLDeliveryMode::FIXED, // TODO
-                                  .destinationMode = REDTBLDestinationMode::PHYSICAL, // TODO
-                                  .pinPolarity = REDTBLPinPolarity::HIGH,
-                                  .triggerMode = REDTBLTriggerMode::EDGE,
-                                  .isMasked = true,
-                                  .destination = id});
+        REDTBLEntry redtblEntry {};
+        redtblEntry.vector = vector;
+        redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::FIXED; // TODO
+        redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL; // TODO
+        redtblEntry.pinPolarity = REDTBLEntry::PinPolarity::HIGH;
+        redtblEntry.triggerMode = REDTBLEntry::TriggerMode::EDGE;
+        redtblEntry.isMasked = true;
+        redtblEntry.destination = id;
+        writeREDTBL(ioapic, gsi, redtblEntry);
     }
 }
 
@@ -315,19 +319,9 @@ REDTBLEntry IoApic::readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi) {
     // NOTE: Interrupts have to be disabled beforehand
     // The first register is the low DW, the second register is the high DW
     uint8_t entry = gsi - ioapic->gsiBase;
-    uint32_t low, high;
-    low = readDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry);
-    high = readDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry + 1);
-
-    // Intel ICH5 Datasheet Chapter 9.5.8
-    return {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
-            .deliveryMode = static_cast<REDTBLDeliveryMode>((low & (0b111 << 8)) >> 8),
-            .destinationMode = static_cast<REDTBLDestinationMode>((low & (1 << 11)) >> 11),
-            .deliveryStatus = static_cast<REDTBLDeliveryStatus>((low & (1 << 12)) >> 12),
-            .pinPolarity = static_cast<REDTBLPinPolarity>((low & (1 << 13)) >> 13),
-            .triggerMode = static_cast<REDTBLTriggerMode>((low & (1 << 15)) >> 15),
-            .isMasked = static_cast<bool>(low & (1 << 16)),
-            .destination = static_cast<uint8_t>(high >> 24)};
+    uint32_t low = readDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry);
+    uint64_t high = readDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry + 1);
+    return REDTBLEntry(low | high << 32);
 }
 
 // TODO: Spinlock?
@@ -337,21 +331,12 @@ void IoApic::writeREDTBL(IoApicConfiguration *ioapic, uint8_t gsi, REDTBLEntry r
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "IoApic::readREDTBL(): GSI is handled by different IO APIC!");
     }
 
-    // Intel ICH5 Datasheet Chapter 9.5.8
-    uint32_t low, high;
-    low = static_cast<uint32_t>(redtbl.vector)
-          | static_cast<uint32_t>(redtbl.deliveryMode) << 8
-          | static_cast<uint32_t>(redtbl.destinationMode) << 11
-          | static_cast<uint32_t>(redtbl.pinPolarity) << 13
-          | static_cast<uint32_t>(redtbl.triggerMode) << 15
-          | static_cast<uint32_t>(redtbl.isMasked) << 16;
-    high = redtbl.destination << 24;
-
     // NOTE: Interrupts have to be disabled beforehand
     // The first register is the low DW, the second register is the high DW
     uint8_t entry = gsi - ioapic->gsiBase;
-    writeDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry, low);
-    writeDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry + 1, high);
+    auto val = static_cast<uint64_t>(redtbl);
+    writeDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry, val & 0xFFFFFFFF);
+    writeDoubleWord(ioapic, Indirect_Register::REDTBL + 2 * entry + 1, val >> 32);
 }
 
 }

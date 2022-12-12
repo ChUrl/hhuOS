@@ -183,8 +183,8 @@ void LApic::initializePlatformConfiguration() {
         platformConfiguration.lnmis.add(new LNMIConfiguration {
             .acpiId = nmi->acpiProcessorId,
             .id = static_cast<uint8_t>(nmi->acpiProcessorId == 0xFF ? 0xFF : uidToId(nmi->acpiProcessorId)),
-            .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTPinPolarity::HIGH : LVTPinPolarity::LOW,
-            .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTTriggerMode::EDGE : LVTTriggerMode::LEVEL,
+            .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTEntry::PinPolarity::HIGH : LVTEntry::PinPolarity::LOW,
+            .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTEntry::TriggerMode::EDGE : LVTEntry::TriggerMode::LEVEL,
             .lint = nmi->localApicLint == 0 ? LINT0 : LINT1
         });
     }
@@ -262,17 +262,21 @@ void LApic::initializeController(LApicConfiguration *lapic) {
 
     // Configure the NMI (non maskable interrupt) pin
     LNMIConfiguration *nmi = getNMIConfiguration(lapic);
-    writeLVT(nmi->lint, {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0), // NMI doesn't have vector
-                         .deliveryMode = LVTDeliveryMode::NMI,
-                         .pinPolarity = nmi->polarity,
-                         .triggerMode = nmi->triggerMode,
-                         .isMasked = false});
+    LVTEntry lvtEntry {};
+    lvtEntry.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0); // NMI doesn't have vector
+    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::NMI;
+    lvtEntry.pinPolarity = nmi->polarity;
+    lvtEntry.triggerMode = nmi->triggerMode;
+    lvtEntry.isMasked = false;
+    writeLVT(nmi->lint, lvtEntry);
 
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
     // and the SW ENABLE flag.
-    writeSVR({.vector = Kernel::InterruptDispatcher::SPURIOUS,
-              .isSWEnabled = true,
-              .hasEOIBroadcastSuppression = true});
+    SVREntry svrEntry {};
+    svrEntry.vector = Kernel::InterruptDispatcher::SPURIOUS;
+    svrEntry.isSWEnabled = true;
+    svrEntry.hasEOIBroadcastSuppression = true;
+    writeSVR(svrEntry);
 
     // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
     // change a subsequently read value, in fact the register should always be written once before reading)
@@ -289,26 +293,27 @@ void LApic::initializeController(LApicConfiguration *lapic) {
 
 void LApic::initializeLVT() {
     // Default values
-    LVTEntry entry = {.deliveryMode = LVTDeliveryMode::FIXED, // TODO
-                      .pinPolarity = LVTPinPolarity::HIGH,
-                      .triggerMode = LVTTriggerMode::EDGE,
-                      .isMasked = true};
+    LVTEntry lvtEntry {};
+    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED, // TODO
+    lvtEntry.pinPolarity = LVTEntry::PinPolarity::HIGH,
+    lvtEntry.triggerMode = LVTEntry::TriggerMode::EDGE,
+    lvtEntry.isMasked = true;
 
     // Set all the vector numbers
-    entry.vector = Kernel::InterruptDispatcher::CMCI;
-    writeLVT(CMCI, entry); // TODO: The CMCI might not exist?
-    entry.vector = Kernel::InterruptDispatcher::APICTIMER;
-    writeLVT(TIMER, entry);
-    entry.vector = Kernel::InterruptDispatcher::THERMAL;
-    writeLVT(THERMAL, entry);
-    entry.vector = Kernel::InterruptDispatcher::PERFORMANCE;
-    writeLVT(PERFORMANCE, entry);
-    entry.vector = Kernel::InterruptDispatcher::LINT0;
-    writeLVT(LINT0, entry);
-    entry.vector = Kernel::InterruptDispatcher::LINT1;
-    writeLVT(LINT1, entry);
-    entry.vector = Kernel::InterruptDispatcher::ERROR;
-    writeLVT(ERROR, entry);
+    lvtEntry.vector = Kernel::InterruptDispatcher::CMCI;
+    writeLVT(CMCI, lvtEntry); // TODO: The CMCI might not exist?
+    lvtEntry.vector = Kernel::InterruptDispatcher::APICTIMER;
+    writeLVT(TIMER, lvtEntry);
+    lvtEntry.vector = Kernel::InterruptDispatcher::THERMAL;
+    writeLVT(THERMAL, lvtEntry);
+    lvtEntry.vector = Kernel::InterruptDispatcher::PERFORMANCE;
+    writeLVT(PERFORMANCE, lvtEntry);
+    lvtEntry.vector = Kernel::InterruptDispatcher::LINT0;
+    writeLVT(LINT0, lvtEntry);
+    lvtEntry.vector = Kernel::InterruptDispatcher::LINT1;
+    writeLVT(LINT1, lvtEntry);
+    lvtEntry.vector = Kernel::InterruptDispatcher::ERROR;
+    writeLVT(ERROR, lvtEntry);
 }
 
 void LApic::dumpLPlatformConfiguration() {
@@ -331,26 +336,6 @@ void LApic::dumpLPlatformConfiguration() {
 
 // ! Private register member functions start here
 
-// IA-32 Architecture Manual Chapter 10.4.4
-MSREntry LApic::readBaseMSR() {
-    uint64_t val = ia32ApicBaseMsr.readQuadWord(); // Atomic read
-
-    return {.isBSP = static_cast<bool>(val & (1 << 8)),
-            .isX2Apic = static_cast<bool>(val & (1 << 10)),
-            .isHWEnabled = static_cast<bool>(val & (1 << 11)),
-            .baseField = static_cast<uint32_t>(val & 0xFFFFF000)};
-}
-
-// IA-32 Architecture Manual Chapter 10.4.4
-void LApic::writeBaseMSR(MSREntry entry) {
-    uint64_t val = static_cast<uint64_t>(entry.isBSP) << 8
-                   | static_cast<uint64_t>(entry.isX2Apic) << 10
-                   | static_cast<uint64_t>(entry.isHWEnabled) << 11
-                   | static_cast<uint64_t>(entry.baseField) << 12;
-
-    ia32ApicBaseMsr.writeQuadWord(val); // Atomic write
-}
-
 // NOTE: https://forum.osdev.org/viewtopic.php?f=1&t=16653#p123105
 // NOTE: In x2APIC mode this can be written atomically, so no spinlock there
 // TODO: Needs spinlock?
@@ -372,50 +357,35 @@ void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
     *regAddr = val;
 }
 
-// IA-32 Architecture Manual Chapter 10.9
-SVREntry LApic::readSVR() {
-    uint32_t val = readDoubleWord(Register::SVR);
+// IA-32 Architecture Manual Chapter 10.4.4
+MSREntry LApic::readBaseMSR() {
+    return MSREntry(ia32ApicBaseMsr.readQuadWord());
+}
 
-    return {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
-            .isSWEnabled = static_cast<bool>(val & (1 << 8)),
-            .hasFocusProcessorChecking = static_cast<bool>(val & (1 << 9)),
-            .hasEOIBroadcastSuppression = static_cast<bool>(val & (1 << 12))};
+// IA-32 Architecture Manual Chapter 10.4.4
+void LApic::writeBaseMSR(MSREntry msrEntry) {
+    ia32ApicBaseMsr.writeQuadWord(static_cast<uint64_t>(msrEntry)); // Atomic write
 }
 
 // IA-32 Architecture Manual Chapter 10.9
-void LApic::writeSVR(SVREntry svr) {
-    uint32_t val = static_cast<uint32_t>(svr.vector)
-                   | static_cast<uint32_t>(svr.isSWEnabled) << 8
-                   | static_cast<uint32_t>(svr.hasFocusProcessorChecking) << 9
-                   | static_cast<uint32_t>(svr.hasEOIBroadcastSuppression) << 12;
+SVREntry LApic::readSVR() {
+    return SVREntry(readDoubleWord(Register::SVR));
+}
 
-    writeDoubleWord(Register::SVR, val);
+// IA-32 Architecture Manual Chapter 10.9
+void LApic::writeSVR(SVREntry svrEntry) {
+    writeDoubleWord(Register::SVR, static_cast<uint32_t>(svrEntry));
 }
 
 // IA-32 Architecture Manual Chapter 10.5.1
 LVTEntry LApic::readLVT(Interrupt lint) {
-    uint32_t val = readDoubleWord(lint);
-
-    return {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(val & 0xFF),
-            .deliveryMode = static_cast<LVTDeliveryMode>((val & (0b111 << 8)) >> 8),
-            .deliveryStatus = static_cast<LVTDeliveryStatus>((val & (1 << 12)) >> 12),
-            .pinPolarity = static_cast<LVTPinPolarity>((val & (1 << 13)) >> 13),
-            .triggerMode = static_cast<LVTTriggerMode>((val & (1 << 15)) >> 15),
-            .isMasked = static_cast<bool>(val & (1 << 16)),
-            .timerMode = static_cast<LVTTimerMode>((val & (0b11 << 17)) >> 17)};
+    return LVTEntry(readDoubleWord(lint));
 }
 
 // TODO: Check if it is a problem to write to readonly/reserved areas
 // IA-32 Architecture Manual Chapter 10.5.1
-void LApic::writeLVT(Interrupt lint, LVTEntry entry) {
-    uint32_t val = static_cast<uint32_t>(entry.vector)
-                   | static_cast<uint32_t>(entry.deliveryMode) << 8
-                   | static_cast<uint32_t>(entry.pinPolarity) << 13
-                   | static_cast<uint32_t>(entry.triggerMode) << 15
-                   | static_cast<uint32_t>(entry.isMasked) << 16
-                   | static_cast<uint32_t>(entry.timerMode) << 17;
-
-    writeDoubleWord(lint, val);
+void LApic::writeLVT(Interrupt lint, LVTEntry lvtEntry) {
+    writeDoubleWord(lint, static_cast<uint32_t>(lvtEntry));
 }
 
 // NOTE: https://forum.osdev.org/viewtopic.php?f=1&t=16653#p123105
@@ -427,36 +397,18 @@ void LApic::writeLVT(Interrupt lint, LVTEntry entry) {
 // IA-32 Architecture Manual Chapter 10.6.1
 ICREntry LApic::readICR() {
     // NOTE: Interrupts have to be disabled beforehand
-    uint32_t low, high;
-    low = readDoubleWord(Register::ICR_LOW);
-    high = readDoubleWord(Register::ICR_HIGH);
-
-    return {.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(low & 0xFF),
-            .deliveryMode = static_cast<ICRDeliveryMode>((low & (0b111 << 8)) >> 8),
-            .destinationMode = static_cast<ICRDestinationMode>((low & (1 << 11)) >> 11),
-            .deliveryStatus = static_cast<ICRDeliveryStatus>((low & (1 << 12)) >> 12),
-            .level = static_cast<ICRLevel>((low & (1 << 14)) >> 14),
-            .triggerMode = static_cast<ICRTriggerMode>((low & (1 << 15)) >> 15),
-            .destinationShorthand = static_cast<ICRDestinationShorthand>((low & (0b11 << 18)) >> 18),
-            .destination = static_cast<uint8_t>(high >> 24)};
+    uint32_t low = readDoubleWord(Register::ICR_LOW);
+    uint64_t high = readDoubleWord(Register::ICR_HIGH);
+    return ICREntry(low | high << 32);
 }
 
 // TODO: Needs spinlock?
 // IA-32 Architecture Manual Chapter 10.6.1
-void LApic::writeICR(ICREntry icr) {
-    uint32_t low, high;
-    low = static_cast<uint32_t>(icr.vector)
-          | static_cast<uint32_t>(icr.deliveryMode) << 8
-          | static_cast<uint32_t>(icr.destinationMode) << 11
-          | static_cast<uint32_t>(icr.deliveryStatus) << 12
-          | static_cast<uint32_t>(icr.level) << 14
-          | static_cast<uint32_t>(icr.triggerMode) << 15
-          | static_cast<uint32_t>(icr.destinationShorthand) << 18;
-    high = static_cast<uint32_t>(icr.destination) << 24;
-
+void LApic::writeICR(ICREntry icrEntry) {
     // NOTE: Interrupts have to be disabled beforehand
-    writeDoubleWord(Register::ICR_HIGH, high);
-    writeDoubleWord(Register::ICR_LOW, low); // Last as writing low DW sends the IPI
+    auto val = static_cast<uint64_t>(icrEntry);
+    writeDoubleWord(Register::ICR_HIGH, val >> 32);
+    writeDoubleWord(Register::ICR_LOW, val & 0xFFFFFFFF); // Last as writing low DW sends the IPI
 }
 
 }
