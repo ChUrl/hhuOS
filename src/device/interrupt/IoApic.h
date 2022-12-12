@@ -7,7 +7,6 @@
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "device/interrupt/Pic.h"
 
-#define HHUOS_IOAPIC_ENABLE 1
 #define HHUOS_IOAPIC_ENABLE_DEBUG 1
 
 namespace Device {
@@ -45,6 +44,8 @@ public:
      * Must not be called with enabled interrupts.
      */
     static void initialize();
+
+    static uint8_t getSystemMaxGsi();
 
     /**
      * Unmask an interrupt in the IO APIC.

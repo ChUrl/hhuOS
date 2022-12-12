@@ -9,7 +9,6 @@
 #include "kernel/log/Logger.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 
-#define HHUOS_LAPIC_ENABLE 1
 #define HHUOS_LAPIC_ENABLE_DEBUG 1
 
 // NOTE: There are now 4 types of "Interrupt":
@@ -59,6 +58,8 @@ public:
 
     ~LApic() = delete; // Static class
 
+
+    static bool isSupported();
 
     // TODO: Differentiate between different cores (put initialized in the LApicConfiguration struct?)
     // NOTE: Currently if this is true this also means that all other APs were initialized

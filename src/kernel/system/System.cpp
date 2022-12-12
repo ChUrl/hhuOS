@@ -114,19 +114,15 @@ void System::initializeSystem() {
 
     initialized = true;
 
-    // TODO: Only do if ACPI + APIC available
-#if HHUOS_LAPIC_ENABLE == 1
-    // NOTE: Enable APIC
-    log.info("Initializing local APIC");
-    Device::LApic::initialize();
-#endif
+    if (Device::Acpi::isAvailable() && Device::LApic::isSupported()) {
+        log.info("APIC support detected -> Initializing local APIC");
+        Device::LApic::initialize();
+    }
 
-    // TODO: Only do if ACPI + APIC available
-#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // NOTE: Enable IO APIC
-    log.info("Initializing IO APIC");
-    Device::IoApic::initialize();
-#endif
+    if (Device::LApic::isInitialized()) {
+        log.info("APIC support detected -> Initializing IO APIC");
+        Device::IoApic::initialize();
+    }
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
@@ -152,17 +148,15 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
-    // TODO: Only do if ACPI + APIC available
-#if HHUOS_APICTIMER_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // NOTE: Enable APIC Timer
-    log.info("Initializing APIC Timer");
-    auto* apictimer = new Device::ApicTimer();
-    apictimer->plugin();
+    if (Device::LApic::isInitialized()) {
+        log.info("APIC support detected -> Initializing APIC Timer");
+        auto* apictimer = new Device::ApicTimer();
+        apictimer->plugin();
 
-    // TODO: APIC Timer calibration requires timeservice (sleep), so timeservice can't be initialized with APIC timer
-    //       and the PIT can't be disabled
-    // interruptService->forbidHardwareInterrupt(Device::Pic::Interrupt::PIT);
-#endif
+        // TODO: APIC Timer calibration requires timeservice (sleep), so timeservice can't be initialized with APIC timer
+        //       and the PIT can't be disabled
+        // interruptService->forbidHardwareInterrupt(Device::Pic::Interrupt::PIT);
+    }
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));

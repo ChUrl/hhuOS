@@ -53,7 +53,6 @@ void InterruptDispatcher::dispatch(const InterruptFrame &frame) {
         processService.exitCurrentProcess(-1);
     }
 
-    // NOTE: Spurious Interrupts must not send an EOI as the IRR/ISR won't be set
     // Ignore spurious interrupts
     if (interruptService.checkSpuriousInterrupt(slot)) {
         spuriousCounterWrapper.inc();
@@ -92,26 +91,24 @@ uint32_t InterruptDispatcher::getInterruptDepth() const {
 }
 
 bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrupt slot) {
-    // TODO: Only do if ACPI + APIC available
-#if HHUOS_LAPIC_ENABLE == 1
     // Local APIC interrupts
-    if (slot >= CMCI && slot <= SPURIOUS) {
-        return false;
+    if (Device::LApic::isInitialized()) {
+        if (slot >= CMCI && slot <= SPURIOUS) {
+            return false;
+        }
     }
-#endif
 
-#if HHUOS_LAPIC_ENABLE == 1 && HHUOS_IOAPIC_ENABLE == 1
-    // TODO: These might not exist, needs to be determined from IoApic
     // Additional IO APIC interrupts
-    if (slot >= PIT && slot <= IO8) { // TODO: Replace IO8 with maxGSI from IoPlatformConfiguration
-        return false;
+    if (Device::IoApic::isInitialized()) {
+        if (slot >= PIT && slot <= PIT + Device::IoApic::getSystemMaxGsi()) {
+            return false;
+        }
     }
-#else
+
     // Hardware (PIC) interrupts
     if (slot >= PIT && slot <= SECONDARY_ATA) {
         return false;
     }
-#endif
 
     // Software interrupts
     if (slot == SYSTEM_CALL) {

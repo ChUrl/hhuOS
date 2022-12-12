@@ -39,6 +39,10 @@ void IoApic::initialize() {
 #endif
 }
 
+uint8_t IoApic::getSystemMaxGsi() {
+    return platformConfiguration.systemGsiMax;
+}
+
 void IoApic::allow(uint8_t gsi) {
     IoApicConfiguration *ioapic = getIoApicConfiguration(gsi);
 

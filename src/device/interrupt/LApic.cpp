@@ -16,6 +16,17 @@ Kernel::Logger LApic::log = Kernel::Logger::get("LApic");
 
 // ! Public member functions start here
 
+bool LApic::isSupported() {
+    auto features = Util::Cpu::CpuId::getCpuFeatures();
+    for (auto feature: features) {
+        if (feature == Util::Cpu::CpuId::CpuFeature::APIC || feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool LApic::isInitialized() {
     return initialized;
 }

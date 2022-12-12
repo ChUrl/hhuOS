@@ -7,8 +7,6 @@
 #include "kernel/system/System.h"
 #include "device/time/TimeProvider.h"
 
-#define HHUOS_APICTIMER_ENABLE 1
-
 // TODO: This code doesn't account for multi core systems
 //       - The calibration only has to be done once, but the registers have to be written
 //         for every core (do before APs get initialized and set registers in AP init sequence?)

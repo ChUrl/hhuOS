@@ -33,67 +33,60 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
 }
 
 void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) {
-    // TODO: Only do if ACPI + APIC available
-#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // TODO: Is disabling interrupts like this safe? Or better use spinlock? Is it even necessary?
-    Device::Cpu::disableInterrupts();
-    Device::IoApic::allow(interrupt);
-    Device::Cpu::enableInterrupts();
-#else
-    pic.allow(interrupt);
-#endif
+    if (Device::IoApic::isInitialized()) {
+        Device::IoApic::allow(interrupt); // TODO: Needs to be synchronized as LVT is written?
+    } else {
+        pic.allow(interrupt);
+    }
 }
 
 void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt) {
-    // TODO: Only do if ACPI + APIC available
-#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // TODO: Is disabling interrupts like this safe? Is it even necessary?
-    Device::Cpu::disableInterrupts();
-    Device::IoApic::forbid(interrupt);
-    Device::Cpu::enableInterrupts();
-#else
-    pic.forbid(interrupt);
-#endif
+    if (Device::IoApic::isInitialized()) {
+        Device::IoApic::forbid(interrupt); // TODO: Needs to be synchronized as LVT is written?
+    } else {
+        pic.forbid(interrupt);
+    }
 }
 
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    // TODO: Only do if ACPI + APIC available
-#if HHUOS_LAPIC_ENABLE == 1
-    // EOI for local interrupts, ExtINT/NMI doesn't have to be EOI'd
-    if (interrupt >= InterruptDispatcher::CMCI && interrupt <= InterruptDispatcher::ERROR
-    && interrupt != InterruptDispatcher::LINT0 && interrupt != InterruptDispatcher::LINT1) {
-        Device::LApic::sendEndOfInterrupt();
+    if (Device::LApic::isInitialized()) {
+        // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
+        // TODO: Only disable NMI pin, not both LINTs
+        // EOI for local interrupts, NMI doesn't have to be EOI'd
+        if (interrupt >= InterruptDispatcher::CMCI && interrupt <= InterruptDispatcher::ERROR
+            && interrupt != InterruptDispatcher::LINT0 && interrupt != InterruptDispatcher::LINT1) {
+            Device::LApic::sendEndOfInterrupt();
+        }
     }
-#endif
 
-#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
-    // TODO: <= IO8 depends on how many GSIs are supported by the system
-    if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::IO8) { // TODO: Change IO8 to maxGsi
-        Device::LApic::sendEndOfInterrupt(); // TODO: Do IO APIC GSIs need local APIC EOI?
-        Device::IoApic::sendEndOfInterrupt(interrupt);
+    if (Device::IoApic::isInitialized()) {
+        // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
+        // TODO: <= IO8 depends on how many GSIs are supported by the system
+        if (interrupt >= InterruptDispatcher::PIT
+        && interrupt <= InterruptDispatcher::PIT + Device::IoApic::getSystemMaxGsi()) {
+            Device::LApic::sendEndOfInterrupt(); // TODO: Do IO APIC GSIs need local APIC EOI?
+            Device::IoApic::sendEndOfInterrupt(interrupt);
+        }
     }
-#else
-    if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA) {
+
+    else if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA) {
         pic.sendEndOfInterrupt(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
     }
-#endif
 }
 
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    // TODO: Only do if ACPI + APIC available
-#if HHUOS_IOAPIC_ENABLE == 1 && HHUOS_LAPIC_ENABLE == 1
-    // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
-    return interrupt == InterruptDispatcher::SPURIOUS; // TODO: Is this working in virtual wire mode for ExtINT IRQs?
-#else
+    if (Device::LApic::isInitialized()) {
+        // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
+        return interrupt == InterruptDispatcher::SPURIOUS;
+    }
+
     // NOTE: When using the PIC the spurious interrupt has the lowest priority of the corresponding chip (7 or 15)
-    if (interrupt != InterruptDispatcher::LPT1 && interrupt != InterruptDispatcher::SECONDARY_ATA) {
+    else if (interrupt != InterruptDispatcher::LPT1 && interrupt != InterruptDispatcher::SECONDARY_ATA) {
         return false;
     }
 
     // NOTE: If an interrupt (number 7 or 15) happens (PIC) but the interrupt flag in ISR is not set, it is spurious
     return pic.isSpurious(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
-#endif
 }
 
 }
