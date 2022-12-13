@@ -26,7 +26,6 @@ target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/interrupt/LApicErrorHandler.cpp
 
         ${HHUOS_SRC_DIR}/device/interrupt/ApicRegisterInterface.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/GlobalSystemInterrupt.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/InterruptArchitecture.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/InterruptArchitectureACPI10.cpp
         )
