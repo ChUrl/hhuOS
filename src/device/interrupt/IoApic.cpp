@@ -5,7 +5,6 @@
 namespace Device {
 
 bool IoApic::initialized = false;
-IoApic::IoPlatformConfiguration IoApic::platformConfiguration;
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 
 // TODO: Should I arbitrarily assign IDs like this or does ACPI already contain valid IDs?
@@ -18,60 +17,51 @@ bool IoApic::isInitialized() {
 }
 
 void IoApic::initialize() {
-    if (!LApic::isInitialized()) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "IoApic::initialize(): Local APIC is not initialized!");
-    }
-
-    initializePlatformConfiguration();
+    LApic::verifyInitialized();
 
     // Initialize all IO APICs of the system
-    for (auto *ioapic : platformConfiguration.ioapics) {
+    for (auto *ioapic : InterruptArchitecture::ioapics()) {
         initializeController(ioapic);
     }
 
     initialized = true;
-
-#if HHUOS_IOAPIC_ENABLE_DEBUG == 1
-    dumpIoPlatformConfiguration();
-#endif
-}
-
-uint8_t IoApic::getSystemMaxGsi() {
-    return platformConfiguration.systemGsiMax;
 }
 
 void IoApic::allow(uint8_t gsi) {
-    IoApicConfiguration *ioapic = getIoApicConfiguration(gsi);
+    InterruptArchitecture::IoApicInformation *ioapic =
+            InterruptArchitecture::getIoApicInformation(static_cast<GlobalSystemInterrupt>(gsi));
 
-    REDTBLEntry entry = readREDTBL(ioapic, gsi);
-    entry.isMasked = false;
-    writeREDTBL(ioapic, gsi, entry);
+    REDTBLEntry redtblEntry = readREDTBL(ioapic, gsi);
+    redtblEntry.isMasked = false;
+    writeREDTBL(ioapic, gsi, redtblEntry);
 }
 
 void IoApic::allow(Pic::Interrupt irq) {
-    allow(platformConfiguration.irqToGsiMappings[static_cast<uint8_t>(irq)]);
+    allow(InterruptArchitecture::ioPlatform->irqToGsiMappings[static_cast<uint8_t>(irq)]);
 }
 
 void IoApic::forbid(uint8_t gsi) {
-    IoApicConfiguration *ioapic = getIoApicConfiguration(gsi);
+    InterruptArchitecture::IoApicInformation *ioapic =
+            InterruptArchitecture::getIoApicInformation(static_cast<GlobalSystemInterrupt>(gsi));
 
-    REDTBLEntry entry = readREDTBL(ioapic, gsi);
-    entry.isMasked = true;
-    writeREDTBL(ioapic, gsi, entry);
+    REDTBLEntry redtblEntry = readREDTBL(ioapic, gsi);
+    redtblEntry.isMasked = true;
+    writeREDTBL(ioapic, gsi, redtblEntry);
 }
 
 void IoApic::forbid(Pic::Interrupt irq) {
-    forbid(platformConfiguration.irqToGsiMappings[static_cast<uint8_t>(irq)]);
+    forbid(InterruptArchitecture::ioPlatform->irqToGsiMappings[static_cast<uint8_t>(irq)]);
 }
 
 bool IoApic::status(uint8_t gsi) {
-    IoApicConfiguration *ioapic = getIoApicConfiguration(gsi);
+    InterruptArchitecture::IoApicInformation *ioapic =
+            InterruptArchitecture::getIoApicInformation(static_cast<GlobalSystemInterrupt>(gsi));
 
     return readREDTBL(ioapic, gsi).isMasked;
 }
 
 bool IoApic::status(Pic::Interrupt irq) {
-    return status(platformConfiguration.irqToGsiMappings[static_cast<uint8_t>(irq)]);
+    return status(InterruptArchitecture::ioPlatform->irqToGsiMappings[static_cast<uint8_t>(irq)]);
 }
 
 // NOTE: Do not allocate memory here, that also means no iterators!
@@ -79,7 +69,8 @@ bool IoApic::status(Pic::Interrupt irq) {
 // TODO: Compatibility mode
 // Intel ICH5 Datasheet Chapter 9.5.5
 void IoApic::sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt vector) {
-    IoApicConfiguration *ioapic = getIoApicConfiguration(vector);
+    InterruptArchitecture::IoApicInformation *ioapic =
+            InterruptArchitecture::getIoApicInformation(static_cast<GlobalSystemInterrupt>(vector));
 
     volatile auto *regAddr = reinterpret_cast<uint32_t *>(ioapic->virtAddress + Register::EOI);
     *regAddr = static_cast<uint8_t>(vector);
@@ -87,116 +78,34 @@ void IoApic::sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt vector) {
 
 // ! Private member functions start here
 
-void IoApic::initializePlatformConfiguration() {
-    if (!Acpi::isAvailable()) {
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): ACPI support not present!");
+void IoApic::verifyMMIO(InterruptArchitecture::IoApicInformation *ioapic) {
+    if (ioapic->virtAddress == 0) {
+        Util::Exception::throwException(Util::Exception::NULL_POINTER, "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
     }
-
-    // Default is identity mapping
-    for (uint8_t irq = 0; irq < 16; ++irq) {
-        platformConfiguration.irqToGsiMappings[irq] = irq;
-        platformConfiguration.gsiToIrqMappings[irq] = irq;
-    }
-
-    Util::Data::ArrayList<const Acpi::IoApic *> ioApics;
-    Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> interruptSourceOverrides;
-    Util::Data::ArrayList<const Acpi::NMISource *> nmiConfigurations;
-    Acpi::getApicStructures(&ioApics, Acpi::IO_APIC);
-    Acpi::getApicStructures(&interruptSourceOverrides, Acpi::INTERRUPT_SOURCE_OVERRIDE);
-    Acpi::getApicStructures(&nmiConfigurations, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
-
-    if (ioApics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "IoApic::initializePlatformConfiguration(): Didn't find IO APIC(s)!");
-    }
-
-    for (auto ioapic : ioApics) {
-        platformConfiguration.ioapics.add(new IoApicConfiguration {
-            .id = ioapic->ioApicId,
-            .address = ioapic->ioApicAddress,
-            .gsiBase = ioapic->globalSystemInterruptBase
-        });
-    }
-
-    for (auto override : interruptSourceOverrides) {
-        platformConfiguration.irqOverrides.add(new IoInterruptOverride {
-            .bus = override->bus,
-            .source = static_cast<Pic::Interrupt>(override->source),
-            .gsi = override->globalSystemInterrupt,
-            .polarity = override->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
-            .triggerMode = override->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL
-        });
-
-        // TODO: Remove old entry with the destination another entry was remapped to?
-        //       If PIT gets remapped from GSI 0 to 2, irqMappings[2] and gsiMappings[2] also point to 2
-        // Update mappings
-        platformConfiguration.irqToGsiMappings[override->source] = override->globalSystemInterrupt;
-        platformConfiguration.gsiToIrqMappings[override->globalSystemInterrupt] = override->source;
-    }
-
-    for (auto nmi : nmiConfigurations) {
-        platformConfiguration.ionmis.add(new IoNMIConfiguration {
-            .polarity = nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
-            .triggerMode = nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL,
-            .gsi = nmi->globalSystemInterrupt
-        });
-    }
-}
-
-IoApic::IoApicConfiguration *IoApic::getIoApicConfiguration(uint8_t gsi) {
-    // NOTE: Using an iterator here would allocate heap memory, don't do that!
-    // NOTE: (Can't allocate heap memory while sending EOI)
-    IoApicConfiguration *ioapic;
-    for (uint32_t i = 0; i < platformConfiguration.ioapics.size(); ++i) {
-        ioapic = platformConfiguration.ioapics.get(i);
-        if (gsi >= ioapic->gsiBase && gsi <= ioapic->gsiMax) {
-            return ioapic;
-        }
-    }
-
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::getIoApicConfiguration(): Didn't find configuration matching GSI!");
-}
-
-// NOTE: The GSIs and IRQs are not identity mapped
-IoApic::IoApicConfiguration *IoApic::getIoApicConfiguration(Pic::Interrupt irq) {
-    return getIoApicConfiguration(platformConfiguration.irqToGsiMappings[static_cast<uint8_t>(irq)]);
-}
-
-// NOTE: The GSIs and vectors are identity mapped, translated by 32
-IoApic::IoApicConfiguration *IoApic::getIoApicConfiguration(Kernel::InterruptDispatcher::Interrupt vector) {
-    return getIoApicConfiguration(vector - 32);
-}
-
-// TODO: Can a single IO APIC have multiple NMIs?
-IoApic::IoNMIConfiguration *IoApic::getNMIConfiguration(IoApicConfiguration *ioapic) {
-    // Check if a NMI exists assigned to one of this IO APICs pins
-    for (auto *nmi : platformConfiguration.ionmis) {
-        if (nmi->gsi >= ioapic->gsiBase && nmi->gsi <= ioapic->gsiMax) {
-            return nmi;
-        }
-    }
-
-    return nullptr; // NMI is optional for IO APIC
 }
 
 // TODO: Need to set the IO APIC ID in the ID register (it's set to 0 on power up)
 //       Copy the value from ACPI? Or is this value 0 aswell?
-void IoApic::initializeController(IoApicConfiguration *ioapic) {
+void IoApic::initializeController(InterruptArchitecture::IoApicInformation *ioapic) {
     initializeMMIORegion(ioapic);
 
     // NOTE: These are overwritten for each IO APIC but this doesn't matter as they are equal
     // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
-    platformConfiguration.version = readDoubleWord(ioapic, Indirect_Register::VER) & 0xFF;
-    platformConfiguration.hasEOIRegister = platformConfiguration.version >= 0x20;
+    InterruptArchitecture::ioPlatform->version = readDoubleWord(ioapic, Indirect_Register::VER) & 0xFF;
+    InterruptArchitecture::ioPlatform->eoiSupported = InterruptArchitecture::ioPlatform->version >= 0x20;
 
     // NOTE: With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
     // NOTE: With ICH5 (and other ICHs?) it is always 24
-    ioapic->gsiMax = ioapic->gsiBase + (readDoubleWord(ioapic, Indirect_Register::VER) >> 16) & 0xFF;
-    platformConfiguration.systemGsiMax = ioapic->gsiMax > platformConfiguration.systemGsiMax ? ioapic->gsiMax : platformConfiguration.systemGsiMax;
+    ioapic->gsiMax = static_cast<GlobalSystemInterrupt>(ioapic->gsiBase + (readDoubleWord(ioapic, Indirect_Register::VER) >> 16) & 0xFF);
+    InterruptArchitecture::ioPlatform->globalGsiMax = static_cast<GlobalSystemInterrupt>(
+            ioapic->gsiMax > InterruptArchitecture::ioPlatform->globalGsiMax
+            ? ioapic->gsiMax
+            : InterruptArchitecture::ioPlatform->globalGsiMax);
 
     initializeREDTBL(ioapic);
 
     // Configure NMI if it exists
-    auto *nmi = getNMIConfiguration(ioapic);
+    auto *nmi = InterruptArchitecture::getIoNMIConfiguration(ioapic);
     if (nmi != nullptr) {
         REDTBLEntry redtblEntry {};
         redtblEntry.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0);
@@ -210,7 +119,7 @@ void IoApic::initializeController(IoApicConfiguration *ioapic) {
     }
 }
 
-void IoApic::initializeMMIORegion(IoApicConfiguration *ioapic) {
+void IoApic::initializeMMIORegion(InterruptArchitecture::IoApicInformation *ioapic) {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
     void *virtAddress = memoryService.mapIO(ioapic->address, Util::Memory::PAGESIZE, true);
 
@@ -224,14 +133,22 @@ void IoApic::initializeMMIORegion(IoApicConfiguration *ioapic) {
 
 // TODO: I read that GSI0 is typically used for ExtINT (PIC), if I can verify that the GSI0 can always be masked
 //       as I don't support virtual wire
-void IoApic::initializeREDTBL(IoApicConfiguration *ioapic) {
+void IoApic::initializeREDTBL(InterruptArchitecture::IoApicInformation *ioapic) {
     uint8_t id = LApic::getId(); // TODO: Don't send all interrupts to one cpu
 
     for (uint32_t gsi = ioapic->gsiBase; gsi <= ioapic->gsiMax; ++gsi) {
+        /*
+         * The REDTBL vectors on QEMU should look like this:
+         * 0: 32
+         * 1: 33
+         * 2: 32 // PIT is mapped to INTI 2
+         * 3: 35
+         */
+
         Kernel::InterruptDispatcher::Interrupt vector;
         if (gsi <= Pic::Interrupt::SECONDARY_ATA) {
-            // GSIs 0 to 15 are mapped depending on the InterruptOverride structures
-            vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(platformConfiguration.gsiToIrqMappings[gsi] + 32);
+            // GSIs 0 to 15 are mapped depending on the ACPI InterruptOverride structures
+            vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(InterruptArchitecture::ioPlatform->gsiToIrqMappings[gsi] + 32);
         } else {
             // Rest of GSIs are identity mapped but translated by 32
             vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(gsi + 32);
@@ -250,42 +167,12 @@ void IoApic::initializeREDTBL(IoApicConfiguration *ioapic) {
     }
 }
 
-void IoApic::dumpIoPlatformConfiguration() {
-    log.info("Version: [0x%x]", platformConfiguration.version);
-    log.info("Has EOI register: [%d]", platformConfiguration.hasEOIRegister);
-    log.info("System max GSI: [%d]", platformConfiguration.systemGsiMax);
-
-    log.info("Io Apic status:");
-    for (auto *ioapic : platformConfiguration.ioapics) {
-        log.info("- Id: [0x%x], MMIO: [0x%x] (phys) -> [0x%x] (virt), GSI base: [%d], GSI max: [%d]",
-                 ioapic->id, ioapic->address, ioapic->virtAddress, ioapic->gsiBase, ioapic->gsiMax);
-    }
-
-    log.info("Io IRQ overrides:");
-    for (auto *override : platformConfiguration.irqOverrides) {
-        log.info("- IRQ source: [%d], GSI target: [%d]", override->source, override->gsi);
-    }
-    if (platformConfiguration.irqOverrides.size() == 0) {
-        log.info("- There are no IRQ overrides");
-    }
-
-    log.info("Io NMI status:");
-    for (auto *nmi : platformConfiguration.ionmis) {
-        log.info("- GSI: [%d]", nmi->gsi);
-    }
-    if (platformConfiguration.ionmis.size() == 0) {
-        log.info("- There are no IO NMIs");
-    }
-}
-
 // ! Private register member functions start here
 
 // TODO: Spinlock?
 // TODO: Use Indirect_Register type and overload the name with a function accepting Register type
-uint32_t IoApic::readDoubleWord(IoApicConfiguration *ioapic, uint8_t reg) {
-    if (ioapic->virtAddress == 0) {
-        Util::Exception::throwException(Util::Exception::NULL_POINTER, "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
-    }
+uint32_t IoApic::readDoubleWord(InterruptArchitecture::IoApicInformation *ioapic, uint8_t reg) {
+    verifyMMIO(ioapic);
 
     volatile auto *indAddr = reinterpret_cast<uint8_t *>(ioapic->virtAddress + Register::IND);
     volatile auto *datAddr = reinterpret_cast<uint32_t *>(ioapic->virtAddress + Register::DAT);
@@ -297,10 +184,8 @@ uint32_t IoApic::readDoubleWord(IoApicConfiguration *ioapic, uint8_t reg) {
 
 // TODO: Spinlock?
 // TODO: Use Indirect_Register type
-void IoApic::writeDoubleWord(IoApicConfiguration *ioapic, uint8_t reg, uint32_t val) {
-    if (ioapic->virtAddress == 0) {
-        Util::Exception::throwException(Util::Exception::NULL_POINTER, "IoApic::readDoubleWord(): IoApic MMIO not initialized!");
-    }
+void IoApic::writeDoubleWord(InterruptArchitecture::IoApicInformation *ioapic, uint8_t reg, uint32_t val) {
+    verifyMMIO(ioapic);
 
     volatile auto *indAddr = reinterpret_cast<uint8_t *>(ioapic->virtAddress + Register::IND);
     volatile auto *datAddr = reinterpret_cast<uint32_t *>(ioapic->virtAddress + Register::DAT);
@@ -311,7 +196,7 @@ void IoApic::writeDoubleWord(IoApicConfiguration *ioapic, uint8_t reg, uint32_t 
 }
 
 // TODO: Spinlock?
-REDTBLEntry IoApic::readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi) {
+REDTBLEntry IoApic::readREDTBL(InterruptArchitecture::IoApicInformation *ioapic, uint8_t gsi) {
     if (gsi < ioapic->gsiBase || gsi > ioapic->gsiMax) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "IoApic::readREDTBL(): GSI is handled by different IO APIC!");
     }
@@ -326,7 +211,7 @@ REDTBLEntry IoApic::readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi) {
 
 // TODO: Spinlock?
 // TODO: Use Interrupt type
-void IoApic::writeREDTBL(IoApicConfiguration *ioapic, uint8_t gsi, REDTBLEntry redtbl) {
+void IoApic::writeREDTBL(InterruptArchitecture::IoApicInformation *ioapic, uint8_t gsi, REDTBLEntry redtbl) {
     if (gsi < ioapic->gsiBase || gsi > ioapic->gsiMax) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "IoApic::readREDTBL(): GSI is handled by different IO APIC!");
     }

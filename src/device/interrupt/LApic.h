@@ -3,28 +3,12 @@
 
 #include <cstdint>
 #include "ApicRegisterInterface.h"
+#include "InterruptArchitecture.h"
 #include "device/interrupt/ModelSpecificRegister.h"
 #include "device/interrupt/Pic.h"
 #include "device/power/acpi/Acpi.h"
 #include "kernel/log/Logger.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
-
-#define HHUOS_LAPIC_ENABLE_DEBUG 1
-
-// NOTE: There are now 4 types of "Interrupt":
-// NOTE: - Pic::Interrupt (on a PIC), referred to as irq
-// NOTE: - LApic::Interrupt (on a local APIC), referred to as lint
-// NOTE: - IoApic interrupts (on an IO APIC), referred to as gsi (Global System Interrupt)
-// NOTE: - InterruptDispatcher::Interrupt (IDT vector number), referred to as vector
-
-// NOTE: When the system is in PIC mode, it receives IRQs (there are 16 of them),
-// NOTE: when it's in APIC mode it receives GSIs (regularly up to
-// NOTE: The GSIs range from 0 to 15 (for legacy PIC compatibility), the rest is adjacent and distributed to IO APICs
-
-// TODO: Error handling: An error handler class that implements the handler for the ERROR vector
-
-// TODO: 64 Bit needs ACPI APIC Address Override structure (but current code is not 64 bit compatible anyways)
-//       Also: ACPI 1.0b doesn't have this structure
 
 namespace Device {
 
@@ -33,18 +17,15 @@ class LApic {
     friend class IoApic; // IoApic disables EOI suppression if it has no EOI register
 
 public:
-    // TODO: Rename to differentiate between GlobalSystemInterrupt and local interrupt pins?
     // TODO: Implement allow/forbid for these in the interruptservice?
-    // NOTE: The values have nothing to do with physical pins, they are the register offsets for the LVT
-    // NOTE: Register::LVT_<...> and Interrupt::<...> is interchangable
-    enum Interrupt : uint16_t {
-        CMCI = 0x2F0, // TODO: Might not exist (check xv6)
-        TIMER = 0x320,
-        THERMAL = 0x330,
-        PERFORMANCE = 0x340,
-        LINT0 = 0x350,
-        LINT1 = 0x360,
-        ERROR = 0x370
+    enum Lint : uint8_t {
+        CMCI = 0, // TODO: Might not exist (check xv6)
+        TIMER = 1,
+        THERMAL = 2,
+        PERFORMANCE = 3,
+        LINT0 = 4,
+        LINT1 = 5,
+        ERROR = 6
     };
 
 public:
@@ -61,8 +42,6 @@ public:
     ~LApic() = delete; // Static class
 
 
-    static bool isSupported();
-
     // TODO: Differentiate between different cores (put initialized in the LApicConfiguration struct?)
     // NOTE: Currently if this is true this means that all APs were initialized
     /**
@@ -71,6 +50,8 @@ public:
      * @return True, if the local APIC is initialized
      */
     static bool isInitialized();
+
+    static void verifyInitialized();
 
     // TODO: Currently also initializes all APs, should probably remove that?
     /**
@@ -87,14 +68,14 @@ public:
      *
      * @param lint The local interrupt to activate
      */
-    static void allow(Interrupt lint);
+    static void allow(Lint lint);
 
     /**
      * Forbid a local interrupt in the local APIC of the current CPU.
      *
      * @param lint The local interrupt to deactivate
      */
-    static void forbid(Interrupt lint);
+    static void forbid(Lint lint);
 
     /**
      * Get the state of this interrupt - whether it is masked out or not.
@@ -102,7 +83,7 @@ public:
      * @param lint The register offset of the interrupt
      * @return True, if the interrupt is disabled in the local APIC of the current CPU
      */
-    static bool status(Interrupt lint);
+    static bool status(Lint lint);
 
     // TODO: For compatibility with older IO APICs (< version 0x20) this has to be used in
     //       combination with temporarily setting all IO APIC redirection entries to level-triggered
@@ -141,39 +122,9 @@ private:
         ICR_HIGH = 0x310,
     };
 
-    // NOTE: I chose to store parsed information like this to be able to initialize it from different sources
-    // NOTE: (like ACPI 1.0b, ACPI >= 2.0, MP tables)
-    // TODO: Add contents of MSR if MSR exists for every core individually?
-    struct LApicConfiguration {
-        uint8_t acpiId; // ACPI also stores this
-        uint8_t id; // TODO: Check if ACPI sets this by itself of if the ID reg values have to be signalled to ACPI
-        // TODO: Does this mean the processor can't be used currently but could be started? Or can't be started at all?
-        bool enabled; // If false the operating system can't use this processor
-    };
-
-    struct LNMIConfiguration {
-        uint8_t acpiId; // 0xFF means all CPUs
-        uint8_t id; // Added for convenience (matches LApicConfiguration::id), 0xFF means all CPUs
-        LVTEntry::PinPolarity polarity;
-        LVTEntry::TriggerMode triggerMode;
-        Interrupt lint;
-    };
-
-    /**
-     * This describes the hardware configuration of the system for all local APICs.
-     */
-    struct LPlatformConfiguration {
-        bool xApicSupported;
-        bool x2ApicSupported;
-        bool isX2Apic; // Indicates mode currently running in
-        uint8_t version; // Needs to be set after MMIO is available
-        uint32_t address;
-        uint32_t virtAddress;
-        Util::Data::ArrayList<LApicConfiguration *> lapics;
-        Util::Data::ArrayList<LNMIConfiguration *> lnmis;
-    };
-
 private:
+    static void verifyMMIO();
+
     /**
      * Get the ID of the local APIC belonging to the current CPU.
      * Used to determine what CPU is currently running.
@@ -182,18 +133,10 @@ private:
      */
     [[nodiscard]] static uint8_t getId();
 
-    /**
-     * Reads information influencing local APIC initialization from ACPI tables.
-     */
-    static void initializePlatformConfiguration();
-
-    static uint8_t uidToId(uint8_t uid);
-
-    static LApicConfiguration *getLApicConfiguration(uint8_t id);
-
-    static LNMIConfiguration *getNMIConfiguration(LApicConfiguration *lapic);
-
     // TODO: If initializeApplicationProcessor needs to call this move it down
+    /**
+     * Allocate the memory region used to access the local APIC's registers.
+     */
     static void initializeMMIORegion();
 
     /**
@@ -202,9 +145,15 @@ private:
      *
      * Must not be called with enabled interrupts.
      */
-    static void initializeApplicationProcessor(LApicConfiguration *lapic);
+    static void initializeApplicationProcessor(InterruptArchitecture::LApicInformation *lapic);
 
-    static void initializeController(LApicConfiguration *lapic);
+    /**
+     * Initialize a single local APIC, used for the BSP and the APs.
+     * For the APs this is called from the AP entry code.
+     *
+     * @param lapic The local APIC to initialize
+     */
+    static void initializeController(InterruptArchitecture::LApicInformation *lapic);
 
     /**
      * Marks every local interrupt in the local vector table as edge-triggered,
@@ -212,8 +161,6 @@ private:
      * Vector numbers are set to InterruptDispatcher equivalent vectors.
      */
     static void initializeLVT();
-
-    static void dumpLPlatformConfiguration();
 
      // NOTE: Reading and writing local APIC's registers
      // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
@@ -231,9 +178,9 @@ private:
 
     static void writeSVR(SVREntry svrEntry);
 
-    [[nodiscard]] static LVTEntry readLVT(Interrupt lint);
+    [[nodiscard]] static LVTEntry readLVT(Lint lint);
 
-    static void writeLVT(Interrupt lint, LVTEntry lvtEntry);
+    static void writeLVT(Lint lint, LVTEntry lvtEntry);
 
     [[nodiscard]] static ICREntry readICR(); // Obtain delivery status of IPI
 
@@ -242,8 +189,9 @@ private:
 private:
     static bool initialized;
     static Device::ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR
-    static LPlatformConfiguration platformConfiguration;
     static Kernel::Logger log;
+
+    static uint16_t lintRegs[7]; // Register offsets for the LINTs
 };
 
 }

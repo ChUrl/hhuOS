@@ -3,11 +3,10 @@
 
 #include <cstdint>
 #include "ApicRegisterInterface.h"
+#include "InterruptArchitecture.h"
 #include "kernel/log/Logger.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "device/interrupt/Pic.h"
-
-#define HHUOS_IOAPIC_ENABLE_DEBUG 1
 
 namespace Device {
 
@@ -44,8 +43,6 @@ public:
      * Must not be called with enabled interrupts.
      */
     static void initialize();
-
-    static uint8_t getSystemMaxGsi();
 
     /**
      * Unmask an interrupt in the IO APIC.
@@ -122,71 +119,21 @@ private:
         REDTBL = 0x10 // Redirection table base address (24x 64 bit entry)
     };
 
-    struct IoApicConfiguration {
-        uint8_t id;
-        uint32_t address;
-        uint32_t virtAddress; // Set when initializing MMIO for this IO APIC
-        uint32_t gsiBase; // GSI where IO APIC interrupt inputs start
-        uint32_t gsiMax; // Set after MMIO is available
-    };
-
-    struct IoInterruptOverride {
-        uint8_t bus; // TODO: What is this
-        Pic::Interrupt source;
-        uint32_t gsi;
-        REDTBLEntry::PinPolarity polarity;
-        REDTBLEntry::TriggerMode triggerMode;
-    };
-
-    struct IoNMIConfiguration {
-        REDTBLEntry::PinPolarity polarity;
-        REDTBLEntry::TriggerMode triggerMode;
-        uint32_t gsi;
-    };
-
-    struct IoPlatformConfiguration {
-        uint8_t version; // Set after MMIO is available
-        bool hasEOIRegister; // If IoApic has no EOI register, set after MMIO is available
-        uint32_t irqToGsiMappings[16]; // GSIs for PIC IRQs (IRQ is the index)
-        uint8_t gsiToIrqMappings[16]; // Inverse of irqToGsiMappings
-        uint8_t systemGsiMax; // Systemwide max gsi
-        Util::Data::ArrayList<IoApicConfiguration *> ioapics;
-        Util::Data::ArrayList<IoInterruptOverride *> irqOverrides;
-        Util::Data::ArrayList<IoNMIConfiguration *> ionmis;
-    };
-
 private:
-    /**
-     * Reads information influencing IO APIC initialization from ACPI tables.
-     */
-    static void initializePlatformConfiguration();
-
-    /**
-     * Get the configuration structure of the IO APIC that handles a specific GSI.
-     *
-     * @param gsi The GSI that's handled by the searched IO APIC
-     * @return The IO APIC configuration
-     */
-    static IoApicConfiguration *getIoApicConfiguration(uint8_t gsi);
-    static IoApicConfiguration *getIoApicConfiguration(Pic::Interrupt irq);
-    static IoApicConfiguration *getIoApicConfiguration(Kernel::InterruptDispatcher::Interrupt vector);
-
-    /**
-     * Get the configuration structure that describes the NMI of a specific IO APIC.
-     *
-     * @param ioapic The IO APIC which NMI configuration is searched
-     * @return The NMI configuration
-     */
-    static IoNMIConfiguration *getNMIConfiguration(IoApicConfiguration *ioapic);
+    static void verifyMMIO(InterruptArchitecture::IoApicInformation *ioapic);
+    static void verifyGSI(InterruptArchitecture::IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
 
     /**
      * Initialize a single IO APIC.
      *
      * @param id The ID of the IO APIC to initialize
      */
-    static void initializeController(IoApicConfiguration *ioapic);
+    static void initializeController(InterruptArchitecture::IoApicInformation *ioapic);
 
-    static void initializeMMIORegion(IoApicConfiguration *ioapic);
+    /**
+     * Allocate the memory region used to access a IO APIC's registers.
+     */
+    static void initializeMMIORegion(InterruptArchitecture::IoApicInformation *ioapic);
 
     /**
      * Marks every entry in the redirection table as edge-triggered, active high, masked,
@@ -195,25 +142,22 @@ private:
      *
      * Must not be called with enabled interrupts.
      */
-    static void initializeREDTBL(IoApicConfiguration *ioapic);
-
-    static void dumpIoPlatformConfiguration();
+    static void initializeREDTBL(InterruptArchitecture::IoApicInformation *ioapic);
 
     // NOTE: Reading and writing IO APIC's registers.
     // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
     // NOTE: Affects the registers of the passed IO APIC
 
-    [[nodiscard]] static uint32_t readDoubleWord(IoApicConfiguration *ioapic, uint8_t reg);
+    [[nodiscard]] static uint32_t readDoubleWord(InterruptArchitecture::IoApicInformation*ioapic, uint8_t reg);
 
-    static void writeDoubleWord(IoApicConfiguration *ioapic, uint8_t reg, uint32_t val);
+    static void writeDoubleWord(InterruptArchitecture::IoApicInformation *ioapic, uint8_t reg, uint32_t val);
 
-    [[nodiscard]] static REDTBLEntry readREDTBL(IoApicConfiguration *ioapic, uint8_t gsi);
+    [[nodiscard]] static REDTBLEntry readREDTBL(InterruptArchitecture::IoApicInformation *ioapic, uint8_t gsi);
 
-    static void writeREDTBL(IoApicConfiguration *ioapic, uint8_t gsi, REDTBLEntry redtbl);
+    static void writeREDTBL(InterruptArchitecture::IoApicInformation *ioapic, uint8_t gsi, REDTBLEntry redtbl);
 
 private:
     static bool initialized;
-    static IoPlatformConfiguration platformConfiguration;
     static Kernel::Logger log;
 };
 
