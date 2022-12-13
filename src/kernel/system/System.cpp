@@ -117,11 +117,11 @@ void System::initializeSystem() {
 
     initialized = true;
 
-    // TODO: Initialize the platform configuration here and pass it to LApic/IoApic
     Device::InterruptArchitecture::initialize<Device::InterruptArchitectureACPI10>();
 
     // TODO: Should I switch from static to completely instance to enforce initialization?
-    //       "Resource Acquisition Is Initialization"...
+    //       - "Resource Acquisition Is Initialization"?
+    //       - But I would need to make sure the initialization is only performed once...
     if (Device::InterruptArchitecture::hasApic()) {
         log.info("APIC support detected -> Initializing Local APIC + IO APIC");
         Device::LApic::initialize();

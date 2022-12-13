@@ -52,7 +52,7 @@ public:
      *
      * @param gsi The number of the interrupt to activated
      */
-    static void allow(uint8_t gsi);
+    static void allow(GlobalSystemInterrupt gsi);
 
     /**
      * Unmask an interrupt in the IO APIC.
@@ -71,7 +71,7 @@ public:
      *
      * @param gsi The number of the interrupt to deactivate
      */
-    static void forbid(uint8_t gsi);
+    static void forbid(GlobalSystemInterrupt gsi);
 
     /**
      * Mask an interrupt in the local APIC.
@@ -88,7 +88,7 @@ public:
      * @param gsi The IO APIC GSI
      * @return True, if the interrupt is disabled
      */
-    static bool status(uint8_t gsi);
+    static bool status(GlobalSystemInterrupt gsi);
 
     static bool status(Pic::Interrupt irq);
 
@@ -120,20 +120,27 @@ private:
     };
 
 private:
-    static void verifyMMIO(InterruptArchitecture::IoApicInformation *ioapic);
-    static void verifyGSI(InterruptArchitecture::IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
+    /**
+     * Throws an exception if the IO APIC's MMIO region hasn't been initialized.
+     */
+    static void verifyMMIO(IoApicInformation *ioapic);
+
+    /**
+     * Throws an exception if the supplied GSI is handled by a different IO APIC than the supplied.
+     */
+    static void verifyGSI(IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
 
     /**
      * Initialize a single IO APIC.
      *
      * @param id The ID of the IO APIC to initialize
      */
-    static void initializeController(InterruptArchitecture::IoApicInformation *ioapic);
+    static void initializeController(IoApicInformation *ioapic);
 
     /**
      * Allocate the memory region used to access a IO APIC's registers.
      */
-    static void initializeMMIORegion(InterruptArchitecture::IoApicInformation *ioapic);
+    static void initializeMMIORegion(IoApicInformation *ioapic);
 
     /**
      * Marks every entry in the redirection table as edge-triggered, active high, masked,
@@ -142,19 +149,19 @@ private:
      *
      * Must not be called with enabled interrupts.
      */
-    static void initializeREDTBL(InterruptArchitecture::IoApicInformation *ioapic);
+    static void initializeREDTBL(IoApicInformation *ioapic);
 
     // NOTE: Reading and writing IO APIC's registers.
     // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
     // NOTE: Affects the registers of the passed IO APIC
 
-    [[nodiscard]] static uint32_t readDoubleWord(InterruptArchitecture::IoApicInformation*ioapic, uint8_t reg);
+    [[nodiscard]] static uint32_t readDoubleWord(IoApicInformation*ioapic, uint8_t reg);
 
-    static void writeDoubleWord(InterruptArchitecture::IoApicInformation *ioapic, uint8_t reg, uint32_t val);
+    static void writeDoubleWord(IoApicInformation *ioapic, uint8_t reg, uint32_t val);
 
-    [[nodiscard]] static REDTBLEntry readREDTBL(InterruptArchitecture::IoApicInformation *ioapic, uint8_t gsi);
+    [[nodiscard]] static REDTBLEntry readREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
 
-    static void writeREDTBL(InterruptArchitecture::IoApicInformation *ioapic, uint8_t gsi, REDTBLEntry redtbl);
+    static void writeREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi, REDTBLEntry redtbl);
 
 private:
     static bool initialized;

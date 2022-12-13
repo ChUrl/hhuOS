@@ -119,6 +119,12 @@ void LApic::handleErrors() {
 
 // ! Private member functions start here
 
+void LApic::verifyMMIO() {
+    if (InterruptArchitecture::localPlatform->virtAddress == 0) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic MMIO region not initialized!");
+    }
+}
+
 uint8_t LApic::getId() {
     return (readDoubleWord(Register::ID) >> 24) & 0xFF;
 }
@@ -139,7 +145,7 @@ void LApic::initializeMMIORegion() {
             + InterruptArchitecture::localPlatform->address % Util::Memory::PAGESIZE;
 }
 
-void LApic::initializeApplicationProcessor(InterruptArchitecture::LApicInformation *lapic) {
+void LApic::initializeApplicationProcessor(LApicInformation *lapic) {
     // TODO: Prepare stack for entrycode
     // TODO: Send INIT and STARTUP interrupts with entry code address
     // TODO: The entrycode needs to call initializeController to initialize its own local APIC registers
@@ -151,7 +157,7 @@ void LApic::initializeApplicationProcessor(InterruptArchitecture::LApicInformati
 //       - Probably not as all of them work in different address spaces?
 //       - Also only one is initialized at a time (and MP init sequence requires acquiring BIOS semaphore...)
 // TODO: IA-32 Architecture Manual Chapter 8.4.3.5: APIC ID has to be signalled to ACPI?
-void LApic::initializeController(InterruptArchitecture::LApicInformation *lapic) {
+void LApic::initializeController(LApicInformation *lapic) {
     // x2Apic doesn't have MMIO register access (x2Apic uses MSRs)
     if (InterruptArchitecture::localPlatform->x2ApicSupported && InterruptArchitecture::localPlatform->isX2Apic) {
         MSREntry msrEntry = readBaseMSR();
@@ -163,7 +169,7 @@ void LApic::initializeController(InterruptArchitecture::LApicInformation *lapic)
     initializeLVT();
 
     // Configure the NMI (non maskable interrupt) pin
-    InterruptArchitecture::LNMIConfiguration *lnmi = InterruptArchitecture::getLNMIConfiguration(lapic);
+    LNMIConfiguration *lnmi = InterruptArchitecture::getLNMIConfiguration(lapic);
     if (lnmi != nullptr) {
         LVTEntry lvtEntry {};
         lvtEntry.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0); // NMI doesn't have vector
@@ -231,6 +237,8 @@ void LApic::initializeLVT() {
 //         different registers would be written
 //       - If an accepted interrupt can change register values interrupts would have to be disabled
 uint32_t LApic::readDoubleWord(uint16_t reg) {
+    verifyMMIO();
+
     volatile auto *regAddr = reinterpret_cast<uint32_t *>(InterruptArchitecture::localPlatform->virtAddress + reg);
     volatile auto val = *regAddr;
 
@@ -239,6 +247,8 @@ uint32_t LApic::readDoubleWord(uint16_t reg) {
 
 // TODO: Needs spinlock?
 void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
+    verifyMMIO();
+
     volatile auto *regAddr = reinterpret_cast<uint32_t *>(InterruptArchitecture::localPlatform->virtAddress + reg);
     *regAddr = val;
 }

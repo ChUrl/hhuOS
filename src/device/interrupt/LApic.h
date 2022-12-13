@@ -6,7 +6,6 @@
 #include "InterruptArchitecture.h"
 #include "device/interrupt/ModelSpecificRegister.h"
 #include "device/interrupt/Pic.h"
-#include "device/power/acpi/Acpi.h"
 #include "kernel/log/Logger.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 
@@ -18,6 +17,7 @@ class LApic {
 
 public:
     // TODO: Implement allow/forbid for these in the interruptservice?
+    // NOTE: Separate from GlobalSystemInterrupt
     enum Lint : uint8_t {
         CMCI = 0, // TODO: Might not exist (check xv6)
         TIMER = 1,
@@ -51,6 +51,10 @@ public:
      */
     static bool isInitialized();
 
+    // TODO: Differentiate between different cores?
+    /**
+     * Throws an exception if the local APIC is not initialized.
+     */
     static void verifyInitialized();
 
     // TODO: Currently also initializes all APs, should probably remove that?
@@ -123,6 +127,9 @@ private:
     };
 
 private:
+    /**
+     * Throws an exception if the local APIC's MMIO region hasn't been initialized.
+     */
     static void verifyMMIO();
 
     /**
@@ -145,7 +152,7 @@ private:
      *
      * Must not be called with enabled interrupts.
      */
-    static void initializeApplicationProcessor(InterruptArchitecture::LApicInformation *lapic);
+    static void initializeApplicationProcessor(LApicInformation *lapic);
 
     /**
      * Initialize a single local APIC, used for the BSP and the APs.
@@ -153,7 +160,7 @@ private:
      *
      * @param lapic The local APIC to initialize
      */
-    static void initializeController(InterruptArchitecture::LApicInformation *lapic);
+    static void initializeController(LApicInformation *lapic);
 
     /**
      * Marks every local interrupt in the local vector table as edge-triggered,
