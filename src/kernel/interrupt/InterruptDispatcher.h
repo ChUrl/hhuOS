@@ -50,7 +50,6 @@ public:
         // PIC interrupts
         PIT = 32,
         KEYBOARD = 33,
-        // NOTE: CASCADE
         COM2 = 35,
         COM1 = 36,
         LPT2 = 37,
@@ -65,21 +64,9 @@ public:
         PRIMARY_ATA = 46,
         SECONDARY_ATA = 47,
 
-        // TODO: Just as example to have 24 names, depends on how many GSIs are supported by the system
-        // NOTE: There should be no gap here as I calculate the vector number by adding 32 to GSI number
-        // IoApic interrupts
-        IO1 = 48,
-        IO2 = 49,
-        IO3 = 50,
-        IO4 = 51,
-        IO5 = 52,
-        IO6 = 53,
-        IO7 = 54,
-        IO8 = 55,
-
         SYSTEM_CALL = 0x86,
 
-        // Local APIC interrupts
+        // Local APIC interrupts (248 - 255)
         CMCI = 0xF8,
         APICTIMER = 0xF9,
         THERMAL = 0xFA,
