@@ -18,8 +18,6 @@
 #include "InterruptService.h"
 #include "device/interrupt/LApic.h"
 #include "device/interrupt/IoApic.h"
-#include "device/interrupt/InterruptArchitecture.h"
-#include "device/cpu/Cpu.h"
 
 namespace Kernel {
 class InterruptHandler;
@@ -34,7 +32,7 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
 }
 
 void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) {
-    if (Device::IoApic::isInitialized()) {
+    if (Device::InterruptArchitecture::hasApic()) {
         Device::IoApic::allow(interrupt); // TODO: Needs to be synchronized as LVT is written?
     } else {
         pic.allow(interrupt);
@@ -42,7 +40,7 @@ void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) 
 }
 
 void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt) {
-    if (Device::IoApic::isInitialized()) {
+    if (Device::InterruptArchitecture::hasApic()) {
         Device::IoApic::forbid(interrupt); // TODO: Needs to be synchronized as LVT is written?
     } else {
         pic.forbid(interrupt);
