@@ -41,3 +41,4 @@ _deps
 .idea
 .memory.hex
 doxygen/
+doxygen-full/
