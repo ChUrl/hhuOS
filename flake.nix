@@ -77,7 +77,8 @@
             bear # To generate compilation database
             gdb
             cling # To try out my bullshit implementations
-            # doxygen # Generate docs + graphs
+            libsForQt5.umbrello # Code graph explorer
+            doxygen # Generate docs + graphs
           ];
 
           # Not for devshell
