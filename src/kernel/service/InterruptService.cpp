@@ -18,6 +18,7 @@
 #include "InterruptService.h"
 #include "device/interrupt/LApic.h"
 #include "device/interrupt/IoApic.h"
+#include "device/interrupt/InterruptArchitecture.h"
 #include "device/cpu/Cpu.h"
 
 namespace Kernel {
@@ -49,7 +50,7 @@ void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt)
 }
 
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (Device::LApic::isInitialized()) {
+    if (Device::InterruptArchitecture::hasApic()) {
         // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
         // TODO: Only disable NMI pin, not both LINTs
         // EOI for local interrupts, NMI doesn't have to be EOI'd
@@ -57,13 +58,11 @@ void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interru
             && interrupt != InterruptDispatcher::LINT0 && interrupt != InterruptDispatcher::LINT1) {
             Device::LApic::sendEndOfInterrupt();
         }
-    }
 
-    if (Device::IoApic::isInitialized()) {
         // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
         // TODO: <= IO8 depends on how many GSIs are supported by the system
         if (interrupt >= InterruptDispatcher::PIT
-        && interrupt <= InterruptDispatcher::PIT + Device::IoApic::getSystemMaxGsi()) {
+        && interrupt <= InterruptDispatcher::PIT + Device::InterruptArchitecture::getGlobalGsiMax()) {
             Device::LApic::sendEndOfInterrupt(); // TODO: Do IO APIC GSIs need local APIC EOI?
             Device::IoApic::sendEndOfInterrupt(interrupt);
         }
@@ -75,7 +74,7 @@ void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interru
 }
 
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (Device::LApic::isInitialized()) {
+    if (Device::InterruptArchitecture::hasApic()) {
         // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
         return interrupt == InterruptDispatcher::SPURIOUS;
     }

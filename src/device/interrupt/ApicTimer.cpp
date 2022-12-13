@@ -9,6 +9,8 @@ namespace Device {
 Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
 ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInterval(yieldInterval) {
+    LApic::verifyInitialized();
+
     auto &timeService = Kernel::System::getService<Kernel::TimeService>();
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)

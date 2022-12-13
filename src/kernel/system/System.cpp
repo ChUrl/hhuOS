@@ -55,6 +55,8 @@
 #include "device/interrupt/LApic.h"
 #include "device/interrupt/IoApic.h"
 #include "device/interrupt/LApicErrorHandler.h"
+#include "device/interrupt/InterruptArchitecture.h"
+#include "device/interrupt/InterruptArchitectureACPI10.h"
 
 namespace Kernel {
 class Service;
@@ -115,17 +117,23 @@ void System::initializeSystem() {
 
     initialized = true;
 
-    if (Device::Acpi::isAvailable() && Device::LApic::isSupported()) {
-        log.info("APIC support detected -> Initializing local APIC");
+    // TODO: Initialize the platform configuration here and pass it to LApic/IoApic
+    Device::InterruptArchitecture::initialize<Device::InterruptArchitectureACPI10>();
+
+    // TODO: Should I switch from static to completely instance to enforce initialization?
+    //       "Resource Acquisition Is Initialization"...
+    if (Device::InterruptArchitecture::hasApic()) {
+        log.info("APIC support detected -> Initializing Local APIC + IO APIC");
         Device::LApic::initialize();
+
         auto *lapicErrorHandler = new Device::LApicErrorHandler();
         lapicErrorHandler->plugin();
-    }
 
-    if (Device::LApic::isInitialized()) {
-        log.info("APIC support detected -> Initializing IO APIC");
         Device::IoApic::initialize();
     }
+
+    // Print interrupt architecture information
+    Device::InterruptArchitecture::dumpPlatformInformation();
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
@@ -151,7 +159,7 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
-    if (Device::LApic::isInitialized()) {
+    if (Device::InterruptArchitecture::hasApic()) {
         log.info("APIC support detected -> Initializing APIC Timer");
         auto* apictimer = new Device::ApicTimer();
         apictimer->plugin();

@@ -33,6 +33,7 @@
 #include "lib/util/base/System.h"
 #include "device/interrupt/LApic.h"
 #include "device/interrupt/IoApic.h"
+#include "device/interrupt/InterruptArchitecture.h"
 
 namespace Kernel {
 
@@ -91,16 +92,14 @@ uint32_t InterruptDispatcher::getInterruptDepth() const {
 }
 
 bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrupt slot) {
-    // Local APIC interrupts
-    if (Device::LApic::isInitialized()) {
+    if (Device::InterruptArchitecture::hasApic()) {
+        // Local APIC interrupts
         if (slot >= CMCI && slot <= SPURIOUS) {
             return false;
         }
-    }
 
-    // Additional IO APIC interrupts
-    if (Device::IoApic::isInitialized()) {
-        if (slot >= PIT && slot <= PIT + Device::IoApic::getSystemMaxGsi()) {
+        // Additional IO APIC interrupts
+        if (slot >= PIT && slot <= PIT + Device::InterruptArchitecture::getGlobalGsiMax()) {
             return false;
         }
     }

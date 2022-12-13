@@ -16,12 +16,17 @@
 
 cmake_minimum_required(VERSION 3.14)
 
+# TODO: Some files have to be relocated
 target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/interrupt/Pic.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/LApic.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/IoApic.cpp
-        # TODO: This doesn't belong here, needs to be moved to x86/i386 folder
         ${HHUOS_SRC_DIR}/device/interrupt/ModelSpecificRegister.cpp
-        # TODO: Does this belong to device/time? Thechnically it is part of the local APIC...
         ${HHUOS_SRC_DIR}/device/interrupt/ApicTimer.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/LApicErrorHandler.cpp)
+        ${HHUOS_SRC_DIR}/device/interrupt/LApicErrorHandler.cpp
+
+        ${HHUOS_SRC_DIR}/device/interrupt/ApicRegisterInterface.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/GlobalSystemInterrupt.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/InterruptArchitecture.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/InterruptArchitectureACPI10.cpp
+        )

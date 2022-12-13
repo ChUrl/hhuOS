@@ -12,6 +12,7 @@
  * 2. Only standard C bitfields have guaranteed ordering, as soon as the "struct" becomes a C++ "class",
  *    the ordering is implementation defined, GCC's __attribute__ ((packed)) doesn't help there
  * 3. Bitfields would also make it very easy to do partial writes to registers, which I wanted to prevent
+ * 4. Doing the masking everytime manually is bug prone
  */
 
 namespace Device {

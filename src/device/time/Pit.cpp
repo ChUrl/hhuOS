@@ -25,6 +25,7 @@
 #include "lib/util/base/Exception.h"
 #include "device/interrupt/LApic.h"
 #include "device/interrupt/ApicTimer.h"
+#include "device/interrupt/InterruptArchitecture.h"
 
 namespace Kernel {
 struct InterruptFrame;
@@ -63,7 +64,7 @@ void Pit::trigger(const Kernel::InterruptFrame &frame) {
 
     // TODO: Configure this in the PIT class?
     // Don't use PIT for scheduling when APIC Timer is enabled
-    if (!LApic::isInitialized()) {
+    if (!InterruptArchitecture::hasApic()) {
         if (time.toMilliseconds() % yieldInterval == 0) {
             Kernel::System::getService<Kernel::SchedulerService>().yield();
         }
