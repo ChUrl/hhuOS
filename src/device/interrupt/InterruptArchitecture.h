@@ -110,7 +110,6 @@ public:
 
     private:
         Gsi gsi;
-        bool invalid; // This gets used for GSIs that are mapped to INTIs where another GSI was mapped to
     };
 
     // ! Processor local APIC architecture
@@ -124,7 +123,7 @@ public:
 
     struct LNMIConfiguration {
         uint8_t acpiId; // 0xFF means all CPUs
-        uint8_t id; // Added for convenience (matches LApicConfiguration::id), 0xFF means all CPUs
+        uint8_t id; // Added for convenience (matches LApicInformation::id), 0xFF means all CPUs
         LVTEntry::PinPolarity polarity;
         LVTEntry::TriggerMode triggerMode;
         uint8_t lint; // Local APIC pin number
