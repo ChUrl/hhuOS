@@ -62,12 +62,6 @@ void InterruptArchitectureACPI10::initializeIoPlatformInformation(InterruptArchi
         return;
     }
 
-    // Default is identity mapping
-    for (uint8_t irq = 0; irq < 16; ++irq) {
-        info->irqToGsiMappings[irq] = irq;
-        info->gsiToIrqMappings[irq] = irq;
-    }
-
     Util::Data::ArrayList<const Acpi::IoApic *> ioApics;
     Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> interruptSourceOverrides;
     Util::Data::ArrayList<const Acpi::NMISource *> nmiConfigurations;
@@ -91,14 +85,10 @@ void InterruptArchitectureACPI10::initializeIoPlatformInformation(InterruptArchi
         info->irqOverrides.add(new InterruptArchitecture::IoInterruptOverride {
                 .bus = override->bus,
                 .source = static_cast<GlobalSystemInterrupt>(override->source),
-                .target = static_cast<GlobalSystemInterrupt>(override->globalSystemInterrupt),
+                .target = static_cast<InterruptInput>(override->globalSystemInterrupt),
                 .polarity = override->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
                 .triggerMode = override->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL
         });
-
-        // Update mappings
-        info->irqToGsiMappings[override->source] = override->globalSystemInterrupt;
-        info->gsiToIrqMappings[override->globalSystemInterrupt] = override->source;
     }
 
     for (auto *ionmi : nmiConfigurations) {
