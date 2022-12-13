@@ -40,3 +40,4 @@ _deps
 .settings/
 .idea
 .memory.hex
+doxygen/
