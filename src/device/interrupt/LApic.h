@@ -2,12 +2,11 @@
 #define __LAPIC_include__
 
 #include <cstdint>
+#include "ModelSpecificRegister.h"
 #include "ApicRegisterInterface.h"
-#include "InterruptArchitecture.h"
-#include "device/interrupt/ModelSpecificRegister.h"
-#include "device/interrupt/Pic.h"
-#include "kernel/log/Logger.h"
+#include "InterruptModel.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
+#include "kernel/log/Logger.h"
 
 namespace Device {
 

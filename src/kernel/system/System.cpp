@@ -54,8 +54,8 @@
 #include "device/interrupt/ApicTimer.h"
 #include "device/interrupt/LApic.h"
 #include "device/interrupt/IoApic.h"
-#include "device/interrupt/LApicErrorHandler.h"
-#include "device/interrupt/InterruptArchitecture.h"
+#include "device/interrupt/ErrorInterruptHandler.h"
+#include "device/interrupt/InterruptModel.h"
 #include "device/interrupt/InterruptArchitectureACPI10.h"
 
 namespace Kernel {
@@ -117,23 +117,23 @@ void System::initializeSystem() {
 
     initialized = true;
 
-    Device::InterruptArchitecture::initialize<Device::InterruptArchitectureACPI10>();
+    Device::InterruptModel::initialize<Device::InterruptArchitectureACPI10>();
 
     // TODO: Should I switch from static to completely instance to enforce initialization?
     //       - "Resource Acquisition Is Initialization"?
     //       - But I would need to make sure the initialization is only performed once...
-    if (Device::InterruptArchitecture::hasApic()) {
+    if (Device::InterruptModel::hasApic()) {
         log.info("APIC support detected -> Initializing Local APIC + IO APIC");
         Device::LApic::initialize();
 
-        auto *lapicErrorHandler = new Device::LApicErrorHandler();
+        auto *lapicErrorHandler = new Device::ErrorInterruptHandler();
         lapicErrorHandler->plugin();
 
         Device::IoApic::initialize();
     }
 
     // Print interrupt architecture information
-    Device::InterruptArchitecture::dumpPlatformInformation();
+    Device::InterruptModel::dumpPlatformInformation();
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
@@ -159,7 +159,7 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
-    if (Device::InterruptArchitecture::hasApic()) {
+    if (Device::InterruptModel::hasApic()) {
         log.info("APIC support detected -> Initializing APIC Timer");
         auto* apictimer = new Device::ApicTimer();
         apictimer->plugin();

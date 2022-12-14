@@ -21,13 +21,13 @@ void LApic::verifyInitialized() {
 }
 
 void LApic::initialize() {
-    InterruptArchitecture::verifyApic();
+    InterruptModel::verifyApic();
     if (!readBaseMSR().isBSP) {
         // NOTE: IA32_APIC_BASE_MSR is unique (every core has its own)
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): May only be called by BSP!");
     }
 
-    InterruptArchitecture::localPlatform->isX2Apic = readBaseMSR().isX2Apic;
+    InterruptModel::localPlatform->isX2Apic = readBaseMSR().isX2Apic;
 
     // TODO: Does every AP has to call this before initializing its local APIC?
     //       - Every AP writes/reads the same physical address, but different registers are affected
@@ -40,13 +40,13 @@ void LApic::initialize() {
 
     // Initialize the local APIC of the BSP before initializing any APs
     // Enables xApic compatibility mode if necessary
-    initializeController(InterruptArchitecture::getLApicInformation(getId()));
+    initializeController(InterruptModel::getLApicInformation(getId()));
 
     // TODO: I hate this
-    InterruptArchitecture::localPlatform->version = readDoubleWord(Register::VER) & 0xFF;
+    InterruptModel::localPlatform->version = readDoubleWord(Register::VER) & 0xFF;
 
     // TODO: Should probably not do this automatically inside LApic::initialize()...
-    for (auto *lapic : InterruptArchitecture::lapics()) {
+    for (auto *lapic : InterruptModel::lapics()) {
         // TODO: !lapic->enabled == true could also mean that the cpu is just not initialized yet...
         if (!lapic->enabled || lapic->id == getId()) { // Skip BSP and unavailable processors
             continue;
@@ -120,7 +120,7 @@ void LApic::handleErrors() {
 // ! Private member functions start here
 
 void LApic::verifyMMIO() {
-    if (InterruptArchitecture::localPlatform->virtAddress == 0) {
+    if (InterruptModel::localPlatform->virtAddress == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic MMIO region not initialized!");
     }
 }
@@ -134,15 +134,15 @@ void LApic::initializeMMIORegion() {
     // Allocate memory (4 kb) for the memory mapped registers (without relocation)
     // The address returned is page aligned, if the size crosses page boundary an additional page will be allocated.
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(InterruptArchitecture::localPlatform->address, Util::Memory::PAGESIZE, true);
+    void *virtAddress = memoryService.mapIO(InterruptModel::localPlatform->address, Util::Memory::PAGESIZE, true);
 
     if (virtAddress == nullptr) {
         Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY, "LApic::initialize(): Not enough space left on kernel heap!");
     }
 
     // Use this address to access the local APIC's memory mapped registers
-    InterruptArchitecture::localPlatform->virtAddress = reinterpret_cast<uint32_t>(virtAddress)
-            + InterruptArchitecture::localPlatform->address % Util::Memory::PAGESIZE;
+    InterruptModel::localPlatform->virtAddress = reinterpret_cast<uint32_t>(virtAddress)
+                                                 + InterruptModel::localPlatform->address % Util::Memory::PAGESIZE;
 }
 
 void LApic::initializeApplicationProcessor(LApicInformation *lapic) {
@@ -159,17 +159,17 @@ void LApic::initializeApplicationProcessor(LApicInformation *lapic) {
 // TODO: IA-32 Architecture Manual Chapter 8.4.3.5: APIC ID has to be signalled to ACPI?
 void LApic::initializeController(LApicInformation *lapic) {
     // x2Apic doesn't have MMIO register access (x2Apic uses MSRs)
-    if (InterruptArchitecture::localPlatform->x2ApicSupported && InterruptArchitecture::localPlatform->isX2Apic) {
+    if (InterruptModel::localPlatform->x2ApicSupported && InterruptModel::localPlatform->isX2Apic) {
         MSREntry msrEntry = readBaseMSR();
         msrEntry.isX2Apic = false; // Operate in xApic compatibility mode // TODO: Test this
         writeBaseMSR(msrEntry);
-        InterruptArchitecture::localPlatform->isX2Apic = false;
+        InterruptModel::localPlatform->isX2Apic = false;
     }
 
     initializeLVT();
 
     // Configure the NMI (non maskable interrupt) pin
-    LNMIConfiguration *lnmi = InterruptArchitecture::getLNMIConfiguration(lapic);
+    LNMIConfiguration *lnmi = InterruptModel::getLNMIConfiguration(lapic);
     if (lnmi != nullptr) {
         LVTEntry lvtEntry {};
         lvtEntry.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0); // NMI doesn't have vector
@@ -238,19 +238,13 @@ void LApic::initializeLVT() {
 //       - If an accepted interrupt can change register values interrupts would have to be disabled
 uint32_t LApic::readDoubleWord(uint16_t reg) {
     verifyMMIO();
-
-    volatile auto *regAddr = reinterpret_cast<uint32_t *>(InterruptArchitecture::localPlatform->virtAddress + reg);
-    volatile auto val = *regAddr;
-
-    return val;
+    return *reinterpret_cast<volatile uint32_t *>(InterruptModel::localPlatform->virtAddress + reg);
 }
 
 // TODO: Needs spinlock?
 void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
     verifyMMIO();
-
-    volatile auto *regAddr = reinterpret_cast<uint32_t *>(InterruptArchitecture::localPlatform->virtAddress + reg);
-    *regAddr = val;
+    *reinterpret_cast<volatile uint32_t *>(InterruptModel::localPlatform->virtAddress + reg) = val;
 }
 
 // IA-32 Architecture Manual Chapter 10.4.4

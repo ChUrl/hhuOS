@@ -31,24 +31,24 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
     dispatcher.dispatch(frame);
 }
 
-void InterruptService::allowHardwareInterrupt(Device::Pic::Interrupt interrupt) {
-    if (Device::InterruptArchitecture::hasApic()) {
-        Device::IoApic::allow(interrupt); // TODO: Needs to be synchronized as LVT is written?
+void InterruptService::allowHardwareInterrupt(Device::GlobalSystemInterrupt gsi) {
+    if (Device::InterruptModel::hasApic()) {
+        Device::IoApic::allow(gsi);
     } else {
-        pic.allow(interrupt);
+        pic.allow(gsi);
     }
 }
 
-void InterruptService::forbidHardwareInterrupt(Device::Pic::Interrupt interrupt) {
-    if (Device::InterruptArchitecture::hasApic()) {
-        Device::IoApic::forbid(interrupt); // TODO: Needs to be synchronized as LVT is written?
+void InterruptService::forbidHardwareInterrupt(Device::GlobalSystemInterrupt gsi) {
+    if (Device::InterruptModel::hasApic()) {
+        Device::IoApic::forbid(gsi);
     } else {
-        pic.forbid(interrupt);
+        pic.forbid(gsi);
     }
 }
 
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (Device::InterruptArchitecture::hasApic()) {
+    if (Device::InterruptModel::hasApic()) {
         // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
         // TODO: Only disable NMI pin, not both LINTs
         // EOI for local interrupts, NMI doesn't have to be EOI'd
@@ -60,19 +60,19 @@ void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interru
         // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
         // TODO: <= IO8 depends on how many GSIs are supported by the system
         if (interrupt >= InterruptDispatcher::PIT
-        && interrupt <= InterruptDispatcher::PIT + Device::InterruptArchitecture::getGlobalGsiMax()) {
+        && interrupt <= static_cast<Kernel::InterruptDispatcher::Interrupt>(Device::InterruptModel::getGlobalGsiMax())) {
             Device::LApic::sendEndOfInterrupt(); // TODO: Do IO APIC GSIs need local APIC EOI?
             Device::IoApic::sendEndOfInterrupt(interrupt);
         }
     }
 
     else if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA) {
-        pic.sendEndOfInterrupt(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
+        pic.sendEndOfInterrupt(static_cast<Device::GlobalSystemInterrupt>(interrupt));
     }
 }
 
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (Device::InterruptArchitecture::hasApic()) {
+    if (Device::InterruptModel::hasApic()) {
         // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
         return interrupt == InterruptDispatcher::SPURIOUS;
     }
@@ -83,7 +83,7 @@ bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt int
     }
 
     // NOTE: If an interrupt (number 7 or 15) happens (PIC) but the interrupt flag in ISR is not set, it is spurious
-    return pic.isSpurious(static_cast<Device::Pic::Interrupt>(interrupt - InterruptDispatcher::PIT));
+    return pic.isSpurious(static_cast<Device::GlobalSystemInterrupt>(interrupt));
 }
 
 }

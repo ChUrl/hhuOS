@@ -335,7 +335,7 @@ bool FloppyController::seek(FloppyDevice &device, uint8_t cylinder, uint8_t head
 void FloppyController::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::FLOPPY, *this);
-    interruptService.allowHardwareInterrupt(Pic::Interrupt::FLOPPY);
+    interruptService.allowHardwareInterrupt(GlobalSystemInterrupt::FLOPPY);
 }
 
 void FloppyController::trigger(const Kernel::InterruptFrame &frame) {

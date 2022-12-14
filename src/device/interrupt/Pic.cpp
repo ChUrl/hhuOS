@@ -20,59 +20,59 @@
 
 namespace Device {
 
-void Pic::allow(Pic::Interrupt interrupt) {
-    auto &port = getDataPort(interrupt);
-    uint8_t mask = getMask(interrupt);
+void Pic::allow(GlobalSystemInterrupt gsi) {
+    auto &port = getDataPort(gsi);
+    uint8_t mask = getMask(gsi);
 
     port.writeByte(port.readByte() & ~mask);
 }
 
-void Pic::forbid(Pic::Interrupt interrupt) {
-    auto &port = getDataPort(interrupt);
-    uint8_t mask = getMask(interrupt);
+void Pic::forbid(GlobalSystemInterrupt gsi) {
+    auto &port = getDataPort(gsi);
+    uint8_t mask = getMask(gsi);
 
     port.writeByte(port.readByte() | mask);
 }
 
-bool Pic::status(Pic::Interrupt interrupt) {
-    const IoPort &port = getDataPort(interrupt);
-    uint8_t mask = getMask(interrupt);
+bool Pic::status(GlobalSystemInterrupt gsi) {
+    const IoPort &port = getDataPort(gsi);
+    uint8_t mask = getMask(gsi);
 
     return port.readByte() & mask;
 }
 
-void Pic::sendEndOfInterrupt(Pic::Interrupt interrupt) {
-    if (interrupt >= Interrupt::RTC) {
+void Pic::sendEndOfInterrupt(GlobalSystemInterrupt gsi) {
+    if (gsi >= GlobalSystemInterrupt::RTC) {
         slaveCommandPort.writeByte(EOI);
     }
 
     masterCommandPort.writeByte(EOI);
 }
 
-const IoPort &Pic::getDataPort(Pic::Interrupt interrupt) {
-    if (interrupt >= Interrupt::RTC) {
+const IoPort &Pic::getDataPort(GlobalSystemInterrupt gsi) {
+    if (gsi >= GlobalSystemInterrupt::RTC) {
         return slaveDataPort;
     }
 
     return masterDataPort;
 }
 
-uint8_t Pic::getMask(Pic::Interrupt interrupt) {
-    if (interrupt >= Interrupt::RTC) {
-        return (uint8_t) (1 << ((uint8_t) interrupt - 8));
+uint8_t Pic::getMask(GlobalSystemInterrupt gsi) {
+    if (gsi >= GlobalSystemInterrupt::RTC) {
+        return (uint8_t) (1 << ((uint8_t) gsi - 8));
     }
 
-    return (uint8_t) (1 << (uint8_t) interrupt);
+    return (uint8_t) (1 << (uint8_t) gsi);
 }
 
-bool Pic::isSpurious(Pic::Interrupt interrupt) {
-    if (interrupt == Interrupt::LPT1) {
+bool Pic::isSpurious(GlobalSystemInterrupt gsi) {
+    if (gsi == GlobalSystemInterrupt::LPT1) {
         masterCommandPort.writeByte(READ_ISR);
         return (masterCommandPort.readByte() & SPURIOUS_INTERRUPT) == 0;
-    } else if (interrupt == Interrupt::SECONDARY_ATA) {
+    } else if (gsi == GlobalSystemInterrupt::SECONDARY_ATA) {
         slaveCommandPort.writeByte(READ_ISR);
         if ((slaveCommandPort.readByte() & SPURIOUS_INTERRUPT) == 0) {
-            sendEndOfInterrupt(Interrupt::CASCADE);
+            sendEndOfInterrupt(GlobalSystemInterrupt::CASCADE);
             return true;
         }
     }
