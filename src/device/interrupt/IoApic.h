@@ -3,10 +3,9 @@
 
 #include <cstdint>
 #include "ApicRegisterInterface.h"
-#include "InterruptArchitecture.h"
-#include "kernel/log/Logger.h"
+#include "InterruptModel.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
-#include "device/interrupt/Pic.h"
+#include "kernel/log/Logger.h"
 
 namespace Device {
 
@@ -55,16 +54,6 @@ public:
     static void allow(GlobalSystemInterrupt gsi);
 
     /**
-     * Unmask an interrupt in the IO APIC.
-     * The interrupt will be sent to the current CPU's local APIC.
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param irq The number of the interrupt to activated
-     */
-    static void allow(Pic::Interrupt irq);
-
-    /**
      * Mask an interrupt in the local APIC.
      *
      * Must not be called with enabled interrupts.
@@ -74,23 +63,12 @@ public:
     static void forbid(GlobalSystemInterrupt gsi);
 
     /**
-     * Mask an interrupt in the local APIC.
-     *
-     * Must not be called with enabled interrupts.
-     *
-     * @param irq The number of the interrupt to deactivate
-     */
-    static void forbid(Pic::Interrupt irq);
-
-    /**
      * Get the state of this interrupt - whether it is masked out or not.
      *
      * @param gsi The IO APIC GSI
      * @return True, if the interrupt is disabled
      */
     static bool status(GlobalSystemInterrupt gsi);
-
-    static bool status(Pic::Interrupt irq);
 
     /**
      * Send an end of interrupt signal to the IO APIC.

@@ -1,8 +1,9 @@
-#ifndef HHUOS_INTERRUPTARCHITECTURE_H
-#define HHUOS_INTERRUPTARCHITECTURE_H
+#ifndef HHUOS_INTERRUPTMODEL_H
+#define HHUOS_INTERRUPTMODEL_H
 
 #include <cstdint>
 #include "ApicRegisterInterface.h"
+#include "GlobalSystemInterrupt.h"
 #include "kernel/log/Logger.h"
 
 /*
@@ -33,84 +34,18 @@
 
 namespace Device {
 
-class InterruptArchitecture {
-    friend class LApic; // Initializes some values
-    friend class IoApic; // Initializes some values
+class InterruptModel {
+    friend class LApic; // Initializes some values // TODO
+    friend class IoApic; // Initializes some values // TODO
 
 public:
-    enum IntArch : uint8_t {
+    enum Model : uint8_t {
         PIC = 0,
-        APIC = 1
+        APIC = 1,
+        // There are more models on other architectures
     };
-
-    // ! Global system interrupts
 
     enum InterruptInput : uint8_t {};
-
-    // TODO: This class uses the outside class members of InterruptArchitecture, I don't like this
-    /**
-     * Global system interrupts abstract the hardware interrupt pins from the software.
-     * Supports conversion from/to vector numbers.
-     */
-    struct GlobalSystemInterrupt {
-        enum Gsi : uint8_t {
-            // PIC compatible GSIs
-            PIT = 0x00,
-            KEYBOARD = 0x01,
-            CASCADE = 0x02,
-            COM2 = 0x03,
-            COM1 = 0x04,
-            LPT2 = 0x05,
-            FLOPPY = 0x06,
-            LPT1 = 0x07,
-            RTC = 0x08,
-            MOUSE = 0x0C,
-            FPU = 0x0D,
-            PRIMARY_ATA = 0x0E,
-            SECONDARY_ATA = 0x0F,
-
-            // Other GSIs, currently none are used
-        };
-
-        GlobalSystemInterrupt() = default;
-        ~GlobalSystemInterrupt() = default;
-
-        explicit GlobalSystemInterrupt(uint8_t gsi); // From int because enums can be implicitly converted to int
-
-        /**
-         * Convert an interrupt vector number to a GlobalSystemInterrupt.
-         * GSIs are mapped to vector numbers 1:1 but translated by 32 (NOT influenced by IO APIC remappings!).
-         */
-        explicit GlobalSystemInterrupt(Kernel::InterruptDispatcher::Interrupt vector);
-
-        /**
-         * Convert the InterruptInput to a GlobalSystemInterrupt.
-         * This takes into account the IO APIC remappings.
-         */
-        explicit GlobalSystemInterrupt(InterruptInput inti);
-
-        operator Gsi() const; // To enum because enums can be implicitly converted to int
-
-        /**
-         * Convert the GlobalSystemInterrupt to an interrupt vector number.
-         * GSIs are mapped to vector numbers 1:1 but translated by 32 (NOT influenced by IO APIC remappings!).
-         */
-        explicit operator Kernel::InterruptDispatcher::Interrupt() const;
-
-        /**
-         * Convert the GlobalSystemInterrupt to an IO APIC interrupt input.
-         * This takes into account the IO APIC remappings.
-         */
-        explicit operator InterruptInput() const;
-
-        bool isValid();
-
-        // Convenient for iterating over GSIs
-        GlobalSystemInterrupt &operator++();
-
-    private:
-        Gsi gsi;
-    };
 
     // ! Processor local APIC architecture
 
@@ -149,14 +84,18 @@ public:
         uint8_t id;
         uint32_t address;
         uint32_t virtAddress; // Set by IoApic after MMIO is available
-        GlobalSystemInterrupt gsiBase; // GSI where IO APIC interrupt inputs start
-        GlobalSystemInterrupt gsiMax; // Set by IoApic after MMIO is available
+        GlobalSystemInterrupt gsiBase; // GSI where IO APIC interrupt inputs start // TODO: Switch to InterruptInput
+        GlobalSystemInterrupt gsiMax; // Set by IoApic after MMIO is available // TODO: Switch to InterruptInput
     };
 
+    /**
+     * This struct represents an ISA IRQ override.
+     * Example: When PIT (IRQ0) is connected to IO APIC INTI2: gsi = 0, inti = 2.
+     */
     struct IoInterruptOverride {
-        uint8_t bus; // TODO: What is this
-        GlobalSystemInterrupt source;
-        InterruptInput target;
+        uint8_t bus; // 0 means irqSource is ISA IRQ relative
+        GlobalSystemInterrupt gsi;
+        InterruptInput inti;
         REDTBLEntry::PinPolarity polarity;
         REDTBLEntry::TriggerMode triggerMode;
     };
@@ -164,7 +103,7 @@ public:
     struct IoNMIConfiguration {
         REDTBLEntry::PinPolarity polarity;
         REDTBLEntry::TriggerMode triggerMode;
-        GlobalSystemInterrupt gsi;
+        GlobalSystemInterrupt gsi; // TODO: Is this before ore after remapping?
     };
 
     /**
@@ -173,10 +112,7 @@ public:
     struct IoPlatformInformation {
         uint8_t version; // Set by IoApic after MMIO is available
         bool eoiSupported; // Set by IoApic after MMIO is available
-        // TODO: This only allows to map PIC GSIs to INTIs in the range [0, 15] (use a hashmap or something?)
-        GlobalSystemInterrupt intiToGsiMappings[16]; // Inti is the index
-        InterruptInput gsiToIntiMappings[16]; // Gsi is the index
-        GlobalSystemInterrupt globalGsiMax; // Systemwide max gsi
+        GlobalSystemInterrupt globalGsiMax; // Systemwide max gsi // TODO: Switch to InterruptInput
         Util::Data::ArrayList<IoApicInformation *> ioapics;
         Util::Data::ArrayList<IoInterruptOverride *> irqOverrides;
         Util::Data::ArrayList<IoNMIConfiguration *> ionmis;
@@ -214,19 +150,26 @@ public:
     static GlobalSystemInterrupt getGlobalGsiMax();
 
     static Util::Data::ArrayList<LApicInformation *> &lapics();
+
     static Util::Data::ArrayList<IoApicInformation *> &ioapics();
+
+    static LApicInformation *getLApicInformation(uint8_t lapicId);
+
+    static LNMIConfiguration *getLNMIConfiguration(LApicInformation *lapic);
+
+    static IoApicInformation *getIoApicInformation(GlobalSystemInterrupt gsi);
+
+    static IoNMIConfiguration *getIoNMIConfiguration(IoApicInformation *ioapic);
+
+    static IoInterruptOverride *getInterruptOverride(GlobalSystemInterrupt gsi);
+
+    static bool hasOverride(InterruptInput inti);
 
     static void dumpPlatformInformation();
 
 private:
-    static LApicInformation *getLApicInformation(uint8_t lapicId);
-    static LNMIConfiguration *getLNMIConfiguration(LApicInformation *lapic);
-    static IoApicInformation *getIoApicInformation(GlobalSystemInterrupt gsi);
-    static IoNMIConfiguration *getIoNMIConfiguration(IoApicInformation *ioapic);
-
-private:
     static bool initialized;
-    static IntArch runningArchitecture;
+    static Model systemModel;
 
     static LPlatformInformation *localPlatform;
     static IoPlatformInformation *ioPlatform;
@@ -235,28 +178,14 @@ private:
 };
 
 template<typename Backend>
-void InterruptArchitecture::initialize() {
+void InterruptModel::initialize() {
     Backend::initializeLPlatformInformation(localPlatform);
     Backend::initializeIoPlatformInformation(ioPlatform);
 
-    // Initialize mappings
-    for (uint8_t i = 0; i < 16; ++i) {
-        ioPlatform->gsiToIntiMappings[i] = static_cast<InterruptInput>(i);
-        ioPlatform->intiToGsiMappings[i] = static_cast<GlobalSystemInterrupt>(i);
-    }
-    for (auto *mapping : ioPlatform->irqOverrides) {
-        ioPlatform->gsiToIntiMappings[mapping->source] = mapping->target;
-        ioPlatform->intiToGsiMappings[mapping->target] = mapping->source;
-
-        // If e.g. the PIT (GSI0) is remapped to IO APIC INTI 2, the default mapping of GSI2 is no longer valid.
-        ioPlatform->gsiToIntiMappings[mapping->target] = static_cast<InterruptInput>(0xFF);
-        ioPlatform->intiToGsiMappings[mapping->source] = static_cast<GlobalSystemInterrupt>(0xFF);
-    }
-
     if (localPlatform->xApicSupported || localPlatform->x2ApicSupported) {
-        runningArchitecture = APIC;
+        systemModel = APIC;
     } else {
-        runningArchitecture = PIC;
+        systemModel = PIC;
     }
 
     initialized = true;
@@ -265,16 +194,15 @@ void InterruptArchitecture::initialize() {
 // TODO: Does this have a benefit to just move the structs out of the InterruptArchitecture class?
 //       - Yes, the structs can access the InterruptArchitecture members directly
 // The InterruptArchitecture defines some structures that should be in the Device namespace directly
-using InterruptInput = InterruptArchitecture::InterruptInput;
-using GlobalSystemInterrupt = InterruptArchitecture::GlobalSystemInterrupt;
-using LApicInformation = InterruptArchitecture::LApicInformation;
-using LNMIConfiguration = InterruptArchitecture::LNMIConfiguration;
-using LPlatformInformation = InterruptArchitecture::LPlatformInformation;
-using IoApicInformation = InterruptArchitecture::IoApicInformation;
-using IoInterruptOverride = InterruptArchitecture::IoInterruptOverride;
-using IoNMIConfiguration = InterruptArchitecture::IoNMIConfiguration;
-using IoPlatformInformation = InterruptArchitecture::IoPlatformInformation;
+using InterruptInput = InterruptModel::InterruptInput;
+using LApicInformation = InterruptModel::LApicInformation;
+using LNMIConfiguration = InterruptModel::LNMIConfiguration;
+using LPlatformInformation = InterruptModel::LPlatformInformation;
+using IoApicInformation = InterruptModel::IoApicInformation;
+using IoInterruptOverride = InterruptModel::IoInterruptOverride;
+using IoNMIConfiguration = InterruptModel::IoNMIConfiguration;
+using IoPlatformInformation = InterruptModel::IoPlatformInformation;
 
 }
 
-#endif //HHUOS_INTERRUPTARCHITECTURE_H
+#endif //HHUOS_INTERRUPTMODEL_H

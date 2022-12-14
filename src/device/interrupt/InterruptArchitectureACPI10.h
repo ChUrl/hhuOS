@@ -1,7 +1,7 @@
 #ifndef HHUOS_INTERRUPTARCHITECTUREACPI10_H
 #define HHUOS_INTERRUPTARCHITECTUREACPI10_H
 
-#include "InterruptArchitecture.h"
+#include "InterruptModel.h"
 
 namespace Device {
 
@@ -16,15 +16,15 @@ public:
     ~InterruptArchitectureACPI10() = default;
 
 
-    static void initializeLPlatformInformation(InterruptArchitecture::LPlatformInformation *info);
+    static void initializeLPlatformInformation(InterruptModel::LPlatformInformation *info);
 
-    static void initializeIoPlatformInformation(InterruptArchitecture::IoPlatformInformation *info);
+    static void initializeIoPlatformInformation(InterruptModel::IoPlatformInformation *info);
 
 private:
     static bool hasACPI10();
     static void verifyACPI10();
 
-    static uint8_t uidToId(InterruptArchitecture::LPlatformInformation *info, uint8_t uid);
+    static uint8_t uidToId(InterruptModel::LPlatformInformation *info, uint8_t uid);
 };
 
 }

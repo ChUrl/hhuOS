@@ -19,13 +19,13 @@ cmake_minimum_required(VERSION 3.14)
 # TODO: Some files have to be relocated
 target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/interrupt/Pic.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/ModelSpecificRegister.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/LApic.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/IoApic.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/ModelSpecificRegister.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/ApicTimer.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/LApicErrorHandler.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/ErrorInterruptHandler.cpp
 
         ${HHUOS_SRC_DIR}/device/interrupt/ApicRegisterInterface.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/InterruptArchitecture.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/InterruptModel.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/InterruptArchitectureACPI10.cpp
         )
