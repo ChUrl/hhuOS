@@ -32,18 +32,18 @@ GlobalSystemInterrupt InterruptModel::getGlobalGsiMax() {
     return ioPlatform->globalGsiMax;
 }
 
-Util::Data::ArrayList<InterruptModel::LApicInformation *> &InterruptModel::lapics() {
+Util::Data::ArrayList<LApicInformation *> &InterruptModel::lapics() {
     verifyApic();
     return localPlatform->lapics;
 }
 
-Util::Data::ArrayList<InterruptModel::IoApicInformation *> &InterruptModel::ioapics() {
+Util::Data::ArrayList<IoApicInformation *> &InterruptModel::ioapics() {
     verifyApic();
     return ioPlatform->ioapics;
 }
 
 // NOTE: Do not use iterators in the get... functions as some of these may be called from an interrupt handler
-InterruptModel::LApicInformation *InterruptModel::getLApicInformation(uint8_t id) {
+LApicInformation *InterruptModel::getLApicInformation(uint8_t id) {
     verifyApic();
     LApicInformation *lapic;
     for (uint32_t i = 0; i < localPlatform->lapics.size(); ++i) {
@@ -57,7 +57,7 @@ InterruptModel::LApicInformation *InterruptModel::getLApicInformation(uint8_t id
 }
 
 // There is a maximum of 1 NMI configuration per core
-InterruptModel::LNMIConfiguration *InterruptModel::getLNMIConfiguration(LApicInformation *lapic) {
+LNMIConfiguration *InterruptModel::getLNMIConfiguration(LApicInformation *lapic) {
     verifyApic();
     LNMIConfiguration *lnmi;
     for (uint32_t i = 0; i < localPlatform->lnmis.size(); ++i) {
@@ -73,7 +73,7 @@ InterruptModel::LNMIConfiguration *InterruptModel::getLNMIConfiguration(LApicInf
 // TODO: The case where a PIC interrupt is remapped to another IO APIC is not handled
 //       - If the system uses 2 IO APICs with 8 inputs each and the PIT GSI is remapped to pin 10
 //         the first IO APIC will be returned because the PIT has GSI0
-InterruptModel::IoApicInformation *InterruptModel::getIoApicInformation(GlobalSystemInterrupt gsi) {
+IoApicInformation *InterruptModel::getIoApicInformation(GlobalSystemInterrupt gsi) {
     verifyApic();
     IoApicInformation *ioapic;
     for (uint32_t i = 0; i < ioPlatform->ioapics.size(); ++i) {
@@ -83,11 +83,12 @@ InterruptModel::IoApicInformation *InterruptModel::getIoApicInformation(GlobalSy
         }
     }
 
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::getIoApicConfiguration(): Didn't find configuration matching GSI!");
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                    "LApic::getIoApicConfiguration(): Didn't find configuration matching GSI!");
 }
 
 // TODO: Can a single IO APIC have multiple NMIs?
-InterruptModel::IoNMIConfiguration *InterruptModel::getIoNMIConfiguration(IoApicInformation *ioapic) {
+IoNMIConfiguration *InterruptModel::getIoNMIConfiguration(IoApicInformation *ioapic) {
     verifyApic();
     // Check if a NMI that is assigned to one of this IO APICs pins exists
     IoNMIConfiguration *ionmi;
@@ -114,7 +115,8 @@ IoInterruptOverride *InterruptModel::getInterruptOverride(GlobalSystemInterrupt 
 
     // If no override exists the identity mapping is used
     if (gsi > ioPlatform->globalGsiMax) {
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "GSI is not supported by the system!");
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION,
+                                        "GSI is not supported by the system!");
     }
 
     return nullptr;
@@ -132,7 +134,8 @@ bool InterruptModel::hasOverride(InterruptInput inti) {
     }
 
     if (inti > static_cast<uint8_t>(ioPlatform->globalGsiMax)) {
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "INTI is not supported by the system!");
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION,
+                                        "INTI is not supported by the system!");
     }
 
     return false;
@@ -150,8 +153,11 @@ void InterruptModel::dumpPlatformInformation() {
 
     // Local APICs
     log.info("Local APIC: Supported modes: [%s%s], Selected mode: [%s], Cores: [%d], Version: [0x%x]",
-             localPlatform->xApicSupported ? "xApic" : "None", localPlatform->x2ApicSupported ? ",x2Apic" : "",
-             localPlatform->isX2Apic ? "x2Apic" : "xApic", localPlatform->lapics.size(), localPlatform->version);
+             localPlatform->xApicSupported ? "xApic" : "None",
+             localPlatform->x2ApicSupported ? ",x2Apic" : "",
+             localPlatform->isX2Apic ? "x2Apic" : "xApic",
+             localPlatform->lapics.size(),
+             localPlatform->version);
     log.info("Local APIC MMIO: [0x%x] (phys) -> [0x%x] (virt)", localPlatform->address, localPlatform->virtAddress);
 
     for (auto *lapic : localPlatform->lapics) {
@@ -164,17 +170,23 @@ void InterruptModel::dumpPlatformInformation() {
 
     // IO APICs
     log.info("Io APIC: Version: [0x%x], EOI supported: [%d], Global GSI max: [%d]",
-             ioPlatform->version, ioPlatform->eoiSupported, static_cast<uint8_t>(ioPlatform->globalGsiMax));
+             ioPlatform->version,
+             ioPlatform->eoiSupported,
+             static_cast<uint8_t>(ioPlatform->globalGsiMax));
 
     for (auto *ioapic : ioPlatform->ioapics) {
         log.info("- IoApic: Id: [0x%x], MMIO: [0x%x] (phys) -> [0x%x] (virt), GSI base: [%d], GSI max: [%d]",
-                 ioapic->id, ioapic->address, ioapic->virtAddress,
-                 static_cast<uint8_t>(ioapic->gsiBase), static_cast<uint8_t>(ioapic->gsiMax));
+                 ioapic->id,
+                 ioapic->address,
+                 ioapic->virtAddress,
+                 static_cast<uint8_t>(ioapic->gsiBase),
+                 static_cast<uint8_t>(ioapic->gsiMax));
     }
 
     for (auto *override : ioPlatform->irqOverrides) {
         log.info("- Override: IRQ Source: [%d], GSI Target: [%d]",
-                 static_cast<uint8_t>(override->inti), static_cast<uint8_t>(override->gsi));
+                 static_cast<uint8_t>(override->inti),
+                 static_cast<uint8_t>(override->gsi));
     }
     if (ioPlatform->irqOverrides.size() == 0) {
         log.info("- There are no IRQ overrides");

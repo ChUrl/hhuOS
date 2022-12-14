@@ -4,7 +4,7 @@
 
 namespace Device {
 
-void InterruptArchitectureACPI10::initializeLPlatformInformation(InterruptModel::LPlatformInformation *info) {
+void InterruptArchitectureACPI10::initializeLPlatformInformation(LPlatformInformation *info) {
     auto features = Util::Cpu::CpuId::getCpuFeatures();
     for (auto feature: features) {
         if (feature == Util::Cpu::CpuId::CpuFeature::APIC) {
@@ -23,7 +23,8 @@ void InterruptArchitectureACPI10::initializeLPlatformInformation(InterruptModel:
     info->address = Acpi::getTable<Acpi::Madt>("APIC")->localApicAddress;
 
     if (info->address == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::initializePlatformConfiguration(): Didn't find local APIC address!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                        "LApic::initializePlatformConfiguration(): Didn't find local APIC address!");
     }
 
     Util::Data::ArrayList<const Acpi::ProcessorLocalApic *> processorLocalApics;
@@ -32,14 +33,16 @@ void InterruptArchitectureACPI10::initializeLPlatformInformation(InterruptModel:
     Acpi::getApicStructures<Acpi::LocalApicNMI>(&nmiConfigurations, Acpi::LOCAL_APIC_NMI);
 
     if (processorLocalApics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::initializePlatformConfiguration(): Didn't find local APIC(s)!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                        "LApic::initializePlatformConfiguration(): Didn't find local APIC(s)!");
     }
     if (nmiConfigurations.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::initializePlatformConfiguration(): Didn't find NMI configuration(s)!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                        "LApic::initializePlatformConfiguration(): Didn't find NMI configuration(s)!");
     }
 
     for (auto *lapic : processorLocalApics) {
-        info->lapics.add(new InterruptModel::LApicInformation {
+        info->lapics.add(new LApicInformation {
                 .acpiId = lapic->acpiProcessorId,
                 .id = lapic->apicId,
                 .enabled = static_cast<bool>(lapic->flags & 0x1),
@@ -47,17 +50,23 @@ void InterruptArchitectureACPI10::initializeLPlatformInformation(InterruptModel:
     }
 
     for (auto *lnmi : nmiConfigurations) {
-        info->lnmis.add(new InterruptModel::LNMIConfiguration {
+        info->lnmis.add(new LNMIConfiguration {
                 .acpiId = lnmi->acpiProcessorId,
-                .id = static_cast<uint8_t>(lnmi->acpiProcessorId == 0xFF ? 0xFF : uidToId(info, lnmi->acpiProcessorId)),
-                .polarity = lnmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTEntry::PinPolarity::HIGH : LVTEntry::PinPolarity::LOW,
-                .triggerMode = lnmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTEntry::TriggerMode::EDGE : LVTEntry::TriggerMode::LEVEL,
+                .id = static_cast<uint8_t>(lnmi->acpiProcessorId == 0xFF
+                        ? 0xFF
+                        : uidToId(info, lnmi->acpiProcessorId)),
+                .polarity = lnmi->flags & Acpi::IntiFlag::ACTIVE_HIGH
+                        ? LVTEntry::PinPolarity::HIGH
+                        : LVTEntry::PinPolarity::LOW,
+                .triggerMode = lnmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED
+                        ? LVTEntry::TriggerMode::EDGE
+                        : LVTEntry::TriggerMode::LEVEL,
                 .lint = lnmi->localApicLint
         });
     }
 }
 
-void InterruptArchitectureACPI10::initializeIoPlatformInformation(InterruptModel::IoPlatformInformation *info) {
+void InterruptArchitectureACPI10::initializeIoPlatformInformation(IoPlatformInformation *info) {
     if (!hasACPI10()) {
         return;
     }
@@ -70,11 +79,12 @@ void InterruptArchitectureACPI10::initializeIoPlatformInformation(InterruptModel
     Acpi::getApicStructures(&nmiConfigurations, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
 
     if (ioApics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "IoApic::initializePlatformConfiguration(): Didn't find IO APIC(s)!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                        "IoApic::initializePlatformConfiguration(): Didn't find IO APIC(s)!");
     }
 
     for (auto *ioapic : ioApics) {
-        info->ioapics.add(new InterruptModel::IoApicInformation {
+        info->ioapics.add(new IoApicInformation {
                 .id = ioapic->ioApicId,
                 .address = ioapic->ioApicAddress,
                 .gsiBase = static_cast<GlobalSystemInterrupt>(ioapic->globalSystemInterruptBase)
@@ -91,19 +101,27 @@ void InterruptArchitectureACPI10::initializeIoPlatformInformation(InterruptModel
      * IO APIC interrupt input instead.
      */
     for (auto *override : interruptSourceOverrides) {
-        info->irqOverrides.add(new InterruptModel::IoInterruptOverride {
+        info->irqOverrides.add(new IoInterruptOverride {
                 .bus = override->bus,
                 .gsi = static_cast<GlobalSystemInterrupt>(override->source),
                 .inti = static_cast<InterruptInput>(override->globalSystemInterrupt),
-                .polarity = override->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
-                .triggerMode = override->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL
+                .polarity = override->flags & Acpi::IntiFlag::ACTIVE_HIGH
+                        ? REDTBLEntry::PinPolarity::HIGH
+                        : REDTBLEntry::PinPolarity::LOW,
+                .triggerMode = override->flags & Acpi::IntiFlag::EDGE_TRIGGERED
+                        ? REDTBLEntry::TriggerMode::EDGE
+                        : REDTBLEntry::TriggerMode::LEVEL
         });
     }
 
     for (auto *ionmi : nmiConfigurations) {
-        info->ionmis.add(new InterruptModel::IoNMIConfiguration {
-                .polarity = ionmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
-                .triggerMode = ionmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL,
+        info->ionmis.add(new IoNMIConfiguration {
+                .polarity = ionmi->flags & Acpi::IntiFlag::ACTIVE_HIGH
+                        ? REDTBLEntry::PinPolarity::HIGH
+                        : REDTBLEntry::PinPolarity::LOW,
+                .triggerMode = ionmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED
+                        ? REDTBLEntry::TriggerMode::EDGE
+                        : REDTBLEntry::TriggerMode::LEVEL,
                 .gsi = static_cast<GlobalSystemInterrupt>(ionmi->globalSystemInterrupt)
         });
     }
@@ -117,13 +135,15 @@ bool InterruptArchitectureACPI10::hasACPI10() {
 
 void InterruptArchitectureACPI10::verifyACPI10() {
     if (!hasACPI10()) {
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "InterruptArchitectureACPI10: ACPI 1.0b support not present!");
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION,
+                                        "InterruptArchitectureACPI10: ACPI 1.0b support not present!");
     }
 }
 
-uint8_t InterruptArchitectureACPI10::uidToId(InterruptModel::LPlatformInformation *info, uint8_t uid) {
+uint8_t InterruptArchitectureACPI10::uidToId(LPlatformInformation *info, uint8_t uid) {
     if (info->lapics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::idToUid(): LApicInformation not initialized!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                        "LApic::idToUid(): LApicInformation not initialized!");
     }
 
     for (auto *lapic : info->lapics) {
@@ -132,7 +152,8 @@ uint8_t InterruptArchitectureACPI10::uidToId(InterruptModel::LPlatformInformatio
         }
     }
 
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic::idToUid(): Didn't find local APIC matching UID!");
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                    "LApic::idToUid(): Didn't find local APIC matching UID!");
 }
 
 }

@@ -27,34 +27,36 @@ void IoApic::initialize() {
     initialized = true;
 }
 
+// TODO: Should this take an InterruptInput?
 void IoApic::allow(GlobalSystemInterrupt gsi) {
-    InterruptModel::IoApicInformation *ioapic = InterruptModel::getIoApicInformation(gsi);
+    IoApicInformation *ioapic = InterruptModel::getIoApicInformation(gsi);
 
     REDTBLEntry redtblEntry = readREDTBL(ioapic, gsi);
     redtblEntry.isMasked = false;
     writeREDTBL(ioapic, gsi, redtblEntry);
 }
 
+// TODO: Should this take an InterruptInput?
 void IoApic::forbid(GlobalSystemInterrupt gsi) {
-    InterruptModel::IoApicInformation *ioapic = InterruptModel::getIoApicInformation(gsi);
+    IoApicInformation *ioapic = InterruptModel::getIoApicInformation(gsi);
 
     REDTBLEntry redtblEntry = readREDTBL(ioapic, gsi);
     redtblEntry.isMasked = true;
     writeREDTBL(ioapic, gsi, redtblEntry);
 }
 
+// TODO: Should this take an InterruptInput?
 bool IoApic::status(GlobalSystemInterrupt gsi) {
-    InterruptModel::IoApicInformation *ioapic = InterruptModel::getIoApicInformation(gsi);
+    IoApicInformation *ioapic = InterruptModel::getIoApicInformation(gsi);
 
     return readREDTBL(ioapic, gsi).isMasked;
 }
 
-// TODO: Kind of suboptimal that for every EOI the corresponding ioapic config has to be searched?
+// TODO: Should this take an InterruptInput?
 // TODO: Compatibility mode
 // Intel ICH5 Datasheet Chapter 9.5.5
 void IoApic::sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt vector) {
-    InterruptModel::IoApicInformation *ioapic =
-            InterruptModel::getIoApicInformation(static_cast<GlobalSystemInterrupt>(vector));
+    IoApicInformation *ioapic = InterruptModel::getIoApicInformation(static_cast<GlobalSystemInterrupt>(vector));
 
     volatile auto *regAddr = reinterpret_cast<uint32_t *>(ioapic->virtAddress + Register::EOI);
     *regAddr = static_cast<uint8_t>(vector);
@@ -120,6 +122,7 @@ void IoApic::initializeMMIORegion(IoApicInformation *ioapic) {
     ioapic->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + ioapic->address % Util::Memory::PAGESIZE;
 }
 
+// TODO: Has to set polarity etc. for overidden interrupts
 // TODO: I read that GSI0 is typically used for ExtINT (PIC), if I can verify that the GSI0 can always be masked
 //       as I don't support virtual wire
 void IoApic::initializeREDTBL(IoApicInformation *ioapic) {
@@ -163,6 +166,7 @@ void IoApic::writeDoubleWord(IoApicInformation *ioapic, uint8_t reg, uint32_t va
 }
 
 // TODO: Spinlock?
+// TODO: Should this be so complicated? The remapping stuff could be taken out and the table entry passed...
 REDTBLEntry IoApic::readREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi) {
     verifyGSI(ioapic, gsi);
 
@@ -186,7 +190,7 @@ REDTBLEntry IoApic::readREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt 
 }
 
 // TODO: Spinlock?
-// TODO: Use Interrupt type
+// TODO: Should this be so complicated? The remapping stuff could be taken out and the table entry passed...
 void IoApic::writeREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi, REDTBLEntry redtbl) {
     verifyGSI(ioapic, gsi);
 

@@ -16,15 +16,15 @@ public:
     ~InterruptArchitectureACPI10() = default;
 
 
-    static void initializeLPlatformInformation(InterruptModel::LPlatformInformation *info);
+    static void initializeLPlatformInformation(LPlatformInformation *info);
 
-    static void initializeIoPlatformInformation(InterruptModel::IoPlatformInformation *info);
+    static void initializeIoPlatformInformation(IoPlatformInformation *info);
 
 private:
     static bool hasACPI10();
     static void verifyACPI10();
 
-    static uint8_t uidToId(InterruptModel::LPlatformInformation *info, uint8_t uid);
+    static uint8_t uidToId(LPlatformInformation *info, uint8_t uid);
 };
 
 }
