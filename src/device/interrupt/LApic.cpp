@@ -1,12 +1,20 @@
 #include "LApic.h"
 #include "kernel/system/System.h"
+#include "kernel/paging/Paging.h"
+#include "device/cpu/Cpu.h"
 
 namespace Device {
 
 bool LApic::initialized = false;
 Device::ModelSpecificRegister LApic::ia32ApicBaseMsr = Device::ModelSpecificRegister(0x1B);
 Kernel::Logger LApic::log = Kernel::Logger::get("LApic");
-uint16_t LApic::lintRegs[7] = {0x2F0, 0x320, 0x330, 0x340, 0x350, 0x360, 0x370};
+LApic::Register LApic::lintRegs[7] = {static_cast<Register>(0x2F0),
+                                      static_cast<Register>(0x320),
+                                      static_cast<Register>(0x330),
+                                      static_cast<Register>(0x340),
+                                      static_cast<Register>(0x350),
+                                      static_cast<Register>(0x360),
+                                      static_cast<Register>(0x370)};
 
 // ! Public member functions start here
 
@@ -14,17 +22,17 @@ bool LApic::isInitialized() {
     return initialized;
 }
 
-void LApic::verifyInitialized() {
+void LApic::ensureInitialized() {
     if (!initialized) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic is not initialized!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Local APICs are not initialized!");
     }
 }
 
 void LApic::initialize() {
-    InterruptModel::verifyApic();
+    // InterruptModel::ensureApicSupported();
     if (!readBaseMSR().isBSP) {
         // NOTE: IA32_APIC_BASE_MSR is unique (every core has its own)
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "LApic::initialize(): May only be called by BSP!");
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "May only be called by BSP!");
     }
 
     InterruptModel::localPlatform->isX2Apic = readBaseMSR().isX2Apic;
@@ -39,14 +47,12 @@ void LApic::initialize() {
     initializeMMIORegion();
 
     // Initialize the local APIC of the BSP before initializing any APs
-    // Enables xApic compatibility mode if necessary
     initializeController(InterruptModel::getLApicInformation(getId()));
 
-    // TODO: I hate this
-    InterruptModel::localPlatform->version = readDoubleWord(Register::VER) & 0xFF;
+    InterruptModel::localPlatform->version = readDoubleWord(VER);
 
     // TODO: Should probably not do this automatically inside LApic::initialize()...
-    for (auto *lapic : InterruptModel::lapics()) {
+    for (auto *lapic: InterruptModel::lapics()) {
         // TODO: !lapic->enabled == true could also mean that the cpu is just not initialized yet...
         if (!lapic->enabled || lapic->id == getId()) { // Skip BSP and unavailable processors
             continue;
@@ -78,15 +84,15 @@ bool LApic::status(Lint lint) {
 }
 
 void LApic::sendEndOfInterrupt() {
-    writeDoubleWord(Register::EOI, 0);
+    writeDoubleWord(EOI, 0);
 }
 
 // TODO: Make sure this is called by the correct processor?
 //       - Should happen anyway because the CPU that received the ERROR interrupt also runs the handler
 void LApic::handleErrors() {
     // Write before read (read/write register, IA-32 Architecture Manual Chapter 10.5.3)
-    writeDoubleWord(Register::ESR, 0);
-    uint32_t errors = readDoubleWord(Register::ESR);
+    writeDoubleWord(ESR, 0);
+    uint32_t errors = readDoubleWord(ESR);
 
     // TODO: This is architecture dependent...
     // Errors for all CPUs
@@ -113,20 +119,20 @@ void LApic::handleErrors() {
     if (sendChecksumError) { log.error("ERROR: Send checksum error!"); }
 
     // Clear errors
-    writeDoubleWord(Register::ESR, 0);
-    writeDoubleWord(Register::ESR, 0);
+    writeDoubleWord(ESR, 0);
+    writeDoubleWord(ESR, 0);
 }
 
 // ! Private member functions start here
 
-void LApic::verifyMMIO() {
+void LApic::ensureMMIO() {
     if (InterruptModel::localPlatform->virtAddress == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic MMIO region not initialized!");
     }
 }
 
 uint8_t LApic::getId() {
-    return (readDoubleWord(Register::ID) >> 24) & 0xFF;
+    return readDoubleWord(ID) >> 24;
 }
 
 void LApic::initializeMMIORegion() {
@@ -136,13 +142,9 @@ void LApic::initializeMMIORegion() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
     void *virtAddress = memoryService.mapIO(InterruptModel::localPlatform->address, Util::Memory::PAGESIZE, true);
 
-    if (virtAddress == nullptr) {
-        Util::Exception::throwException(Util::Exception::OUT_OF_MEMORY, "LApic::initialize(): Not enough space left on kernel heap!");
-    }
-
     // Use this address to access the local APIC's memory mapped registers
-    InterruptModel::localPlatform->virtAddress = reinterpret_cast<uint32_t>(virtAddress)
-                                                 + InterruptModel::localPlatform->address % Util::Memory::PAGESIZE;
+    InterruptModel::localPlatform->virtAddress =
+            reinterpret_cast<uint32_t>(virtAddress) + InterruptModel::localPlatform->address % Util::Memory::PAGESIZE;
 }
 
 void LApic::initializeApplicationProcessor(LApicInformation *lapic) {
@@ -171,8 +173,8 @@ void LApic::initializeController(LApicInformation *lapic) {
     // Configure the NMI (non maskable interrupt) pin
     LNMIConfiguration *lnmi = InterruptModel::getLNMIConfiguration(lapic);
     if (lnmi != nullptr) {
-        LVTEntry lvtEntry {};
-        lvtEntry.vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(0); // NMI doesn't have vector
+        LVTEntry lvtEntry{};
+        lvtEntry.vector = static_cast<InterruptVector>(0); // NMI doesn't have vector
         lvtEntry.deliveryMode = LVTEntry::DeliveryMode::NMI;
         lvtEntry.pinPolarity = lnmi->polarity;
         lvtEntry.triggerMode = lnmi->triggerMode;
@@ -182,7 +184,7 @@ void LApic::initializeController(LApicInformation *lapic) {
 
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF (OSDev)
     // and the SW ENABLE flag.
-    SVREntry svrEntry {};
+    SVREntry svrEntry{};
     svrEntry.vector = Kernel::InterruptDispatcher::SPURIOUS;
     svrEntry.isSWEnabled = true;
     svrEntry.hasEOIBroadcastSuppression = true;
@@ -190,20 +192,20 @@ void LApic::initializeController(LApicInformation *lapic) {
 
     // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
     // change a subsequently read value, in fact the register should always be written once before reading)
-    writeDoubleWord(Register::ESR, 0);
-    writeDoubleWord(Register::ESR, 0);
+    writeDoubleWord(ESR, 0);
+    writeDoubleWord(ESR, 0);
 
     // Clear other outstanding interrupts
     sendEndOfInterrupt();
 
     // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
     // (IA-32 Architecture Manual Chapter 10.8.3.1)
-    writeDoubleWord(Register::TPR, 0);
+    writeDoubleWord(TPR, 0);
 }
 
 void LApic::initializeLVT() {
     // Default values
-    LVTEntry lvtEntry {};
+    LVTEntry lvtEntry{};
     lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED, // TODO
     lvtEntry.pinPolarity = LVTEntry::PinPolarity::HIGH,
     lvtEntry.triggerMode = LVTEntry::TriggerMode::EDGE,
@@ -228,22 +230,13 @@ void LApic::initializeLVT() {
 
 // ! Private register member functions start here
 
-// NOTE: https://forum.osdev.org/viewtopic.php?f=1&t=16653#p123105
-// NOTE: In x2APIC mode this can be written atomically, so no spinlock there
-// TODO: Needs spinlock?
-//       - If a single cpu would somehow write the regAddr, switch threads and then read regAddr this would be a bug
-//         This case shouldn't happen though as there is no (really?) situation where a thread would write these...
-//       - If a cpu writes the regAddr and another cpu writes the regAddr again there would be no difference as
-//         different registers would be written
-//       - If an accepted interrupt can change register values interrupts would have to be disabled
-uint32_t LApic::readDoubleWord(uint16_t reg) {
-    verifyMMIO();
+uint32_t LApic::readDoubleWord(Register reg) {
+    ensureMMIO();
     return *reinterpret_cast<volatile uint32_t *>(InterruptModel::localPlatform->virtAddress + reg);
 }
 
-// TODO: Needs spinlock?
-void LApic::writeDoubleWord(uint16_t reg, uint32_t val) {
-    verifyMMIO();
+void LApic::writeDoubleWord(Register reg, uint32_t val) {
+    ensureMMIO();
     *reinterpret_cast<volatile uint32_t *>(InterruptModel::localPlatform->virtAddress + reg) = val;
 }
 
@@ -253,18 +246,18 @@ MSREntry LApic::readBaseMSR() {
 }
 
 // IA-32 Architecture Manual Chapter 10.4.4
-void LApic::writeBaseMSR(MSREntry msrEntry) {
+void LApic::writeBaseMSR(const MSREntry &msrEntry) {
     ia32ApicBaseMsr.writeQuadWord(static_cast<uint64_t>(msrEntry)); // Atomic write
 }
 
 // IA-32 Architecture Manual Chapter 10.9
 SVREntry LApic::readSVR() {
-    return SVREntry(readDoubleWord(Register::SVR));
+    return SVREntry(readDoubleWord(SVR));
 }
 
 // IA-32 Architecture Manual Chapter 10.9
-void LApic::writeSVR(SVREntry svrEntry) {
-    writeDoubleWord(Register::SVR, static_cast<uint32_t>(svrEntry));
+void LApic::writeSVR(const SVREntry &svrEntry) {
+    writeDoubleWord(SVR, static_cast<uint32_t>(svrEntry));
 }
 
 // IA-32 Architecture Manual Chapter 10.5.1
@@ -274,31 +267,26 @@ LVTEntry LApic::readLVT(Lint lint) {
 
 // TODO: Check if it is a problem to write to readonly/reserved areas
 // IA-32 Architecture Manual Chapter 10.5.1
-void LApic::writeLVT(Lint lint, LVTEntry lvtEntry) {
+void LApic::writeLVT(Lint lint, const LVTEntry &lvtEntry) {
     writeDoubleWord(lintRegs[lint], static_cast<uint32_t>(lvtEntry));
 }
 
-// NOTE: https://forum.osdev.org/viewtopic.php?f=1&t=16653#p123105
-// NOTE: In x2APIC mode this can be written atomically, so no spinlock there
-// TODO: Needs spinlock?
-//       - The case that a single cpu writes the ICR from different threads shouldn't happen
-//         as IPIs are only issued to startup different cores (happens before scheduling)?
-//       - The delivery status changes when an ipi is accepted, so interrups have to be disabled?
-// IA-32 Architecture Manual Chapter 10.6.1
+// NOTE: In x2APIC mode this could be read atomically (rdmsr)
 ICREntry LApic::readICR() {
-    // NOTE: Interrupts have to be disabled beforehand
-    uint32_t low = readDoubleWord(Register::ICR_LOW);
-    uint64_t high = readDoubleWord(Register::ICR_HIGH);
+    // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
+    uint32_t low = readDoubleWord(ICR_LOW);
+    uint64_t high = readDoubleWord(ICR_HIGH);
+    // Cpu::enableInterrupts();
     return ICREntry(low | high << 32);
 }
 
-// TODO: Needs spinlock?
-// IA-32 Architecture Manual Chapter 10.6.1
-void LApic::writeICR(ICREntry icrEntry) {
-    // NOTE: Interrupts have to be disabled beforehand
+// NOTE: In x2APIC mode this could be written atomically (wrmsr)
+void LApic::writeICR(const ICREntry &icrEntry) {
     auto val = static_cast<uint64_t>(icrEntry);
-    writeDoubleWord(Register::ICR_HIGH, val >> 32);
-    writeDoubleWord(Register::ICR_LOW, val & 0xFFFFFFFF); // Last as writing low DW sends the IPI
+    // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
+    writeDoubleWord(ICR_HIGH, val >> 32);
+    writeDoubleWord(ICR_LOW, val & 0xFFFFFFFF); // Writing the low DW sends the IPI
+    // Cpu::enableInterrupts();
 }
 
 }
