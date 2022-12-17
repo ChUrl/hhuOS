@@ -97,7 +97,7 @@ IoPlatformInformation *InterruptModelAcpiParser::parseIoPlatformInformation() {
         info->ioapics.add(new IoApicInformation{
                 .id = ioapic->ioApicId,
                 .address = ioapic->ioApicAddress,
-                .baseInti = static_cast<InterruptInput>(ioapic->globalSystemInterruptBase)
+                .gsiBase = static_cast<GlobalSystemInterrupt>(ioapic->globalSystemInterruptBase)
         });
     }
 

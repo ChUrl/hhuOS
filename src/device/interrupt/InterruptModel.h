@@ -106,8 +106,8 @@ private:
 
 template<typename Backend>
 void InterruptModel::initialize() {
-    Backend::initializeLPlatformInformation(localPlatform);
-    Backend::initializeIoPlatformInformation(ioPlatform);
+    localPlatform = Backend::parseLPlatformInformation();
+    ioPlatform = Backend::parseIoPlatformInformation();
 
     if (localPlatform->xApicSupported || localPlatform->x2ApicSupported) {
         systemModel = APIC;
