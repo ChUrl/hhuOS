@@ -7,7 +7,7 @@
 #include "kernel/system/System.h"
 #include "device/time/TimeProvider.h"
 
-// TODO: This code doesn't account for multi core systems
+// TODO: This code doesn't account for multicore systems
 //       - The calibration only has to be done once, but the registers have to be written
 //         for every core (do before APs get initialized and set registers in AP init sequence?)
 //       - I think it wouldn't make sense to use the APICTIMER for timekeeping then
@@ -32,7 +32,6 @@ public:
 
     ~ApicTimer() override = default;
 
-
     /**
      * Overriding function from InterruptHandler.
      */
@@ -49,13 +48,6 @@ public:
     [[nodiscard]] Util::Time::Timestamp getTime() override;
 
 private:
-    // Offsets, IA-32 Architecture Manual Chapter 10.4.1
-    enum Register : uint16_t {
-        TIMER_INITIAL = 0x380, // Timer Initial Count Register
-        TIMER_CURRENT = 0x390, // Timer Current Count Register
-        TIMER_DIVIDE = 0x3E0 // Timer Divide Configuration Register
-    };
-
     // IA-32 Architecture Manual Chapter 10.5.4
     enum Divide : uint32_t {
         BY_1 = 0b1011,
@@ -77,6 +69,8 @@ private:
     void setInterruptRate(uint32_t interval);
 
 private:
+    static bool initialized;
+
     Util::Time::Timestamp time{};
     uint32_t timerInterval = 0;
     uint32_t yieldInterval;

@@ -6,20 +6,22 @@
 
 namespace Device {
 
+bool ApicTimer::initialized = false;
 Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
 ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInterval(yieldInterval) {
-    LApic::verifyInitialized();
+    LApic::ensureInitialized();
 
     auto &timeService = Kernel::System::getService<Kernel::TimeService>();
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
-    LApic::writeDoubleWord(Register::TIMER_DIVIDE, Divide::BY_1); // TODO: What divider?
+    LApic::writeDoubleWord(LApic::TIMER_DIVIDE, Divide::BY_1); // TODO: What divider?
     LVTEntry lvtEntry = LApic::readLVT(LApic::TIMER);
     lvtEntry.timerMode = LVTEntry::TimerMode::PERIODIC;
     LApic::writeLVT(LApic::TIMER, lvtEntry);
 
     setInterruptRate(timerInterval);
+    initialized = true;
 }
 
 void ApicTimer::plugin() {
@@ -29,6 +31,7 @@ void ApicTimer::plugin() {
 }
 
 void ApicTimer::trigger(const Kernel::InterruptFrame &frame) {
+    // TODO: Get the timestamp from the system and remove TimeProvider from ApicTimer
     time.addNanoseconds(timerInterval);
     if (time.toMilliseconds() % yieldInterval == 0) {
         Kernel::System::getService<Kernel::SchedulerService>().yield();
@@ -48,12 +51,12 @@ Util::Time::Timestamp ApicTimer::getTime() {
 //          based on the number of counts occured in the end - start interval
 // TODO: Check CPUID if the timer stops in deep C-States (IA-32 10.5.4)
 void ApicTimer::setInterruptRate(uint32_t interval) {
-    LApic::writeDoubleWord(Register::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter, writing starts timer
+    LApic::writeDoubleWord(LApic::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter, writing starts timer
     Util::Async::Thread::sleep(Util::Time::Timestamp::ofMilliseconds(interval / 1000000));
-    uint32_t initialCount = 0xFFFFFFFF - LApic::readDoubleWord(Register::TIMER_CURRENT);
+    uint32_t initialCount = 0xFFFFFFFF - LApic::readDoubleWord(LApic::TIMER_CURRENT);
 
     log.info("Setting APIC Timer interval to [%uns] (Initial count: [%u])", interval, initialCount);
-    LApic::writeDoubleWord(Register::TIMER_INITIAL, initialCount);
+    LApic::writeDoubleWord(LApic::TIMER_INITIAL, initialCount);
 
     timerInterval = interval;
 }
