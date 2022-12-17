@@ -17,7 +17,7 @@ bool IoApic::isInitialized() {
 }
 
 void IoApic::initialize() {
-    LApic::verifyInitialized();
+    LApic::ensureInitialized();
 
     // Initialize all IO APICs of the system
     for (auto *ioapic : InterruptModel::ioapics()) {
