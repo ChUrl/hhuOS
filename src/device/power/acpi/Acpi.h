@@ -166,7 +166,7 @@ public:
         ApicStructureHeader header;
         uint8_t acpiProcessorId;
         uint8_t apicId;
-        uint32_t flags; // Enabled flag
+        uint32_t flags; // "Enabled" flag
     } __attribute__ ((packed));
 
     struct IoApic {
@@ -180,7 +180,7 @@ public:
     struct InterruptSourceOverride {
         ApicStructureHeader header;
         uint8_t bus; // "0 - Constant, meaning ISA"
-        uint8_t source;
+        uint8_t source; // ISA IRQ relative if bus = 0
         uint32_t globalSystemInterrupt;
         uint16_t flags; // INTI Flags
     } __attribute__ ((packed));
@@ -202,7 +202,7 @@ public:
         SdtHeader header;
         uint32_t localApicAddress;
         uint32_t flags; // PCAT compat flag
-        ApicStructureHeader apicStructure; // NOTE: Is a list
+        ApicStructureHeader apicStructure; // Is a list
     } __attribute__ ((packed));
 
     /**
@@ -241,39 +241,15 @@ public:
 
     static const SdtHeader& getTable(const char *signature);
 
+    static Util::Data::Array<Util::Memory::String> getAvailableTables();
+
     // TODO: Is this okay?
     // Convenience function to directly receive pointer to specific table
     template<typename T = SdtHeader>
-    static const T *getTable(const char *signature) {
-        return reinterpret_cast<const T *>(&getTable(signature));
-    }
+    static const T *getTable(const char *signature);
 
-    static Util::Array<Util::String> getAvailableTables();
-
-    // TODO: Move?
     template<typename T>
-    static void getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type) {
-        auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
-        auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
-
-        auto *pos = reinterpret_cast<const uint8_t *>(&madt->apicStructure);
-        const ApicStructureHeader *header;
-        while (pos < madtEndAddress) {
-            header = reinterpret_cast<const ApicStructureHeader *>(pos);
-
-            if (header->length == 0) {
-                // If this happens there is a bug in this function o_O
-                Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                                "Acpi::getApicStructures(): Header length must not be 0!");
-            }
-
-            if (header->type == type) {
-                structures->add(reinterpret_cast<const T *>(header));
-            }
-
-            pos += header->length;
-        }
-    }
+    static void getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type);
 
 private:
 
@@ -292,6 +268,45 @@ private:
 
     static const constexpr uint8_t SIGNATURE_LENGTH = 8;
 };
+
+// TODO: Is this okay?
+// Convenience function to directly receive pointer to specific table
+template<typename T>
+const T *Acpi::getTable(const char *signature) {
+    return reinterpret_cast<const T *>(&getTable(signature));
+}
+
+    static Util::Array<Util::String> getAvailableTables();
+
+    // TODO: Move?
+    template<typename T>
+    static void getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type) {
+        auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
+        auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
+// TODO: Move?
+template<typename T>
+void Acpi::getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type) {
+    auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
+    auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
+
+    auto *pos = reinterpret_cast<const uint8_t *>(&madt->apicStructure);
+    const ApicStructureHeader *header;
+    while (pos < madtEndAddress) {
+        header = reinterpret_cast<const ApicStructureHeader *>(pos);
+
+        if (header->length == 0) {
+            // If this happens there is a bug in this function o_O
+            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
+                                            "Acpi::getApicStructures(): Header length must not be 0!");
+        }
+
+        if (header->type == type) {
+            structures->add(reinterpret_cast<const T *>(header));
+        }
+
+        pos += header->length;
+    }
+}
 
 }
 

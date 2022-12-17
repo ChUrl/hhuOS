@@ -17,9 +17,9 @@ MSREntry::MSREntry(uint64_t registerValue) {
 
 MSREntry::operator uint64_t() const {
     return static_cast<uint64_t>(isBSP) << 8
-    | static_cast<uint64_t>(isX2Apic) << 10
-    | static_cast<uint64_t>(isHWEnabled) << 11
-    | static_cast<uint64_t>(baseField) << 12;
+           | static_cast<uint64_t>(isX2Apic) << 10
+           | static_cast<uint64_t>(isHWEnabled) << 11
+           | static_cast<uint64_t>(baseField) << 12;
 }
 
 /*
@@ -27,7 +27,7 @@ MSREntry::operator uint64_t() const {
  */
 
 SVREntry::SVREntry(uint32_t registerValue) {
-    vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(registerValue & 0xFF);
+    vector = static_cast<InterruptVector>(registerValue & 0xFF);
     isSWEnabled = registerValue & (1 << 8);
     hasFocusProcessorChecking = registerValue & (1 << 9);
     hasEOIBroadcastSuppression = registerValue & (1 << 12);
@@ -35,9 +35,9 @@ SVREntry::SVREntry(uint32_t registerValue) {
 
 SVREntry::operator uint32_t() const {
     return static_cast<uint32_t>(vector)
-    | static_cast<uint32_t>(isSWEnabled) << 8
-    | static_cast<uint32_t>(hasFocusProcessorChecking) << 9
-    | static_cast<uint32_t>(hasEOIBroadcastSuppression) << 12;
+           | static_cast<uint32_t>(isSWEnabled) << 8
+           | static_cast<uint32_t>(hasFocusProcessorChecking) << 9
+           | static_cast<uint32_t>(hasEOIBroadcastSuppression) << 12;
 }
 
 /*
@@ -45,7 +45,7 @@ SVREntry::operator uint32_t() const {
  */
 
 LVTEntry::LVTEntry(uint32_t registerValue) {
-    vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(registerValue & 0xFF);
+    vector = static_cast<InterruptVector>(registerValue & 0xFF);
     deliveryMode = static_cast<DeliveryMode>((registerValue & (0b111 << 8)) >> 8);
     deliveryStatus = static_cast<DeliveryStatus>((registerValue & (1 << 12)) >> 12);
     pinPolarity = static_cast<PinPolarity>((registerValue & (1 << 13)) >> 13);
@@ -56,11 +56,11 @@ LVTEntry::LVTEntry(uint32_t registerValue) {
 
 LVTEntry::operator uint32_t() const {
     return static_cast<uint32_t>(vector)
-    | static_cast<uint32_t>(deliveryMode) << 8
-    | static_cast<uint32_t>(pinPolarity) << 13
-    | static_cast<uint32_t>(triggerMode) << 15
-    | static_cast<uint32_t>(isMasked) << 16
-    | static_cast<uint32_t>(timerMode) << 17;
+           | static_cast<uint32_t>(deliveryMode) << 8
+           | static_cast<uint32_t>(pinPolarity) << 13
+           | static_cast<uint32_t>(triggerMode) << 15
+           | static_cast<uint32_t>(isMasked) << 16
+           | static_cast<uint32_t>(timerMode) << 17;
 }
 
 /*
@@ -68,7 +68,7 @@ LVTEntry::operator uint32_t() const {
  */
 
 ICREntry::ICREntry(uint64_t registerValue) {
-    vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(registerValue & 0xFF);
+    vector = static_cast<InterruptVector>(registerValue & 0xFF);
     deliveryMode = static_cast<DeliveryMode>((registerValue & (0b111 << 8)) >> 8);
     destinationMode = static_cast<DestinationMode>((registerValue & (1 << 11)) >> 11);
     deliveryStatus = static_cast<DeliveryStatus>((registerValue & (1 << 12)) >> 12);
@@ -80,13 +80,13 @@ ICREntry::ICREntry(uint64_t registerValue) {
 
 ICREntry::operator uint64_t() const {
     return static_cast<uint64_t>(vector)
-    | static_cast<uint64_t>(deliveryMode) << 8
-    | static_cast<uint64_t>(destinationMode) << 11
-    | static_cast<uint64_t>(deliveryStatus) << 12
-    | static_cast<uint64_t>(level) << 14
-    | static_cast<uint64_t>(triggerMode) << 15
-    | static_cast<uint64_t>(destinationShorthand) << 18
-    | static_cast<uint64_t>(destination) << 56;
+           | static_cast<uint64_t>(deliveryMode) << 8
+           | static_cast<uint64_t>(destinationMode) << 11
+           | static_cast<uint64_t>(deliveryStatus) << 12
+           | static_cast<uint64_t>(level) << 14
+           | static_cast<uint64_t>(triggerMode) << 15
+           | static_cast<uint64_t>(destinationShorthand) << 18
+           | static_cast<uint64_t>(destination) << 56;
 }
 
 // ! IoApic register interface
@@ -96,7 +96,7 @@ ICREntry::operator uint64_t() const {
  */
 
 REDTBLEntry::REDTBLEntry(uint64_t registerValue) {
-    vector = static_cast<Kernel::InterruptDispatcher::Interrupt>(registerValue & 0xFF);
+    vector = static_cast<InterruptVector>(registerValue & 0xFF);
     deliveryMode = static_cast<DeliveryMode>((registerValue & (0b111 << 8)) >> 8);
     destinationMode = static_cast<DestinationMode>((registerValue & (1 << 11)) >> 11);
     deliveryStatus = static_cast<DeliveryStatus>((registerValue & (1 << 12)) >> 12);
@@ -107,12 +107,12 @@ REDTBLEntry::REDTBLEntry(uint64_t registerValue) {
 }
 
 REDTBLEntry::operator uint64_t() const {
-    return  static_cast<uint64_t>(vector)
-    | static_cast<uint64_t>(deliveryMode) << 8
-    | static_cast<uint64_t>(destinationMode) << 11
-    | static_cast<uint64_t>(pinPolarity) << 13
-    | static_cast<uint64_t>(triggerMode) << 15
-    | static_cast<uint64_t>(isMasked) << 16
-    | static_cast<uint64_t>(destination) << 56;
+    return static_cast<uint64_t>(vector)
+           | static_cast<uint64_t>(deliveryMode) << 8
+           | static_cast<uint64_t>(destinationMode) << 11
+           | static_cast<uint64_t>(pinPolarity) << 13
+           | static_cast<uint64_t>(triggerMode) << 15
+           | static_cast<uint64_t>(isMasked) << 16
+           | static_cast<uint64_t>(destination) << 56;
 }
 }

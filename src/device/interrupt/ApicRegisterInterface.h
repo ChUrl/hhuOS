@@ -1,23 +1,19 @@
 #ifndef HHUOS_APICREGISTERINTERFACE_H
 #define HHUOS_APICREGISTERINTERFACE_H
 
-#include <cstdint>
 #include "kernel/interrupt/InterruptDispatcher.h"
-
-// TODO: Enforce read-only fields? If I const them the default constructor will disappear...
 
 /*
  * I chose to implement the APIC register interaction this way because:
- * 1. It's very easy to use
- * 2. Only standard C bitfields have guaranteed ordering, as soon as the "struct" becomes a C++ "class",
- *    the ordering is implementation defined, GCC's __attribute__ ((packed)) doesn't help there
- * 3. Bitfields would also make it very easy to do partial writes to registers, which I wanted to prevent
- * 4. Doing the masking everytime manually is bug prone
+ * 1. Only standard C bitfields have guaranteed ordering (C99 Standard Chapter 6.7.2.1.13),
+ *    as soon as the "struct" becomes a C++ "class", the ordering is implementation defined,
+ *    GCC's __attribute__ ((packed)) doesn't help there
+ * 2. Doing the masking everytime manually is bug prone
  */
 
 namespace Device {
 
-// ! LApic register interface
+using InterruptVector = Kernel::InterruptDispatcher::Interrupt;
 
 /**
  * Information obtainable from the local APIC's model specific register.
@@ -29,7 +25,9 @@ struct MSREntry {
     uint32_t baseField;
 
     MSREntry() = default;
+
     explicit MSREntry(uint64_t registerValue);
+
     explicit operator uint64_t() const;
 };
 
@@ -38,13 +36,15 @@ struct MSREntry {
  * current CPU's local APIC.
  */
 struct SVREntry {
-    Kernel::InterruptDispatcher::Interrupt vector;
+    InterruptVector vector;
     bool isSWEnabled;
     bool hasFocusProcessorChecking;
     bool hasEOIBroadcastSuppression;
 
     SVREntry() = default;
+
     explicit SVREntry(uint32_t registerValue);
+
     explicit operator uint32_t() const;
 };
 
@@ -73,7 +73,7 @@ struct LVTEntry {
         ONESHOT = 0, PERIODIC = 1
     };
 
-    Kernel::InterruptDispatcher::Interrupt vector;
+    InterruptVector vector;
     DeliveryMode deliveryMode; // All except timer
     DeliveryStatus deliveryStatus; // RO
     PinPolarity pinPolarity; // Only LINT0, LINT1
@@ -82,7 +82,9 @@ struct LVTEntry {
     TimerMode timerMode; // Only timer
 
     LVTEntry() = default;
+
     explicit LVTEntry(uint32_t registerValue);
+
     explicit operator uint32_t() const;
 };
 
@@ -117,7 +119,7 @@ struct ICREntry {
         ALL_NO_SELF = 0b11
     };
 
-    Kernel::InterruptDispatcher::Interrupt vector;
+    InterruptVector vector;
     DeliveryMode deliveryMode;
     DestinationMode destinationMode;
     DeliveryStatus deliveryStatus; // RO
@@ -127,12 +129,16 @@ struct ICREntry {
     uint8_t destination;
 
     ICREntry() = default;
+
     explicit ICREntry(uint64_t registerValue);
+
     explicit operator uint64_t() const;
 };
 
-// ! IoApic register interface
-
+/**
+ * Information obtainable from the redirection table of an IO APIC.
+ * Affects handling of external interrupts.
+ */
 struct REDTBLEntry {
     enum class DeliveryMode : uint8_t {
         FIXED = 0,
@@ -155,7 +161,7 @@ struct REDTBLEntry {
         EDGE = 0, LEVEL = 1
     };
 
-    Kernel::InterruptDispatcher::Interrupt vector;
+    InterruptVector vector;
     DeliveryMode deliveryMode;
     DestinationMode destinationMode;
     DeliveryStatus deliveryStatus; // RO
@@ -165,7 +171,9 @@ struct REDTBLEntry {
     uint8_t destination;
 
     REDTBLEntry() = default;
+
     explicit REDTBLEntry(uint64_t registerValue);
+
     explicit operator uint64_t() const;
 };
 

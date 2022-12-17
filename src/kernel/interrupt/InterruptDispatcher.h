@@ -40,14 +40,12 @@ struct InterruptFrame;
  * @date HHU, 2018
  */
 class InterruptDispatcher {
-
 public:
-    // NOTE: These don't correspong to GSI order but to IRQ order (that's why ACPI Interrupt Source Override exists)
     enum Interrupt : uint8_t {
         DEVICE_NOT_AVAILABLE = 7,
         PAGEFAULT = 14,
 
-        // PIC interrupts
+        // PIC compatible interrupts
         PIT = 32,
         KEYBOARD = 33,
         COM2 = 35,
@@ -63,6 +61,8 @@ public:
         FPU = 45,
         PRIMARY_ATA = 46,
         SECONDARY_ATA = 47,
+
+        // Some other interrupts supported by IO APICs
 
         SYSTEM_CALL = 0x86,
 
