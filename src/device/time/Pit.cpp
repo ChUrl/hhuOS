@@ -16,15 +16,13 @@
  */
 
 #include "kernel/service/InterruptService.h"
-#include "device/interrupt/Pic.h"
 #include "Pit.h"
 #include "kernel/system/System.h"
-#include "device/interrupt/InterruptModel.h"
+#include "device/interrupt/Apic.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "kernel/log/Logger.h"
 #include "kernel/service/SchedulerService.h"
 #include "lib/util/base/Exception.h"
-#include "device/interrupt/LApic.h"
 #include "device/interrupt/ApicTimer.h"
 
 namespace Kernel {
@@ -56,19 +54,18 @@ void Pit::setInterruptRate(uint16_t divisor) {
 void Pit::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::PIT, *this);
-    interruptService.allowHardwareInterrupt(GlobalSystemInterrupt::PIT);
+    interruptService.allowHardwareInterrupt(InterruptSource::PIT);
 }
 
 void Pit::trigger(const Kernel::InterruptFrame &frame) {
     time.addNanoseconds(timerInterval);
 
-    // TODO: Configure this in the PIT class?
     // Don't use PIT for scheduling when APIC Timer is enabled
-    if (!InterruptModel::hasApic()) {
+    // if (!InterruptModel::isApic()) {
         if (time.toMilliseconds() % yieldInterval == 0) {
             Kernel::System::getService<Kernel::SchedulerService>().yield();
         }
-    }
+    // }
 }
 
 Util::Time::Timestamp Pit::getTime() {

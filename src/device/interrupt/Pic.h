@@ -19,7 +19,7 @@
 #define __PIC_include__
 
 #include <cstdint>
-#include "InterruptModel.h"
+#include "Apic.h"
 #include "device/cpu/IoPort.h"
 
 namespace Device {
@@ -60,58 +60,58 @@ public:
      * Unmask an interrupt number in the corresponding PIC. If this is done,
      * all interrupts with this number will be passed to the CPU.
      *
-     * @param gsi The number of the interrupt to activated
+     * @param interruptSource The number of the interrupt to activated
      */
-    void allow(GlobalSystemInterrupt gsi);
+    void allow(InterruptSource interruptSource);
 
     /**
      * Forbid an interrupt. If this is done, the interrupt is masked out
      * and every interrupt with this number that is thrown will be
      * suppressed and not arrive the CPU.
      *
-     * @param gsi The number of the interrupt to deactivate
+     * @param interruptSource The number of the interrupt to deactivate
      */
-    void forbid(GlobalSystemInterrupt gsi);
+    void forbid(InterruptSource interruptSource);
 
     /**
      * Get the state of this interrupt - whether it is masked out or not.
      *
-     * @param gsi The number of the interrupt
+     * @param interruptSource The number of the interrupt
      * @return true, if the interrupt is disabled
      */
-    bool status(GlobalSystemInterrupt gsi);
+    bool status(InterruptSource interruptSource);
 
     /**
      * Send an end of interrupt signal to the corresponding PIC.
      *
-     * @param gsi The number of the interrupt for which to send an EOI
+     * @param interruptSource The number of the interrupt for which to send an EOI
      */
-    void sendEndOfInterrupt(GlobalSystemInterrupt gsi);
+    void sendEndOfInterrupt(InterruptSource interruptSource);
 
     /**
      * Check if a spurious interrupt has occurred.
      *
      * @return true, if a spurious interrupt has occurred
      */
-    bool isSpurious(GlobalSystemInterrupt gsi);
+    bool isSpurious(InterruptSource interruptSource);
 
 private:
 
     /**
      * Get the PIC's data port for the specified interrupt.
      *
-     * @param gsi The interrupt
+     * @param interruptSource The interrupt
      * @return The corresponding PIC's data port
      */
-    const IoPort& getDataPort(GlobalSystemInterrupt gsi);
+    const IoPort& getDataPort(InterruptSource interruptSource);
 
     /**
      * Get the mask for the specified interrupt.
      *
-     * @param gsi The interrupt
+     * @param interruptSource The interrupt
      * @return The interrupt's mask
      */
-    static uint8_t getMask(GlobalSystemInterrupt gsi);
+    static uint8_t getMask(InterruptSource interruptSource);
 
 private:
 

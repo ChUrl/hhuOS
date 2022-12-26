@@ -130,10 +130,10 @@ void SerialPort::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     if (port == COM1 || port == COM3) {
         interruptService.assignInterrupt(Kernel::InterruptDispatcher::COM1, *this);
-        interruptService.allowHardwareInterrupt(GlobalSystemInterrupt::COM1);
+        interruptService.allowHardwareInterrupt(InterruptSource::COM1);
     } else {
         Kernel::System::getService<Kernel::InterruptService>().assignInterrupt(Kernel::InterruptDispatcher::COM2, *this);
-        interruptService.allowHardwareInterrupt(GlobalSystemInterrupt::COM2);
+        interruptService.allowHardwareInterrupt(InterruptSource::COM2);
     }
 
     interruptRegister.writeByte(0x01);

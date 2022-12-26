@@ -18,7 +18,7 @@
 #ifndef HHUOS_INTERRUPTSERVICE_H
 #define HHUOS_INTERRUPTSERVICE_H
 
-#include "device/interrupt/InterruptModel.h"
+#include "device/interrupt/Apic.h"
 #include <cstdint>
 
 #include "device/interrupt/Pic.h"
@@ -56,20 +56,19 @@ public:
 
     void dispatchInterrupt(const InterruptFrame &frame);
 
-    void allowHardwareInterrupt(Device::GlobalSystemInterrupt gsi);
+    void allowHardwareInterrupt(Device::InterruptSource interruptSource);
 
-    void forbidHardwareInterrupt(Device::GlobalSystemInterrupt gsi);
+    void forbidHardwareInterrupt(Device::InterruptSource interruptSource);
 
-    // TODO: Change to use GSI
     void sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt);
 
-    // TODO: Change to use GSI
     bool checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt);
 
     static const constexpr uint8_t SERVICE_ID = 1;
 
 private:
 
+    // TODO: Instance LApic/IoApic and put here?
     Device::Pic pic;
     InterruptDispatcher dispatcher;
 };

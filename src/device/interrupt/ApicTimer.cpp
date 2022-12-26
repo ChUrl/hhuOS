@@ -1,5 +1,5 @@
 #include "ApicTimer.h"
-#include "LApic.h"
+#include "LocalApic.h"
 #include "ApicRegisterInterface.h"
 #include "kernel/service/TimeService.h"
 #include "lib/util/async/Thread.h"
@@ -10,15 +10,15 @@ bool ApicTimer::initialized = false;
 Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
 ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInterval(yieldInterval) {
-    LApic::ensureInitialized();
+    LocalApic::ensureInitialized();
 
     auto &timeService = Kernel::System::getService<Kernel::TimeService>();
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
-    LApic::writeDoubleWord(LApic::TIMER_DIVIDE, Divide::BY_1); // TODO: What divider?
-    LVTEntry lvtEntry = LApic::readLVT(LApic::TIMER);
+    LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, Divide::BY_1); // TODO: What divider?
+    LVTEntry lvtEntry = LocalApic::readLVT(LocalApic::TIMER);
     lvtEntry.timerMode = LVTEntry::TimerMode::PERIODIC;
-    LApic::writeLVT(LApic::TIMER, lvtEntry);
+    LocalApic::writeLVT(LocalApic::TIMER, lvtEntry);
 
     setInterruptRate(timerInterval);
     initialized = true;
@@ -27,7 +27,7 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInte
 void ApicTimer::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::APICTIMER, *this);
-    LApic::allow(LApic::TIMER); // TODO: This in interruptservice?
+    LocalApic::allow(LocalApic::TIMER); // TODO: This in interruptservice?
 }
 
 void ApicTimer::trigger(const Kernel::InterruptFrame &frame) {
@@ -51,12 +51,12 @@ Util::Time::Timestamp ApicTimer::getTime() {
 //          based on the number of counts occured in the end - start interval
 // TODO: Check CPUID if the timer stops in deep C-States (IA-32 10.5.4)
 void ApicTimer::setInterruptRate(uint32_t interval) {
-    LApic::writeDoubleWord(LApic::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter, writing starts timer
+    LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter, writing starts timer
     Util::Async::Thread::sleep(Util::Time::Timestamp::ofMilliseconds(interval / 1000000));
-    uint32_t initialCount = 0xFFFFFFFF - LApic::readDoubleWord(LApic::TIMER_CURRENT);
+    uint32_t initialCount = 0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT);
 
     log.info("Setting APIC Timer interval to [%uns] (Initial count: [%u])", interval, initialCount);
-    LApic::writeDoubleWord(LApic::TIMER_INITIAL, initialCount);
+    LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, initialCount);
 
     timerInterval = interval;
 }

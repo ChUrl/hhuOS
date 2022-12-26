@@ -1,18 +1,18 @@
 #include "ErrorInterruptHandler.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
-#include "LApic.h"
+#include "LocalApic.h"
 
 namespace Device {
 
 void ErrorInterruptHandler::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::ERROR, *this);
-    LApic::allow(LApic::ERROR); // TODO: This in interruptservice
+    LocalApic::allow(LocalApic::ERROR); // TODO: This in interruptservice
 }
 
 void ErrorInterruptHandler::trigger(const Kernel::InterruptFrame &frame) {
-    LApic::handleErrors();
+    LocalApic::handleErrors();
 }
 
 }

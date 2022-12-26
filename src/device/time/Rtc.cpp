@@ -70,7 +70,7 @@ void Rtc::plugin() {
 
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::RTC, *this);
-    interruptService.allowHardwareInterrupt(GlobalSystemInterrupt::RTC);
+    interruptService.allowHardwareInterrupt(InterruptSource::RTC);
 
     Cmos::enableNmi();
     Cpu::enableInterrupts();

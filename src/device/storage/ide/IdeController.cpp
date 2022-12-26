@@ -349,9 +349,9 @@ void IdeController::initializeAvailableControllers() {
 void IdeController::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::PRIMARY_ATA, *this);
-    interruptService.allowHardwareInterrupt(GlobalSystemInterrupt::PRIMARY_ATA);
+    interruptService.allowHardwareInterrupt(InterruptSource::PRIMARY_ATA);
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::SECONDARY_ATA, *this);
-    interruptService.allowHardwareInterrupt(GlobalSystemInterrupt::SECONDARY_ATA);
+    interruptService.allowHardwareInterrupt(InterruptSource::SECONDARY_ATA);
 }
 
 void IdeController::trigger(const Kernel::InterruptFrame &frame) {
