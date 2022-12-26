@@ -1,10 +1,8 @@
 #ifndef __IOAPIC_include__
 #define __IOAPIC_include__
 
-#include <cstdint>
 #include "ApicRegisterInterface.h"
-#include "InterruptModel.h"
-#include "kernel/interrupt/InterruptDispatcher.h"
+#include "Apic.h"
 #include "kernel/log/Logger.h"
 
 namespace Device {
@@ -19,6 +17,13 @@ namespace Device {
 
 // NOTE: SAPIC/IO SAPIC is not supported
 
+/**
+ * @brief This class implements the IO APIC hardware interrupt controller.
+ *
+ * In contrast to the local APIC the IO APIC is not part of the CPU but of the system chipset (not exclusively).
+ * It receives hardware interrupts from external devices (comparable with the PIC) and forwards them to local APICs.
+ * This class allows the system to interact with multiple IO APICs.
+ */
 class IoApic {
 public:
     IoApic() = delete; // Static class
@@ -33,52 +38,65 @@ public:
 
     ~IoApic() = delete; // Static class
 
-
+    /**
+     * @brief Check if all IO APICs are initialized.
+     */
     static bool isInitialized();
 
     /**
-     * Initialize the IO APIC.
+     * @brief Ensure that all IO APICs are initialized.
+     */
+    static void ensureInitialized();
+
+    /**
+     * @brief Initialize all existing IO APICs.
      *
      * Must not be called with enabled interrupts.
      */
     static void initialize();
 
     /**
-     * Unmask an interrupt in the IO APIC.
-     * The interrupt will be sent to the current CPU's local APIC.
+     * @brief Unmask an interrupt in the IO APIC.
      *
+     * The IO APIC responsible for this GSI will be selected and the interrupt will be sent
+     * to the current CPU's local APIC.
      * Must not be called with enabled interrupts.
      *
-     * @param gsi The number of the interrupt to activated
+     * @param interruptSource The GSI to unmask
      */
-    static void allow(GlobalSystemInterrupt gsi);
+    static void allow(InterruptSource interruptSource);
 
     /**
-     * Mask an interrupt in the local APIC.
+     * @brief Mask an interrupt in the local APIC.
      *
+     * The IO APIC responsible for this GSI will be selected.
      * Must not be called with enabled interrupts.
      *
-     * @param gsi The number of the interrupt to deactivate
+     * @param interruptSource The GSI to mask
      */
-    static void forbid(GlobalSystemInterrupt gsi);
+    static void forbid(InterruptSource interruptSource);
 
     /**
-     * Get the state of this interrupt - whether it is masked out or not.
+     * @brief Get the state of this interrupt - whether it is masked out or not.
      *
-     * @param gsi The IO APIC GSI
-     * @return True, if the interrupt is disabled
+     * The IO APIC responsible for this GSI will be selected.
+     *
+     * @param interruptSource The GSI
+     * @return True, if the GSI is masked
      */
-    static bool status(GlobalSystemInterrupt gsi);
+    static bool status(InterruptSource interruptSource);
 
     /**
-     * Send an end of interrupt signal to the IO APIC.
+     * @brief Send an end of interrupt signal.
+     *
+     * The EOI will be sent to the IO APIC responsible for the GSI.
      * Only compatible with IO APIC version >= 0x20.
      * (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
      * (Intel ICH5 Datasheet Chapter 9.5.5)
      *
-     * @param vector The vector number of the interrupt that is marked as completed
+     * @param vector The vector number of the interrupt that will be marked as completed
      */
-    static void sendEndOfInterrupt(Kernel::InterruptDispatcher::Interrupt vector);
+    static void sendEndOfInterrupt(InterruptVector vector);
 
 private:
     // Offsets, Intel ICH5 Datasheet Chapter 9.5.1 Table 144
@@ -99,32 +117,32 @@ private:
 
 private:
     /**
-     * Throws an exception if the IO APIC's MMIO region hasn't been initialized.
+     * @brief Ensure that the IO APIC's MMIO region has been initialized.
      */
-    static void verifyMMIO(IoApicInformation *ioapic);
+    static void ensureMMIO(IoApicInformation *ioapic);
 
     /**
-     * Throws an exception if the supplied GSI is handled by a different IO APIC than the supplied.
+     * @brief Ensure that the GSI belongs to the supplied IO APIC.
      */
-    static void verifyGSI(IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
+    static void ensureValidGsi(IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
 
     /**
-     * Initialize a single IO APIC.
-     *
-     * @param id The ID of the IO APIC to initialize
+     * @brief Initialize a single IO APIC.
      */
     static void initializeController(IoApicInformation *ioapic);
 
     /**
-     * Allocate the memory region used to access a IO APIC's registers.
+     * @brief Allocate the memory region used to access a single IO APIC's registers.
      */
     static void initializeMMIORegion(IoApicInformation *ioapic);
 
     /**
-     * Marks every entry in the redirection table as edge-triggered, active high, masked,
-     * physical destination mode to local APIC of the current CPU and fixed delivery mode.
-     * Sets vector numbers to corresponding InterruptDispatcher::Interrupt.
+     * @brief Initialize a single IO APIC's interrupt redirection table.
      *
+     * Marks entries for all supported interrupt inputs of the IO APIC as edge-triggered, active high,
+     * masked, physical destination mode to local APIC of the current CPU and fixed delivery mode,
+     * unless trigger mode or pin polarity are overridden.
+     * Sets vector numbers to corresponding InterruptDispatcher::Interrupt.
      * Must not be called with enabled interrupts.
      */
     static void initializeREDTBL(IoApicInformation *ioapic);
@@ -133,18 +151,36 @@ private:
     // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
     // NOTE: Affects the registers of the passed IO APIC
 
-    [[nodiscard]] static uint32_t readDoubleWord(IoApicInformation*ioapic, uint8_t reg);
+    template<typename T>
+    [[nodiscard]] static T readDirectRegister(IoApicInformation *ioapic, Register reg);
 
-    static void writeDoubleWord(IoApicInformation *ioapic, uint8_t reg, uint32_t val);
+    template<typename T>
+    static void writeDirectRegister(IoApicInformation *ioapic, Register reg, T val);
+
+    [[nodiscard]] static uint32_t readDoubleWord(IoApicInformation *ioapic, Indirect_Register reg);
+
+    static void writeDoubleWord(IoApicInformation *ioapic, Indirect_Register reg, uint32_t val);
 
     [[nodiscard]] static REDTBLEntry readREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
 
-    static void writeREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi, REDTBLEntry redtbl);
+    static void writeREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl);
 
 private:
     static bool initialized;
-    static Kernel::Logger log;
+    static Kernel::Logger log; // TODO: Remove?
 };
+
+template<typename T>
+T IoApic::readDirectRegister(IoApicInformation *ioapic, Register reg) {
+    ensureMMIO(ioapic);
+    return *reinterpret_cast<volatile T *>(ioapic->virtAddress + reg);
+}
+
+template<typename T>
+void IoApic::writeDirectRegister(IoApicInformation *ioapic, Register reg, T val) {
+    ensureMMIO(ioapic);
+    *reinterpret_cast<volatile T *>(ioapic->virtAddress + reg) = val;
+}
 
 }
 
