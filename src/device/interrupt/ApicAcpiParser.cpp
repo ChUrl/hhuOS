@@ -1,10 +1,10 @@
-#include "InterruptModelAcpiParser.h"
+#include "ApicAcpiParser.h"
 #include "device/power/acpi/Acpi.h"
 #include "lib/util/cpu/CpuId.h"
 
 namespace Device {
 
-LPlatformInformation *InterruptModelAcpiParser::parseLPlatformInformation() {
+LPlatformInformation *ApicAcpiParser::parseLPlatformInformation() {
     auto *info = new LPlatformInformation;
     auto features = Util::Cpu::CpuId::getCpuFeatures();
     for (auto feature: features) {
@@ -22,11 +22,8 @@ LPlatformInformation *InterruptModelAcpiParser::parseLPlatformInformation() {
         return nullptr;
     }
 
-    info->address = Acpi::getTable<Acpi::Madt>("APIC")->localApicAddress;
-
-    if (info->address == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find local APIC address!");
-    }
+    auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
+    info->address = madt->localApicAddress;
 
     Util::Data::ArrayList<const Acpi::ProcessorLocalApic *> processorLocalApics;
     Util::Data::ArrayList<const Acpi::LocalApicNMI *> nmiConfigurations;
@@ -67,7 +64,7 @@ LPlatformInformation *InterruptModelAcpiParser::parseLPlatformInformation() {
     return info;
 }
 
-IoPlatformInformation *InterruptModelAcpiParser::parseIoPlatformInformation() {
+IoPlatformInformation *ApicAcpiParser::parseIoPlatformInformation() {
     bool apicSupported = false;
     auto features = Util::Cpu::CpuId::getCpuFeatures();
     for (auto feature: features) {
@@ -113,8 +110,8 @@ IoPlatformInformation *InterruptModelAcpiParser::parseIoPlatformInformation() {
     for (auto *override: interruptSourceOverrides) {
         info->irqOverrides.add(new IoInterruptOverride{
                 .bus = override->bus,
-                .gsi = static_cast<GlobalSystemInterrupt>(override->source),
-                .inti = static_cast<InterruptInput>(override->globalSystemInterrupt),
+                .source = static_cast<InterruptSource>(override->source),
+                .target = static_cast<GlobalSystemInterrupt>(override->globalSystemInterrupt),
                 .polarity = override->flags & Acpi::IntiFlag::ACTIVE_HIGH
                             ? REDTBLEntry::PinPolarity::HIGH
                             : REDTBLEntry::PinPolarity::LOW,
@@ -141,11 +138,11 @@ IoPlatformInformation *InterruptModelAcpiParser::parseIoPlatformInformation() {
 
 // ! Private member functions start here
 
-bool InterruptModelAcpiParser::hasACPI10() {
+bool ApicAcpiParser::hasACPI10() {
     return Acpi::isAvailable() && Acpi::getRsdp().revision == 0;
 }
 
-uint8_t InterruptModelAcpiParser::acpiIdToApicId(LPlatformInformation *info, uint8_t uid) {
+uint8_t ApicAcpiParser::acpiIdToApicId(LPlatformInformation *info, uint8_t uid) {
     if (info->lapics.size() == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApicInformation not initialized!");
     }

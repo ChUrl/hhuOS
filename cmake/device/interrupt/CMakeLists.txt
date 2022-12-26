@@ -20,12 +20,12 @@ cmake_minimum_required(VERSION 3.14)
 target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/interrupt/Pic.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/ModelSpecificRegister.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/LApic.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/IoApic.cpp
+
+        ${HHUOS_SRC_DIR}/device/interrupt/Apic.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/ApicAcpiParser.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/ApicRegisterInterface.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/LocalApic.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/ApicTimer.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/ErrorInterruptHandler.cpp
-
-        ${HHUOS_SRC_DIR}/device/interrupt/ApicRegisterInterface.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/InterruptModel.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/InterruptModelAcpiParser.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/IoApic.cpp
         )

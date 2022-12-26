@@ -1,22 +1,22 @@
-#ifndef HHUOS_INTERRUPTMODELACPIPARSER_H
-#define HHUOS_INTERRUPTMODELACPIPARSER_H
+#ifndef HHUOS_APICACPIPARSER_H
+#define HHUOS_APICACPIPARSER_H
 
-#include "InterruptModelStructures.h"
+#include "ApicStructures.h"
 
 namespace Device {
 
 /**
  * @brief This class provides functions to parse information about the InterruptModel from ACPI 1.0.
  */
-class InterruptModelAcpiParser {
+class ApicAcpiParser {
 public:
-    InterruptModelAcpiParser() = delete;
+    ApicAcpiParser() = delete;
 
-    InterruptModelAcpiParser(const InterruptModelAcpiParser &copy) = delete;
+    ApicAcpiParser(const ApicAcpiParser &copy) = delete;
 
-    InterruptModelAcpiParser &operator=(const InterruptModelAcpiParser &copy) = delete;
+    ApicAcpiParser &operator=(const ApicAcpiParser &copy) = delete;
 
-    ~InterruptModelAcpiParser() = delete;
+    ~ApicAcpiParser() = delete;
 
     /**
      * @brief Initialize a LPlatformInformation structure with information parsed from ACPI 1.0.
@@ -42,4 +42,4 @@ private:
 
 }
 
-#endif //HHUOS_INTERRUPTMODELACPIPARSER_H
+#endif //HHUOS_APICACPIPARSER_H

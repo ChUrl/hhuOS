@@ -3,10 +3,12 @@
 
 #include "ModelSpecificRegister.h"
 #include "ApicRegisterInterface.h"
-#include "InterruptModel.h"
+#include "Apic.h"
 #include "kernel/log/Logger.h"
 
 namespace Device {
+
+// TODO: The LApic doesn't support individual relocation for SMP systems
 
 /**
  * @brief This class implements the local APIC hardware interrupt controller.
@@ -16,7 +18,7 @@ namespace Device {
  * and interrupts signalled over the system or APIC bus (IPIs and IO APIC interrupts).
  * Using this class mostly means interacting with the local APIC of the current CPU core.
  */
-class LApic {
+class LocalApic {
     friend class ApicTimer; // ApicTimer is configured by using LApic registers
     friend class IoApic; // IoApic disables EOI suppression if it has no EOI register
 
@@ -25,10 +27,10 @@ public:
      * @brief This lists the local APIC's local interrupt pins.
      *
      * Every individual local APIC has these pins, they are completely separate from
-     * the usual (PIC/IO APIC) hardware InterruptInputs.
+     * the usual (PIC/IO APIC) hardware interrupt inputs.
      */
     enum Lint : uint8_t {
-        CMCI = 0, // TODO: Might not exist (check xv6)
+        CMCI = 0, // TODO: Might not exist
         TIMER = 1,
         THERMAL = 2,
         PERFORMANCE = 3,
@@ -38,17 +40,17 @@ public:
     };
 
 public:
-    LApic() = delete; // Static class
+    LocalApic() = delete; // Static class
 
-    LApic(const LApic &copy) = delete;
+    LocalApic(const LocalApic &copy) = delete;
 
-    LApic &operator=(const LApic &copy) = delete;
+    LocalApic &operator=(const LocalApic &copy) = delete;
 
-    LApic(LApic &&move) = delete;
+    LocalApic(LocalApic &&move) = delete;
 
-    LApic &operator=(LApic &&move) = delete;
+    LocalApic &operator=(LocalApic &&move) = delete;
 
-    ~LApic() = delete; // Static class
+    ~LocalApic() = delete; // Static class
 
 
     // TODO: Differentiate between different cores (put initialized in the LApicConfiguration struct?)
@@ -156,11 +158,6 @@ private:
     [[nodiscard]] static uint8_t getId();
 
     /**
-     * @brief Allocate the memory region used to access the local APIC's registers.
-     */
-    static void initializeMMIORegion();
-
-    /**
      * @brief Initialize the local APIC of an additional AP (Application Processor).
      *
      * (MultiProcessor Specification Appendix B.4)
@@ -168,6 +165,11 @@ private:
      * Must not be called with enabled interrupts.
      */
     static void initializeApplicationProcessor(LApicInformation *lapic);
+
+    /**
+     * @brief Allocate the memory region used to access the local APIC's registers.
+     */
+    static void initializeMMIORegion();
 
     /**
      * @brief Initialize a single local APIC.
@@ -191,14 +193,15 @@ private:
     // NOTE: Reading and writing local APIC's registers
     // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
     // NOTE: Only registers of currently running CPU will be affected
-
-    [[nodiscard]] static uint32_t readDoubleWord(Register reg);
-
-    static void writeDoubleWord(Register reg, uint32_t val);
+    // NOTE: The LApicInformation has to be passed anyway since every LApic could have a different MMIO address
 
     [[nodiscard]] static MSREntry readBaseMSR();
 
     static void writeBaseMSR(const MSREntry &msrEntry);
+
+    [[nodiscard]] static uint32_t readDoubleWord(Register reg);
+
+    static void writeDoubleWord(Register reg, uint32_t val);
 
     [[nodiscard]] static SVREntry readSVR();
 
@@ -215,7 +218,7 @@ private:
 private:
     static bool initialized;
     static Device::ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR
-    static Kernel::Logger log;
+    static Kernel::Logger log; // TODO: Remove?
 
     static Register lintRegs[7]; // Register offsets for the LINTs
 };
