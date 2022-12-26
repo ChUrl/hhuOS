@@ -52,11 +52,11 @@
 
 // NOTE: My stuff
 #include "device/interrupt/ApicTimer.h"
-#include "device/interrupt/LApic.h"
+#include "device/interrupt/LocalApic.h"
 #include "device/interrupt/IoApic.h"
 #include "device/interrupt/ErrorInterruptHandler.h"
-#include "device/interrupt/InterruptModel.h"
-#include "device/interrupt/InterruptArchitectureACPI10.h"
+#include "device/interrupt/Apic.h"
+#include "device/interrupt/ApicAcpiParser.h"
 
 namespace Kernel {
 class Service;
@@ -104,7 +104,7 @@ void System::initializeSystem() {
     auto *interruptService = new InterruptService();
     registerService(InterruptService::SERVICE_ID, interruptService);
     registerService(MemoryService::SERVICE_ID, memoryService);
-    memoryService->plugin(); // NOTE: PAGEFAULT, doesn't need to be hardware allowed
+    memoryService->plugin();
     log.info("Welcome to hhuOS!");
     log.info("Memory management has been initialized");
 
@@ -117,23 +117,23 @@ void System::initializeSystem() {
 
     initialized = true;
 
-    Device::InterruptModel::initialize<Device::InterruptArchitectureACPI10>();
+    Device::Apic::initialize<Device::ApicAcpiParser>();
 
     // TODO: Should I switch from static to completely instance to enforce initialization?
     //       - "Resource Acquisition Is Initialization"?
     //       - But I would need to make sure the initialization is only performed once...
-    if (Device::InterruptModel::hasApic()) {
+    if (Device::Apic::apicSupported()) {
         log.info("APIC support detected -> Initializing Local APIC + IO APIC");
-        Device::LApic::initialize();
-
-        auto *lapicErrorHandler = new Device::ErrorInterruptHandler();
-        lapicErrorHandler->plugin();
-
+        Device::LocalApic::initialize();
         Device::IoApic::initialize();
+
+        // TODO: Disabled for debug
+        // auto *lapicErrorHandler = new Device::ErrorInterruptHandler();
+        // lapicErrorHandler->plugin();
     }
 
     // Print interrupt architecture information
-    Device::InterruptModel::dumpPlatformInformation();
+    Device::Apic::dumpPlatformInformation();
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
@@ -159,15 +159,12 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
-    if (Device::InterruptModel::hasApic()) {
-        log.info("APIC support detected -> Initializing APIC Timer");
-        auto* apictimer = new Device::ApicTimer();
-        apictimer->plugin();
-
-        // TODO: APIC Timer calibration requires timeservice (sleep), so timeservice can't be initialized with APIC timer
-        //       and the PIT can't be disabled
-        // interruptService->forbidHardwareInterrupt(Device::Pic::Interrupt::PIT);
-    }
+    // if (Device::InterruptModel::isApic()) {
+        // TODO: Disabled for debugging, also reenabled PIT scheduling
+        // log.info("APIC support detected -> Initializing APIC Timer");
+        // auto* apictimer = new Device::ApicTimer();
+        // apictimer->plugin();
+    // }
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));
