@@ -16,7 +16,7 @@
  */
 
 #include "InterruptService.h"
-#include "device/interrupt/LApic.h"
+#include "device/interrupt/LocalApic.h"
 #include "device/interrupt/IoApic.h"
 
 namespace Kernel {
@@ -31,59 +31,53 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
     dispatcher.dispatch(frame);
 }
 
-void InterruptService::allowHardwareInterrupt(Device::GlobalSystemInterrupt gsi) {
-    if (Device::InterruptModel::hasApic()) {
-        Device::IoApic::allow(gsi);
+void InterruptService::allowHardwareInterrupt(Device::InterruptSource interruptSource) {
+    if (Device::Apic::isInitialized()) {
+        Device::IoApic::allow(interruptSource);
     } else {
-        pic.allow(gsi);
+        pic.allow(interruptSource);
     }
 }
 
-void InterruptService::forbidHardwareInterrupt(Device::GlobalSystemInterrupt gsi) {
-    if (Device::InterruptModel::hasApic()) {
-        Device::IoApic::forbid(gsi);
+void InterruptService::forbidHardwareInterrupt(Device::InterruptSource interruptSource) {
+    if (Device::Apic::isInitialized()) {
+        Device::IoApic::forbid(interruptSource);
     } else {
-        pic.forbid(gsi);
+        pic.forbid(interruptSource);
     }
 }
 
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (Device::InterruptModel::hasApic()) {
-        // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
-        // TODO: Only disable NMI pin, not both LINTs
-        // EOI for local interrupts, NMI doesn't have to be EOI'd
-        if (interrupt >= InterruptDispatcher::CMCI && interrupt <= InterruptDispatcher::ERROR
-            && interrupt != InterruptDispatcher::LINT0 && interrupt != InterruptDispatcher::LINT1) {
-            Device::LApic::sendEndOfInterrupt();
-        }
-
-        // TODO: Exclude SMI, Init, Startup, Init-Deassert somehow?
-        // TODO: <= IO8 depends on how many GSIs are supported by the system
-        if (interrupt >= InterruptDispatcher::PIT
-        && interrupt <= static_cast<Kernel::InterruptDispatcher::Interrupt>(Device::InterruptModel::getGlobalGsiMax())) {
-            Device::LApic::sendEndOfInterrupt(); // TODO: Do IO APIC GSIs need local APIC EOI?
+    if (Device::Apic::isInitialized()) {
+        // TODO: local/IoApic should not accept InterruptVectors? Only GSIs...
+        //       (decouple hardware from InterruptDispatcher)
+        // TODO: NMI and other stuff (SMI, etc...) should be excluded.
+        //       I think NMI and the others do not send a valid vector number (should send 0),
+        //       if that is the case nothing has to be done here as 0 is not a local/external interrupt.
+        //       This needs to be checked though (that the vectors are set correctly to 0)
+        if (Device::Apic::isExternalInterrupt(interrupt)) {
+            Device::LocalApic::sendEndOfInterrupt(); // Both LApic and IO APIC need EOIs for external interrupts
             Device::IoApic::sendEndOfInterrupt(interrupt);
+        } else if (Device::Apic::isLocalInterrupt(interrupt)) {
+            Device::LocalApic::sendEndOfInterrupt();
         }
     }
 
-    else if (interrupt >= InterruptDispatcher::PIT && interrupt <= InterruptDispatcher::SECONDARY_ATA) {
-        pic.sendEndOfInterrupt(static_cast<Device::GlobalSystemInterrupt>(interrupt));
+    if (!Device::Apic::isInitialized() && interrupt - 32 <= Device::InterruptSource::SECONDARY_ATA) {
+        pic.sendEndOfInterrupt(static_cast<Device::InterruptSource>(interrupt - 32));
     }
 }
 
 bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (Device::InterruptModel::hasApic()) {
-        // NOTE: The APIC always reports vector number set in the SVR for spurious interrupts (0xFF)
+    if (Device::Apic::isInitialized()) {
         return interrupt == InterruptDispatcher::SPURIOUS;
     }
 
-    // NOTE: When using the PIC the spurious interrupt has the lowest priority of the corresponding chip (7 or 15)
     else if (interrupt != InterruptDispatcher::LPT1 && interrupt != InterruptDispatcher::SECONDARY_ATA) {
         return false;
     }
 
-    // NOTE: If an interrupt (number 7 or 15) happens (PIC) but the interrupt flag in ISR is not set, it is spurious
-    return pic.isSpurious(static_cast<Device::GlobalSystemInterrupt>(interrupt));
+    return pic.isSpurious(static_cast<Device::InterruptSource>(interrupt - 32));
 }
 
 }

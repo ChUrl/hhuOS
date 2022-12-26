@@ -31,9 +31,9 @@
 #include "lib/util/collection/List.h"
 #include "lib/util/io/stream/PrintStream.h"
 #include "lib/util/base/System.h"
-#include "device/interrupt/LApic.h"
 #include "device/interrupt/IoApic.h"
-#include "device/interrupt/InterruptModel.h"
+#include "InterruptDispatcher.h"
+#include "device/interrupt/Apic.h"
 
 namespace Kernel {
 
@@ -92,21 +92,13 @@ uint32_t InterruptDispatcher::getInterruptDepth() const {
 }
 
 bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrupt slot) {
-    if (Device::InterruptModel::hasApic()) {
-        // Local APIC interrupts
-        if (slot >= CMCI && slot <= SPURIOUS) {
-            return false;
-        }
-
-        // Additional IO APIC interrupts
-        if (slot >= PIT
-        && slot <= static_cast<Kernel::InterruptDispatcher::Interrupt>(Device::InterruptModel::getGlobalGsiMax())) {
-            return false;
-        }
+    // Apic interrupts
+    if (Device::Apic::isInitialized() && (Device::Apic::isLocalInterrupt(slot) || Device::Apic::isExternalInterrupt(slot))) {
+        return false;
     }
 
-    // Hardware (PIC) interrupts
-    if (slot >= PIT && slot <= SECONDARY_ATA) {
+    // Pic interrupts
+    if (!Device::Apic::isInitialized() && slot - 32 <= Device::InterruptSource::SECONDARY_ATA) {
         return false;
     }
 
