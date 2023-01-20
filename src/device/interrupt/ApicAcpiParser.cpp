@@ -1,29 +1,14 @@
 #include "ApicAcpiParser.h"
-#include "device/power/acpi/Acpi.h"
-#include "lib/util/cpu/CpuId.h"
 
 namespace Device {
 
-LPlatformInformation *ApicAcpiParser::parseLPlatformInformation() {
-    auto *info = new LPlatformInformation;
-    auto features = Util::Cpu::CpuId::getCpuFeatures();
-    for (auto feature: features) {
-        if (feature == Util::Cpu::CpuId::CpuFeature::APIC) {
-            info->xApicSupported = true;
-        }
-        if (feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
-            info->x2ApicSupported = true;
-        }
-    }
+// TODO: Move this into ApicAcpiInterface?
 
-    // Abort if APIC/ACPI support not present
-    if (!(info->xApicSupported || info->x2ApicSupported) || !hasACPI10()) {
-        delete info;
-        return nullptr;
-    }
+void ApicAcpiParser::parseLocalPlatformInformation(LocalApicPlatform *localPlatform) {
+    ensureAcpi10();
 
     auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
-    info->address = madt->localApicAddress;
+    localPlatform->physAddress = madt->localApicAddress;
 
     Util::Data::ArrayList<const Acpi::ProcessorLocalApic *> processorLocalApics;
     Util::Data::ArrayList<const Acpi::LocalApicNMI *> nmiConfigurations;
@@ -38,77 +23,47 @@ LPlatformInformation *ApicAcpiParser::parseLPlatformInformation() {
     }
 
     for (auto *lapic: processorLocalApics) {
-        info->lapics.add(new LApicInformation{
-                .acpiId = lapic->acpiProcessorId,
+        localPlatform->localApics.add(new LocalApicInformation{
                 .id = lapic->apicId,
                 .enabled = static_cast<bool>(lapic->flags & 0x1),
         });
     }
 
-    for (auto *lnmi: nmiConfigurations) {
-        info->lnmis.add(new LNMIConfiguration{
-                .acpiId = lnmi->acpiProcessorId,
-                .id = static_cast<uint8_t>(lnmi->acpiProcessorId == 0xFF
-                                           ? 0xFF
-                                           : acpiIdToApicId(info, lnmi->acpiProcessorId)),
-                .polarity = lnmi->flags & Acpi::IntiFlag::ACTIVE_HIGH
+    for (auto *nmiConfiguration: nmiConfigurations) {
+        auto *lnmi = new LocalApicNMI{
+                .polarity = nmiConfiguration->flags & Acpi::IntiFlag::ACTIVE_HIGH
                             ? LVTEntry::PinPolarity::HIGH
                             : LVTEntry::PinPolarity::LOW,
-                .triggerMode = lnmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED
+                .triggerMode = nmiConfiguration->flags & Acpi::IntiFlag::EDGE_TRIGGERED
                                ? LVTEntry::TriggerMode::EDGE
                                : LVTEntry::TriggerMode::LEVEL,
-                .lint = lnmi->localApicLint
-        });
-    }
+                .lint = nmiConfiguration->localApicLint
+        };
 
-    return info;
-}
+        // NOTE: This assumes that every local Apic only has one non maskable interrupt source
 
-IoPlatformInformation *ApicAcpiParser::parseIoPlatformInformation() {
-    bool apicSupported = false;
-    auto features = Util::Cpu::CpuId::getCpuFeatures();
-    for (auto feature: features) {
-        if (feature == Util::Cpu::CpuId::CpuFeature::APIC || feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
-            apicSupported = true;
+        // Assign the nmi to either all CPUs or one specific CPU
+        if (nmiConfiguration->acpiProcessorId == 0xFF) {
+            // 0xFF means all CPUs
+            for (auto *localApic: localPlatform->localApics) {
+                localApic->nmi = lnmi;
+            }
+        } else {
+            auto apicId = acpiIdToApicId(processorLocalApics, nmiConfiguration->acpiProcessorId);
+            auto *localInfo = getLocalApicInfo(localPlatform->localApics, apicId);
+            localInfo->nmi = lnmi;
         }
     }
+}
 
-    if (!apicSupported || !hasACPI10()) {
-        return nullptr;
-    }
+void ApicAcpiParser::parseIoPlatformInformation(IoApicPlatform *ioPlatform) {
+    ensureAcpi10();
 
-    auto *info = new IoPlatformInformation;
-
-    Util::Data::ArrayList<const Acpi::IoApic *> ioApics;
     Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> interruptSourceOverrides;
-    Util::Data::ArrayList<const Acpi::NMISource *> nmiConfigurations;
-    Acpi::getApicStructures(&ioApics, Acpi::IO_APIC);
     Acpi::getApicStructures(&interruptSourceOverrides, Acpi::INTERRUPT_SOURCE_OVERRIDE);
-    Acpi::getApicStructures(&nmiConfigurations, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
 
-    if (ioApics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find IO APIC(s)!");
-    }
-
-    for (auto *ioapic: ioApics) {
-        info->ioapics.add(new IoApicInformation{
-                .id = ioapic->ioApicId,
-                .address = ioapic->ioApicAddress,
-                .gsiBase = static_cast<GlobalSystemInterrupt>(ioapic->globalSystemInterruptBase)
-        });
-    }
-
-    /*
-     * The .gsi/.inti assigned values seem switched, but I think ACPI is confusing regarding overrides:
-     * Example when PIT (IRQ0) is mapped to IO APIC interrupt input 2:
-     * The ACPI "Source" field would be 0, the ACPI "Global System Interrupt" field would be 2.
-     * This makes working with GSIs slightly difficult, because to determine what GSI2 actually is, one would have
-     * to look at the ACPI override structures.
-     * Instead, I treat the GSIs as fixed (GSI0 will always be the PIT) and map them to an
-     * IO APIC interrupt input instead.
-     */
     for (auto *override: interruptSourceOverrides) {
-        info->irqOverrides.add(new IoInterruptOverride{
+        ioPlatform->overrides.add(new IoApicIrqOverride{
                 .bus = override->bus,
                 .source = static_cast<InterruptSource>(override->source),
                 .target = static_cast<GlobalSystemInterrupt>(override->globalSystemInterrupt),
@@ -120,9 +75,32 @@ IoPlatformInformation *ApicAcpiParser::parseIoPlatformInformation() {
                                : REDTBLEntry::TriggerMode::LEVEL
         });
     }
+}
+
+void ApicAcpiParser::parseIoApicInformation(Util::Data::ArrayList<IoApicInformation *> *ioInfos) {
+    ensureAcpi10();
+
+    Util::Data::ArrayList<const Acpi::IoApic *> ioApics;
+    Acpi::getApicStructures(&ioApics, Acpi::IO_APIC);
+
+    if (ioApics.size() == 0) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any I/O APIC!");
+    }
+
+    for (auto *ioapic: ioApics) {
+        ioInfos->add(new IoApicInformation{
+                .id = ioapic->ioApicId,
+                .physAddress = ioapic->ioApicAddress,
+                .gsiBase = static_cast<GlobalSystemInterrupt>(ioapic->globalSystemInterruptBase)
+        });
+    }
+
+    Util::Data::ArrayList<const Acpi::NMISource *> nmiConfigurations;
+    Acpi::getApicStructures(&nmiConfigurations, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
 
     for (auto *ionmi: nmiConfigurations) {
-        info->ionmis.add(new IoNMIConfiguration{
+        auto *ioInfo = getIoApicInfo(*ioInfos, static_cast<GlobalSystemInterrupt>(ionmi->globalSystemInterrupt));
+        ioInfo->nmi = new IoApicNMI{
                 .polarity = ionmi->flags & Acpi::IntiFlag::ACTIVE_HIGH
                             ? REDTBLEntry::PinPolarity::HIGH
                             : REDTBLEntry::PinPolarity::LOW,
@@ -130,30 +108,50 @@ IoPlatformInformation *ApicAcpiParser::parseIoPlatformInformation() {
                                ? REDTBLEntry::TriggerMode::EDGE
                                : REDTBLEntry::TriggerMode::LEVEL,
                 .gsi = static_cast<GlobalSystemInterrupt>(ionmi->globalSystemInterrupt)
-        });
+        };
     }
-
-    return info;
 }
 
-// ! Private member functions start here
-
-bool ApicAcpiParser::hasACPI10() {
-    return Acpi::isAvailable() && Acpi::getRsdp().revision == 0;
+void ApicAcpiParser::ensureAcpi10() {
+    if (!(Acpi::isAvailable() && Acpi::getRsdp().revision == 0)) {
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "Acpi 1.0 is not available!");
+    }
 }
 
-uint8_t ApicAcpiParser::acpiIdToApicId(LPlatformInformation *info, uint8_t uid) {
-    if (info->lapics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApicInformation not initialized!");
-    }
-
-    for (auto *lapic: info->lapics) {
-        if (lapic->acpiId == uid) {
-            return lapic->id;
+uint8_t
+ApicAcpiParser::acpiIdToApicId(const Util::Data::ArrayList<const Acpi::ProcessorLocalApic *> &lapics, uint8_t acpiUid) {
+    for (auto *lapic: lapics) {
+        if (lapic->acpiProcessorId == acpiUid) {
+            // 0xFF means all CPUs
+            return lapic->apicId;
         }
     }
 
     Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find local APIC matching UID!");
+}
+
+LocalApicInformation *ApicAcpiParser::getLocalApicInfo(const Util::Data::ArrayList<LocalApicInformation *> &infos,
+                                                       uint8_t id) {
+    for (auto *info: infos) {
+        if (info->id == id) {
+            return info;
+        }
+    }
+
+    return nullptr;
+}
+
+// TODO: Test this
+IoApicInformation *
+ApicAcpiParser::getIoApicInfo(const Util::Data::ArrayList<IoApicInformation *> &infos, GlobalSystemInterrupt gsi) {
+    auto *ioInfo = infos.get(0);
+    for (auto *info: infos) {
+        // Find the largest gsiBase that is still smaller than the gsi
+        if (gsi >= info->gsiBase && info->gsiBase > ioInfo->gsiBase) {
+            ioInfo = info;
+        }
+    }
+    return ioInfo;
 }
 
 }

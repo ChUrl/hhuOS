@@ -1,7 +1,8 @@
 #ifndef HHUOS_APICACPIPARSER_H
 #define HHUOS_APICACPIPARSER_H
 
-#include "ApicStructures.h"
+#include "ApicAcpiInterface.h"
+#include "device/power/acpi/Acpi.h"
 
 namespace Device {
 
@@ -18,26 +19,26 @@ public:
 
     ~ApicAcpiParser() = delete;
 
-    /**
-     * @brief Initialize a LPlatformInformation structure with information parsed from ACPI 1.0.
-     */
-    static LPlatformInformation *parseLPlatformInformation();
+    static void parseLocalPlatformInformation(LocalApicPlatform *localPlatform);
 
-    /**
-     * @brief Initialize an IoPlatformInformation structure with information parsed from ACPI 1.0.
-     */
-    static IoPlatformInformation *parseIoPlatformInformation();
+    static void parseIoPlatformInformation(IoApicPlatform *ioPlatform);
+
+    static void parseIoApicInformation(Util::Data::ArrayList<IoApicInformation *> *ioInfos);
 
 private:
     /**
-     * @brief Check if the system supports ACPI 1.0.
+     * @brief Ensure the system supports ACPI 1.0.
      */
-    static bool hasACPI10();
+    static void ensureAcpi10();
 
     /**
-     * @brief Lookup an APIC id by an ACPI APIC id.
+     * @brief Lookup an APIC id by an ACPI APIC uid.
      */
-    static uint8_t acpiIdToApicId(LPlatformInformation *info, uint8_t uid);
+    static uint8_t acpiIdToApicId(const Util::Data::ArrayList<const Acpi::ProcessorLocalApic *> &lapics, uint8_t acpiUid);
+
+    static LocalApicInformation *getLocalApicInfo(const Util::Data::ArrayList<LocalApicInformation *> &infos, uint8_t id);
+
+    static IoApicInformation *getIoApicInfo(const Util::Data::ArrayList<IoApicInformation *> &infos, GlobalSystemInterrupt gsi);
 };
 
 }
