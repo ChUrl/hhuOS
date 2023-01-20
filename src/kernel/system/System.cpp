@@ -117,23 +117,21 @@ void System::initializeSystem() {
 
     initialized = true;
 
-    Device::Apic::initialize<Device::ApicAcpiParser>();
-
     // TODO: Should I switch from static to completely instance to enforce initialization?
     //       - "Resource Acquisition Is Initialization"?
     //       - But I would need to make sure the initialization is only performed once...
-    if (Device::Apic::apicSupported()) {
+    if (Device::Apic::isSupported()) {
         log.info("APIC support detected -> Initializing Local APIC + IO APIC");
-        Device::LocalApic::initialize();
-        Device::IoApic::initialize();
+        Device::Apic::initialize<Device::ApicAcpiParser>();
 
         // TODO: Disabled for debug
         // auto *lapicErrorHandler = new Device::ErrorInterruptHandler();
         // lapicErrorHandler->plugin();
     }
 
+    // TODO:
     // Print interrupt architecture information
-    Device::Apic::dumpPlatformInformation();
+    // Device::Apic::dumpPlatformInformation();
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
