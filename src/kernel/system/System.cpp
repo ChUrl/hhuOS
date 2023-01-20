@@ -54,9 +54,10 @@
 #include "device/interrupt/ApicTimer.h"
 #include "device/interrupt/LocalApic.h"
 #include "device/interrupt/IoApic.h"
-#include "device/interrupt/ErrorInterruptHandler.h"
+#include "device/interrupt/ApicErrorInterruptHandler.h"
 #include "device/interrupt/Apic.h"
 #include "device/interrupt/ApicAcpiParser.h"
+#include "lib/util/async/Thread.h"
 
 namespace Kernel {
 class Service;
@@ -121,17 +122,13 @@ void System::initializeSystem() {
     //       - "Resource Acquisition Is Initialization"?
     //       - But I would need to make sure the initialization is only performed once...
     if (Device::Apic::isSupported()) {
-        log.info("APIC support detected -> Initializing Local APIC + IO APIC");
+        log.info("APIC support detected -> Initializing Local APIC + I/O APIC");
         Device::Apic::initialize<Device::ApicAcpiParser>();
+        Device::Apic::printDebugInfo();
 
-        // TODO: Disabled for debug
-        // auto *lapicErrorHandler = new Device::ErrorInterruptHandler();
-        // lapicErrorHandler->plugin();
+        auto *lapicErrorHandler = new Device::ApicErrorInterruptHandler();
+        lapicErrorHandler->plugin();
     }
-
-    // TODO:
-    // Print interrupt architecture information
-    // Device::Apic::dumpPlatformInformation();
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
@@ -157,12 +154,10 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
-    // if (Device::InterruptModel::isApic()) {
-        // TODO: Disabled for debugging, also reenabled PIT scheduling
-        // log.info("APIC support detected -> Initializing APIC Timer");
-        // auto* apictimer = new Device::ApicTimer();
-        // apictimer->plugin();
-    // }
+    if (Device::Apic::isInitialized()) {
+        log.info("Running APIC detected -> Initializing APIC Timer");
+        Device::Apic::initializeTimer();
+    }
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));
@@ -180,6 +175,7 @@ void System::initializeSystem() {
 
     // Protect kernel code
     kernelAddressSpace->getPageDirectory().unsetPageFlags(___WRITE_PROTECTED_START__, ___WRITE_PROTECTED_END__, Paging::READ_WRITE);
+
 }
 
 void *System::allocateEarlyMemory(uint32_t size) {
