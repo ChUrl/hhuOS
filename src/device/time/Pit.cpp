@@ -58,14 +58,15 @@ void Pit::plugin() {
 }
 
 void Pit::trigger(const Kernel::InterruptFrame &frame) {
+    // Although the Pit is not used for scheduling when the ApicTimer is used, it is still used for the systemtime
     time.addNanoseconds(timerInterval);
 
     // Don't use PIT for scheduling when APIC Timer is enabled
-    // if (!InterruptModel::isApic()) {
+    if (!Apic::isTimerInitialized()) {
         if (time.toMilliseconds() % yieldInterval == 0) {
             Kernel::System::getService<Kernel::SchedulerService>().yield();
         }
-    // }
+    }
 }
 
 Util::Time::Timestamp Pit::getTime() {
