@@ -8,14 +8,14 @@ namespace Device {
  * IA-32 Architecture Manual Chapter 10.12.1
  */
 
-MSREntry::MSREntry(uint64_t registerValue) {
+BaseMSREntry::BaseMSREntry(uint64_t registerValue) {
     isBSP = registerValue & (1 << 8);
     isX2Apic = registerValue & (1 << 10);
     isHWEnabled = registerValue & (1 << 11);
     baseField = registerValue & 0xFFFFF000;
 }
 
-MSREntry::operator uint64_t() const {
+BaseMSREntry::operator uint64_t() const {
     return static_cast<uint64_t>(isBSP) << 8
            | static_cast<uint64_t>(isX2Apic) << 10
            | static_cast<uint64_t>(isHWEnabled) << 11
