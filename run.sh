@@ -20,7 +20,7 @@ readonly CONST_QEMU_BIN_I386="qemu-system-i386"
 readonly CONST_QEMU_BIN_X86_64="qemu-system-x86_64"
 readonly CONST_QEMU_MACHINE_PC="pc"
 readonly CONST_QEMU_MACHINE_PC_KVM="pc,accel=kvm,kernel-irqchip=split"
-readonly CONST_QEMU_CPU_I386="base,+fpu,+tsc,+cmov,+fxsr,+mmx,+sse,+apic"
+readonly CONST_QEMU_CPU_I386="base,+fpu,+tsc,+cmov,+fxsr,+mmx,+sse,+apic,+x2apic" # +x2apic not supported via TCG
 readonly CONST_QEMU_CPU_X86_64="qemu64"
 readonly CONST_QEMU_DEFAULT_RAM="128M"
 readonly CONST_QEMU_BIOS_PC=""
@@ -162,18 +162,15 @@ parse_cpu() {
 parse_debug() {
   local port=$1
 
-  # NOTE: Added tui enable and breakpoint
   echo "set architecture i386
       set disassembly-flavor intel
-      target remote 127.0.0.1:${port}
-      tui enable
-      break GatesOfHell::enter()" >/tmp/gdbcommands."$(id -u)"
+      target remote 127.0.0.1:${port}" >/tmp/gdbcommands."$(id -u)"
 
   QEMU_GDB_PORT="${port}"
 }
 
 start_gdb() {
-  gdb -x "/tmp/gdbcommands.$(id -u)" "loader/towboot/hhuOS.bin" # NOTE: Changed boot to towboot
+  gdb -x "/tmp/gdbcommands.$(id -u)" "loader/boot/hhuOS.bin"
   exit $?
 }
 
