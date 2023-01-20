@@ -33,7 +33,7 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
 
 void InterruptService::allowHardwareInterrupt(Device::InterruptSource interruptSource) {
     if (Device::Apic::isInitialized()) {
-        Device::IoApic::allow(interruptSource);
+        Device::Apic::allowExternalInterrupt(interruptSource);
     } else {
         pic.allow(interruptSource);
     }
@@ -41,7 +41,7 @@ void InterruptService::allowHardwareInterrupt(Device::InterruptSource interruptS
 
 void InterruptService::forbidHardwareInterrupt(Device::InterruptSource interruptSource) {
     if (Device::Apic::isInitialized()) {
-        Device::IoApic::forbid(interruptSource);
+        Device::Apic::forbidExternalInterrupt(interruptSource);
     } else {
         pic.forbid(interruptSource);
     }
@@ -56,8 +56,7 @@ void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interru
         //       if that is the case nothing has to be done here as 0 is not a local/external interrupt.
         //       This needs to be checked though (that the vectors are set correctly to 0)
         if (Device::Apic::isExternalInterrupt(interrupt)) {
-            Device::LocalApic::sendEndOfInterrupt(); // Both LApic and IO APIC need EOIs for external interrupts
-            Device::IoApic::sendEndOfInterrupt(interrupt);
+            Device::Apic::sendExternalEndOfInterrupt(interrupt);
         } else if (Device::Apic::isLocalInterrupt(interrupt)) {
             Device::LocalApic::sendEndOfInterrupt();
         }
