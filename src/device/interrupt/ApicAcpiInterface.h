@@ -33,8 +33,9 @@ struct LocalApicInformation {
 struct LocalApicPlatform {
     bool isX2Apic; ///< @brief The xApic architecture uses MMIO for register access, x2Apic uses MSRs
     uint8_t version;
-    uint32_t physAddress = 0;
-    uint32_t virtAddress = 0;
+    uint32_t physAddress = 0; // xApic MMIO
+    uint32_t virtAddress = 0; // xApic MMIO
+    uint32_t msrAddress = 0x800; // x2Apic
     Util::Data::ArrayList<LocalApicInformation *> localApics;
 
     [[nodiscard]] LocalApicInformation *getLocalApicInformation(uint8_t id) const;
