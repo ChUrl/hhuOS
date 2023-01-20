@@ -284,7 +284,6 @@ void LocalApic::writeLVT(LocalInterrupt lint, const LVTEntry &lvtEntry) {
     writeDoubleWord(lintRegs[lint], static_cast<uint32_t>(lvtEntry));
 }
 
-// NOTE: In x2APIC mode this could be read atomically (rdmsr)
 ICREntry LocalApic::readICR() {
     Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
     uint32_t low = readDoubleWord(ICR_LOW);
@@ -293,7 +292,6 @@ ICREntry LocalApic::readICR() {
     return static_cast<ICREntry>(low | high << 32);
 }
 
-// NOTE: In x2APIC mode this could be written atomically (wrmsr)
 void LocalApic::writeICR(const ICREntry &icrEntry) {
     auto val = static_cast<uint64_t>(icrEntry);
     Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up

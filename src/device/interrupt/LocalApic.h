@@ -24,6 +24,7 @@ class LocalApic {
 
 public:
     // TODO: Move this to its own file?
+    //       Maybe "Interrupt" or sth. that contains all types (LocalInterrupt, InterruptSource, InterruptVector...)?
     /**
      * @brief This lists the local APIC's local interrupt pins.
      *
@@ -84,9 +85,6 @@ private:
     static bool supportsX2Apic();
 
     static bool isInitialized();
-
-    // TODO: SMP
-    // static bool isSmpInitialized();
 
     /**
      * @brief Ensure that all local APICs are initialized.
@@ -204,7 +202,6 @@ private:
 
 private:
     static bool initialized;
-    // static bool smpInitialized;
     static LocalApicPlatform *localPlatform; ///< @brief General information valid for all local APICs
 
     static ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (unique although static)

@@ -32,11 +32,6 @@ void Apic::ensureInitialized() {
     }
 }
 
-// TODO: SMP
-// bool Apic::isSMPInitialized() {
-//     return LocalApic::isSmpInitialized();
-// }
-
 void Apic::initializeTimer() {
     apicTimer = new Device::ApicTimer();
     apicTimer->plugin();
@@ -102,10 +97,8 @@ void Apic::printDebugInfo() {
         }
     }
 
-    log.info("Using [%s] for scheduling", ApicTimer::isInitialized() ? "ApicTimer" : "Pit");
+    log.info("Using %s for scheduling", ApicTimer::isInitialized() ? "ApicTimer" : "Pit");
 }
-
-// ! Local Apic
 
 bool Apic::isLocalInterrupt(InterruptVector vector) {
     return vector >= InterruptVector::CMCI && vector <= InterruptVector::ERROR;
@@ -114,8 +107,6 @@ bool Apic::isLocalInterrupt(InterruptVector vector) {
 void Apic::sendLocalEndOfInterrupt() {
     LocalApic::sendEndOfInterrupt();
 }
-
-// ! Io Apic
 
 bool Apic::isExternalInterrupt(InterruptVector vector) {
     return static_cast<GlobalSystemInterrupt>(vector - 32) <= IoApic::ioPlatform->globalMaxGsi;
@@ -147,8 +138,6 @@ void Apic::sendExternalEndOfInterrupt(InterruptVector vector) {
     LocalApic::sendEndOfInterrupt();
     ioApic.sendEndOfInterrupt(vector);
 }
-
-// ! Private functions
 
 IoApic &Apic::getIoApic(GlobalSystemInterrupt gsi) {
     ensureInitialized();

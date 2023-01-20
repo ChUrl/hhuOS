@@ -55,13 +55,7 @@ public:
 
     static bool isTimerInitialized();
 
-    // TODO: SMP
-    // static void initializeSMP();
-    // static bool isSMPInitialized();
-
     static void printDebugInfo();
-
-    // NOTE: The APIC interrupt model requires differentiation between local and external interrupts.
 
     /**
      * @brief Check if an interrupt vector belongs to a local interrupt (Local APIC).

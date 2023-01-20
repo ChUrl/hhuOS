@@ -8,21 +8,13 @@
 
 namespace Device {
 
-// TODO: Crosscheck references to the original IO APIC Datasheet with Intel ICH5 Datasheet
-
-// TODO: Find the chapter where this is described in some manual (the range is mentioned in ICH5,
-//       but I remember to have seen it somewhere else aswell...)
-// NOTE: Valid IO APIC REDTBL vectors range between 0x10 and 0xFE
-
-// NOTE: SAPIC/IO SAPIC is not supported
-
 /**
- * @brief This class implements the IO APIC hardware interrupt controller.
+ * @brief This class implements the I/O APIC hardware interrupt controller.
  *
- * In contrast to the local APIC the IO APIC is not part of the CPU, but of the system chipset (not exclusively).
+ * In contrast to the local APIC the I/O APIC is not part of the CPU, but of the system chipset.
  * It receives hardware interrupts from external devices (comparable with the PIC) and forwards them to local APICs.
- * This class allows the system to interact with a single IO APIC.
- * To support systems with multiple IO APICs, the Apic "controller" class manages multiple IoApic instances.
+ * This class allows the system to interact with a single I/O APIC.
+ * To support systems with multiple I/O APICs, the Apic "controller" class manages multiple IoApic instances.
  */
 class IoApic {
     friend class Apic;
@@ -58,8 +50,6 @@ private:
     };
 
 private:
-    // NOTE: IoApic does not expose a public interface (Apic class has to be used)
-
     [[nodiscard]] bool isInitialized() const;
 
     /**
@@ -125,10 +115,6 @@ private:
      * Sets vector numbers to corresponding InterruptDispatcher::Interrupt.
      */
     void initializeREDTBL();
-
-    // NOTE: Reading and writing IO APIC's registers.
-    // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
-    // NOTE: Affects the registers of the passed IO APIC
 
     template<typename T>
     [[nodiscard]] T readDirectRegister(Register reg);

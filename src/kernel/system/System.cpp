@@ -118,9 +118,6 @@ void System::initializeSystem() {
 
     initialized = true;
 
-    // TODO: Should I switch from static to completely instance to enforce initialization?
-    //       - "Resource Acquisition Is Initialization"?
-    //       - But I would need to make sure the initialization is only performed once...
     if (Device::Apic::isSupported()) {
         log.info("APIC support detected -> Initializing Local APIC + I/O APIC");
         Device::Apic::initialize<Device::ApicAcpiParser>();

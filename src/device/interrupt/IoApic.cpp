@@ -9,13 +9,6 @@ namespace Device {
 IoApicPlatform *IoApic::ioPlatform = nullptr;
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 
-// TODO: IoApics could be managed through instances...
-//       - Apic would be the class the OS interacts with, Apic manages multiple IoApic instances...
-//       - Apic could get all the interaction methods (EOI, allowExternalInterrupt, allowLocalInterrupt, ...)
-//       - The same could be done for local APIC, but the main part of the functions would stay static,
-//         as local APIC always accesses registers of the current CPU, don't need instancing here?
-//       - Or use instancing to manage the state, like individual relocation?
-
 // TODO: Should I arbitrarily assign IDs like this or does ACPI already contain valid IDs?
 uint8_t ioApicId = 0; // IoApics don't start with an assigned id
 
@@ -80,7 +73,6 @@ bool IoApic::status(GlobalSystemInterrupt gsi) {
 }
 
 // TODO: EOI compatibility mode
-// Intel ICH5 Datasheet Chapter 9.5.5
 void IoApic::sendEndOfInterrupt(InterruptVector vector) {
     writeDirectRegister<uint32_t>(EOI, vector);
 }
@@ -110,6 +102,7 @@ void IoApic::initializeMMIORegion() {
 
 // TODO: I read that GSI0 is typically used for ExtINT (PIC), if I can verify that the GSI0 can always be masked
 //       as I don't support virtual wire
+//       GSI0 is also for NMIs?
 void IoApic::initializeREDTBL() {
     REDTBLEntry redtblEntry{};
     redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::FIXED;
@@ -127,8 +120,7 @@ void IoApic::initializeREDTBL() {
         IoApicIrqOverride *override = ioPlatform->getIoApicIrqOverride(gsi);
         if (override != nullptr) {
             redtblEntry.vector = static_cast<InterruptVector>(override->source + 32);
-            // TODO: This is disabled because ACPI entries are bugged?
-            //       PIT polarity/triggermode are overridden but wrong...
+            // NOTE: This is disabled because some ACPI entries are bugged (for example the PIT redirect)
             // redtblEntry.pinPolarity = override->polarity;
             // redtblEntry.triggerMode = override->triggerMode;
         }
