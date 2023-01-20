@@ -1,17 +1,19 @@
-#include "ErrorInterruptHandler.h"
+#include "ApicErrorInterruptHandler.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
 #include "LocalApic.h"
 
 namespace Device {
 
-void ErrorInterruptHandler::plugin() {
+// TODO: Check how serenityOS does error handling
+
+void ApicErrorInterruptHandler::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::ERROR, *this);
-    LocalApic::allow(LocalApic::ERROR); // TODO: This in interruptservice
+    LocalApic::allow(LocalApic::ERROR);
 }
 
-void ErrorInterruptHandler::trigger(const Kernel::InterruptFrame &frame) {
+void ApicErrorInterruptHandler::trigger(const Kernel::InterruptFrame &frame) {
     LocalApic::handleErrors();
 }
 
