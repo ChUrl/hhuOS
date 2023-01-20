@@ -24,6 +24,8 @@
 #include "device/interrupt/Pic.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "kernel/service/Service.h"
+#include "device/interrupt/InterruptSource.h"
+#include "MemoryService.h"
 
 namespace Kernel {
 class InterruptHandler;
@@ -68,8 +70,7 @@ public:
 
 private:
 
-    // TODO: Instance LApic/IoApic and put here?
-    Device::Pic pic;
+    // TODO: I removed the Pic instance because it is static now, confirm this
     InterruptDispatcher dispatcher;
 };
 

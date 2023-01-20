@@ -16,8 +16,8 @@
  */
 
 #include "InterruptService.h"
-#include "device/interrupt/LocalApic.h"
-#include "device/interrupt/IoApic.h"
+#include "device/interrupt/Apic.h"
+#include "device/interrupt/Pic.h"
 
 namespace Kernel {
 class InterruptHandler;
@@ -35,7 +35,7 @@ void InterruptService::allowHardwareInterrupt(Device::InterruptSource interruptS
     if (Device::Apic::isInitialized()) {
         Device::Apic::allowExternalInterrupt(interruptSource);
     } else {
-        pic.allow(interruptSource);
+        Device::Pic::allow(interruptSource);
     }
 }
 
@@ -43,27 +43,21 @@ void InterruptService::forbidHardwareInterrupt(Device::InterruptSource interrupt
     if (Device::Apic::isInitialized()) {
         Device::Apic::forbidExternalInterrupt(interruptSource);
     } else {
-        pic.forbid(interruptSource);
+        Device::Pic::forbid(interruptSource);
     }
 }
 
 void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
     if (Device::Apic::isInitialized()) {
-        // TODO: local/IoApic should not accept InterruptVectors? Only GSIs...
-        //       (decouple hardware from InterruptDispatcher)
-        // TODO: NMI and other stuff (SMI, etc...) should be excluded.
-        //       I think NMI and the others do not send a valid vector number (should send 0),
-        //       if that is the case nothing has to be done here as 0 is not a local/external interrupt.
-        //       This needs to be checked though (that the vectors are set correctly to 0)
         if (Device::Apic::isExternalInterrupt(interrupt)) {
             Device::Apic::sendExternalEndOfInterrupt(interrupt);
         } else if (Device::Apic::isLocalInterrupt(interrupt)) {
-            Device::LocalApic::sendEndOfInterrupt();
+            Device::Apic::sendLocalEndOfInterrupt();
         }
     }
 
     if (!Device::Apic::isInitialized() && interrupt - 32 <= Device::InterruptSource::SECONDARY_ATA) {
-        pic.sendEndOfInterrupt(static_cast<Device::InterruptSource>(interrupt - 32));
+        Device::Pic::sendEndOfInterrupt(static_cast<Device::InterruptSource>(interrupt - 32));
     }
 }
 
@@ -76,7 +70,7 @@ bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt int
         return false;
     }
 
-    return pic.isSpurious(static_cast<Device::InterruptSource>(interrupt - 32));
+    return Device::Pic::isSpurious(static_cast<Device::InterruptSource>(interrupt - 32));
 }
 
 }
