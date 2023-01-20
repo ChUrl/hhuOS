@@ -2,14 +2,13 @@
 #define __IOAPIC_include__
 
 #include "ApicRegisterInterface.h"
-#include "Apic.h"
+#include "ApicAcpiInterface.h"
+#include "InterruptSource.h"
 #include "kernel/log/Logger.h"
 
 namespace Device {
 
 // TODO: Crosscheck references to the original IO APIC Datasheet with Intel ICH5 Datasheet
-
-// TODO: Do IO APIC GSIs have to be continuous (could there be gaps between IO APICs)?
 
 // TODO: Find the chapter where this is described in some manual (the range is mentioned in ICH5,
 //       but I remember to have seen it somewhere else aswell...)
@@ -20,86 +19,67 @@ namespace Device {
 /**
  * @brief This class implements the IO APIC hardware interrupt controller.
  *
- * In contrast to the local APIC the IO APIC is not part of the CPU but of the system chipset (not exclusively).
+ * In contrast to the local APIC the IO APIC is not part of the CPU, but of the system chipset (not exclusively).
  * It receives hardware interrupts from external devices (comparable with the PIC) and forwards them to local APICs.
- * This class allows the system to interact with multiple IO APICs.
+ * This class allows the system to interact with a single IO APIC.
+ * To support systems with multiple IO APICs, the Apic "controller" class manages multiple IoApic instances.
  */
 class IoApic {
+    friend class Apic;
+
 public:
-    IoApic() = delete; // Static class
+    IoApic() = default;
 
     IoApic(const IoApic &copy) = delete;
 
     IoApic &operator=(const IoApic &copy) = delete;
 
-    IoApic(IoApic &&move) = delete;
+    ~IoApic() = default;
 
-    IoApic &operator=(IoApic &&move) = delete;
-
-    ~IoApic() = delete; // Static class
+    bool isInitialized() const;
 
     /**
-     * @brief Check if all IO APICs are initialized.
+     * @brief Initialize this existing IO APIC.
      */
-    static bool isInitialized();
+    void initialize(IoApicPlatform *platform, IoApicInformation *info);
 
     /**
-     * @brief Ensure that all IO APICs are initialized.
-     */
-    static void ensureInitialized();
-
-    /**
-     * @brief Initialize all existing IO APICs.
+     * @brief Unmask an interrupt in this IO APIC.
      *
-     * Must not be called with enabled interrupts.
+     * @param gsi The GSI to unmask
      */
-    static void initialize();
-
-    /**
-     * @brief Unmask an interrupt in the IO APIC.
-     *
-     * The IO APIC responsible for this GSI will be selected and the interrupt will be sent
-     * to the current CPU's local APIC.
-     * Must not be called with enabled interrupts.
-     *
-     * @param interruptSource The GSI to unmask
-     */
-    static void allow(InterruptSource interruptSource);
+    void allow(GlobalSystemInterrupt gsi);
 
     /**
      * @brief Mask an interrupt in the local APIC.
      *
-     * The IO APIC responsible for this GSI will be selected.
-     * Must not be called with enabled interrupts.
-     *
-     * @param interruptSource The GSI to mask
+     * @param gsi The GSI to mask
      */
-    static void forbid(InterruptSource interruptSource);
+    void forbid(GlobalSystemInterrupt gsi);
 
     /**
      * @brief Get the state of this interrupt - whether it is masked out or not.
      *
-     * The IO APIC responsible for this GSI will be selected.
-     *
-     * @param interruptSource The GSI
+     * @param gsi The GSI
      * @return True, if the GSI is masked
      */
-    static bool status(InterruptSource interruptSource);
+    bool status(GlobalSystemInterrupt gsi);
 
     /**
      * @brief Send an end of interrupt signal.
      *
-     * The EOI will be sent to the IO APIC responsible for the GSI.
      * Only compatible with IO APIC version >= 0x20.
      * (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
      * (Intel ICH5 Datasheet Chapter 9.5.5)
      *
      * @param vector The vector number of the interrupt that will be marked as completed
      */
-    static void sendEndOfInterrupt(InterruptVector vector);
+    void sendEndOfInterrupt(InterruptVector vector);
 
 private:
-    // Offsets, Intel ICH5 Datasheet Chapter 9.5.1 Table 144
+    /**
+     * @brief MMIO accessible registers.
+     */
     enum Register : uint8_t {
         IND = 0x00,
         DAT = 0x10,
@@ -107,7 +87,9 @@ private:
         EOI = 0x40
     };
 
-    // Selectors, IOAPIC Datasheet Chapter 3.0 Table 2
+    /**
+     * @brief Indirectly accessible registers.
+     */
     enum Indirect_Register : uint8_t {
         ID = 0x00, // ID
         VER = 0x01, // Version
@@ -119,22 +101,17 @@ private:
     /**
      * @brief Ensure that the IO APIC's MMIO region has been initialized.
      */
-    static void ensureMMIO(IoApicInformation *ioapic);
+    void ensureMMIO() const;
 
     /**
      * @brief Ensure that the GSI belongs to the supplied IO APIC.
      */
-    static void ensureValidGsi(IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
-
-    /**
-     * @brief Initialize a single IO APIC.
-     */
-    static void initializeController(IoApicInformation *ioapic);
+    void ensureValidGsi(GlobalSystemInterrupt gsi) const;
 
     /**
      * @brief Allocate the memory region used to access a single IO APIC's registers.
      */
-    static void initializeMMIORegion(IoApicInformation *ioapic);
+    void initializeMMIORegion();
 
     /**
      * @brief Initialize a single IO APIC's interrupt redirection table.
@@ -143,43 +120,46 @@ private:
      * masked, physical destination mode to local APIC of the current CPU and fixed delivery mode,
      * unless trigger mode or pin polarity are overridden.
      * Sets vector numbers to corresponding InterruptDispatcher::Interrupt.
-     * Must not be called with enabled interrupts.
      */
-    static void initializeREDTBL(IoApicInformation *ioapic);
+    void initializeREDTBL();
 
     // NOTE: Reading and writing IO APIC's registers.
     // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
     // NOTE: Affects the registers of the passed IO APIC
 
     template<typename T>
-    [[nodiscard]] static T readDirectRegister(IoApicInformation *ioapic, Register reg);
+    [[nodiscard]] T readDirectRegister(Register reg);
 
     template<typename T>
-    static void writeDirectRegister(IoApicInformation *ioapic, Register reg, T val);
+    void writeDirectRegister(Register reg, T val);
 
-    [[nodiscard]] static uint32_t readDoubleWord(IoApicInformation *ioapic, Indirect_Register reg);
+    [[nodiscard]] uint32_t readDoubleWord(Indirect_Register reg);
 
-    static void writeDoubleWord(IoApicInformation *ioapic, Indirect_Register reg, uint32_t val);
+    void writeDoubleWord(Indirect_Register reg, uint32_t val);
 
-    [[nodiscard]] static REDTBLEntry readREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi);
+    [[nodiscard]] REDTBLEntry readREDTBL(GlobalSystemInterrupt gsi);
 
-    static void writeREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl);
+    void writeREDTBL(GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl);
 
 private:
-    static bool initialized;
-    static Kernel::Logger log; // TODO: Remove?
+    bool initialized = false;
+
+    IoApicInformation *ioInfo = nullptr; ///< @brief General information about a single (this) IO APIC
+    static IoApicPlatform *ioPlatform; ///< @brief General information valid for all IO APICs
+
+    static Kernel::Logger log;
 };
 
 template<typename T>
-T IoApic::readDirectRegister(IoApicInformation *ioapic, Register reg) {
-    ensureMMIO(ioapic);
-    return *reinterpret_cast<volatile T *>(ioapic->virtAddress + reg);
+T IoApic::readDirectRegister(Register reg) {
+    ensureMMIO();
+    return *reinterpret_cast<volatile T *>(ioInfo->virtAddress + reg);
 }
 
 template<typename T>
-void IoApic::writeDirectRegister(IoApicInformation *ioapic, Register reg, T val) {
-    ensureMMIO(ioapic);
-    *reinterpret_cast<volatile T *>(ioapic->virtAddress + reg) = val;
+void IoApic::writeDirectRegister(Register reg, T val) {
+    ensureMMIO();
+    *reinterpret_cast<volatile T *>(ioInfo->virtAddress + reg) = val;
 }
 
 }

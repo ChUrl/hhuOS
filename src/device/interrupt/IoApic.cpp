@@ -6,7 +6,7 @@
 
 namespace Device {
 
-bool IoApic::initialized = false;
+IoApicPlatform *IoApic::ioPlatform = nullptr;
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 
 // TODO: IoApics could be managed through instances...
@@ -19,140 +19,113 @@ Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 // TODO: Should I arbitrarily assign IDs like this or does ACPI already contain valid IDs?
 uint8_t ioApicId = 0; // IoApics don't start with an assigned id
 
-bool IoApic::isInitialized() {
+bool IoApic::isInitialized() const {
     return initialized;
 }
 
-void IoApic::ensureInitialized() {
-    if (!initialized) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "IO APICs are not initialized!");
-    }
-}
-
-void IoApic::initialize() {
+// TODO: Need to set the IO APIC ID in the ID register (it's set to 0 on power up)
+//       Copy the value from ACPI? Or is this value 0 aswell?
+void IoApic::initialize(IoApicPlatform *platform, IoApicInformation *info) {
     LocalApic::ensureInitialized();
+    ioPlatform = platform; // This is set multiple times, doesn't matter
+    ioInfo = info;
+    initializeMMIORegion();
 
-    // Initialize all IO APICs of the system
-    for (auto *ioapic: Apic::ioapics()) {
-        initializeController(ioapic);
+    // NOTE: These are overwritten with every IO APIC but this doesn't matter as they are equal
+    // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
+    ioPlatform->version = readDoubleWord(VER);
+    ioPlatform->eoiSupported = ioPlatform->version >= 0x20;
+
+    // NOTE: With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
+    // NOTE: With ICH5 (and other ICHs?) it is always 24 (also ICH5 only has 1 IO APIC)
+    ioInfo->gsiMax = static_cast<GlobalSystemInterrupt>(ioInfo->gsiBase + (readDoubleWord(VER) >> 16));
+    if (ioInfo->gsiMax > ioPlatform->globalMaxGsi) {
+        ioPlatform->globalMaxGsi = ioInfo->gsiMax;
+    }
+
+    initializeREDTBL();
+
+    // Configure NMI if it exists
+    if (ioInfo->nmi != nullptr) {
+        REDTBLEntry redtblEntry{};
+        redtblEntry.vector = static_cast<InterruptVector>(0);
+        redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::NMI;
+        redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL; // TODO: What to set here?
+        redtblEntry.pinPolarity = ioInfo->nmi->polarity;
+        redtblEntry.triggerMode = ioInfo->nmi->triggerMode;
+        redtblEntry.isMasked = false;
+        redtblEntry.destination = LocalApic::getId();
+        writeREDTBL(ioInfo->nmi->gsi, redtblEntry);
     }
 
     initialized = true;
 }
 
-void IoApic::allow(InterruptSource interruptSource) {
-    // The GsiSources don't translate to interrupt inputs 1:1 because of possible remappings
-    GlobalSystemInterrupt gsi = Apic::getInterruptOverrideTarget(interruptSource);
-
-    // We need to find out what IO APIC is responsible for this interrupt
-    IoApicInformation *ioapic = Apic::getIoApicInformation(gsi);
-
-    REDTBLEntry redtblEntry = readREDTBL(ioapic, gsi);
+void IoApic::allow(GlobalSystemInterrupt gsi) {
+    ensureValidGsi(gsi);
+    REDTBLEntry redtblEntry = readREDTBL(gsi);
     redtblEntry.isMasked = false;
-    writeREDTBL(ioapic, gsi, redtblEntry);
+    writeREDTBL(gsi, redtblEntry);
 }
 
-void IoApic::forbid(InterruptSource interruptSource) {
-    GlobalSystemInterrupt gsi = Apic::getInterruptOverrideTarget(interruptSource);
-    IoApicInformation *ioapic = Apic::getIoApicInformation(gsi);
-
-    REDTBLEntry redtblEntry = readREDTBL(ioapic, gsi);
+void IoApic::forbid(GlobalSystemInterrupt gsi) {
+    ensureValidGsi(gsi);
+    REDTBLEntry redtblEntry = readREDTBL(gsi);
     redtblEntry.isMasked = true;
-    writeREDTBL(ioapic, gsi, redtblEntry);
+    writeREDTBL(gsi, redtblEntry);
 }
 
-bool IoApic::status(InterruptSource interruptSource) {
-    GlobalSystemInterrupt gsi = Apic::getInterruptOverrideTarget(interruptSource);
-    IoApicInformation *ioapic = Apic::getIoApicInformation(gsi);
-
-    return readREDTBL(ioapic, gsi).isMasked;
+bool IoApic::status(GlobalSystemInterrupt gsi) {
+    ensureValidGsi(gsi);
+    return readREDTBL(gsi).isMasked;
 }
 
 // TODO: EOI compatibility mode
 // Intel ICH5 Datasheet Chapter 9.5.5
 void IoApic::sendEndOfInterrupt(InterruptVector vector) {
-    // Signal EOI to every IO APIC, otherwise we would have to check beforehand which IO APIC
-    // is responsible for the current ended interrupt
-    for (uint32_t i = 0; i < Apic::ioapics().size(); ++i) {
-        IoApicInformation *ioapic = Apic::ioapics().get(i);
-        writeDirectRegister<uint32_t>(ioapic, EOI, vector);
-    }
+    writeDirectRegister<uint32_t>(EOI, vector);
 }
 
-void IoApic::ensureMMIO(IoApicInformation *ioapic) {
-    if (ioapic->virtAddress == 0) {
+void IoApic::ensureMMIO() const {
+    if (ioInfo->virtAddress == 0) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "IoApic MMIO not initialized!");
     }
 }
 
-void IoApic::ensureValidGsi(IoApicInformation *ioapic, GlobalSystemInterrupt gsi) {
-    if (gsi < ioapic->gsiBase || gsi > ioapic->gsiMax) {
+void IoApic::ensureValidGsi(GlobalSystemInterrupt gsi) const {
+    if (gsi < ioInfo->gsiBase || gsi > ioInfo->gsiMax) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI not handled by this IO APIC!");
     }
 }
 
-// TODO: Need to set the IO APIC ID in the ID register (it's set to 0 on power up)
-//       Copy the value from ACPI? Or is this value 0 aswell?
-void IoApic::initializeController(IoApicInformation *ioapic) {
-    initializeMMIORegion(ioapic);
-
-    // NOTE: These are overwritten with every IO APIC but this doesn't matter as they are equal
-    // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
-    Apic::ioPlatform->version = readDoubleWord(ioapic, VER);
-    Apic::ioPlatform->eoiSupported = Apic::ioPlatform->version >= 0x20;
-
-    // NOTE: With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
-    // NOTE: With ICH5 (and other ICHs?) it is always 24 (also ICH5 only has 1 IO APIC)
-    ioapic->gsiMax = static_cast<GlobalSystemInterrupt>(ioapic->gsiBase + (readDoubleWord(ioapic, VER) >> 16));
-    if (ioapic->gsiMax > Apic::ioPlatform->globalMaxGsi) {
-        Apic::ioPlatform->globalMaxGsi = ioapic->gsiMax;
-    }
-
-    initializeREDTBL(ioapic);
-
-    // Configure NMI if it exists
-    auto *nmi = Apic::getIoNMIConfiguration(ioapic);
-    if (nmi != nullptr) {
-        REDTBLEntry redtblEntry{};
-        redtblEntry.vector = static_cast<InterruptVector>(0);
-        redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::NMI;
-        redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL; // TODO: What to set here?
-        redtblEntry.pinPolarity = nmi->polarity;
-        redtblEntry.triggerMode = nmi->triggerMode;
-        redtblEntry.isMasked = false;
-        redtblEntry.destination = LocalApic::getId();
-        writeREDTBL(ioapic, nmi->gsi, redtblEntry);
-    }
-}
-
-void IoApic::initializeMMIORegion(IoApicInformation *ioapic) {
-    uint32_t physAddress = ioapic->address;
+void IoApic::initializeMMIORegion() {
+    uint32_t physAddress = ioInfo->physAddress;
     uint32_t pageOffset = physAddress % Util::Memory::PAGESIZE;
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
     void *virtAddress = memoryService.mapIO(physAddress, Util::Memory::PAGESIZE, true);
 
     // Account for possible misalignment
-    ioapic->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
+    ioInfo->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
 }
 
 // TODO: I read that GSI0 is typically used for ExtINT (PIC), if I can verify that the GSI0 can always be masked
 //       as I don't support virtual wire
-void IoApic::initializeREDTBL(IoApicInformation *ioapic) {
+void IoApic::initializeREDTBL() {
     REDTBLEntry redtblEntry{};
     redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::FIXED;
     redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL;
     redtblEntry.isMasked = true;
     redtblEntry.destination = LocalApic::getId(); // TODO: Don't send all interrupts to one CPU
 
-    for (uint8_t interruptInput = ioapic->gsiBase; interruptInput <= ioapic->gsiMax; ++interruptInput) {
+    for (uint8_t interruptInput = ioInfo->gsiBase; interruptInput <= ioInfo->gsiMax; ++interruptInput) {
         auto gsi = static_cast<GlobalSystemInterrupt>(interruptInput); // GSIs match interrupt inputs on IO APIC
 
         redtblEntry.vector = static_cast<InterruptVector>(gsi + 32); // If no override exists GSI matches vector
         redtblEntry.pinPolarity = REDTBLEntry::PinPolarity::HIGH;
         redtblEntry.triggerMode = REDTBLEntry::TriggerMode::EDGE;
 
-        auto *override = Apic::getInterruptOverride(gsi);
+        IoApicIrqOverride *override = ioPlatform->getIoApicIrqOverride(gsi);
         if (override != nullptr) {
             redtblEntry.vector = static_cast<InterruptVector>(override->source + 32);
             // TODO: This is disabled because ACPI entries are bugged?
@@ -161,48 +134,48 @@ void IoApic::initializeREDTBL(IoApicInformation *ioapic) {
             // redtblEntry.triggerMode = override->triggerMode;
         }
 
-        writeREDTBL(ioapic, gsi, redtblEntry);
+        writeREDTBL(gsi, redtblEntry);
     }
 }
 
-uint32_t IoApic::readDoubleWord(IoApicInformation *ioapic, Indirect_Register reg) {
-    ensureMMIO(ioapic);
+uint32_t IoApic::readDoubleWord(Indirect_Register reg) {
+    ensureMMIO();
     // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
-    writeDirectRegister<uint8_t>(ioapic, IND, reg);
-    auto val = readDirectRegister<uint32_t>(ioapic, DAT);
+    writeDirectRegister<uint8_t>(IND, reg);
+    auto val = readDirectRegister<uint32_t>(DAT);
     // Cpu::enableInterrupts();
     return val;
 }
 
-void IoApic::writeDoubleWord(IoApicInformation *ioapic, Indirect_Register reg, uint32_t val) {
-    ensureMMIO(ioapic);
+void IoApic::writeDoubleWord(Indirect_Register reg, uint32_t val) {
+    ensureMMIO();
     // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
-    writeDirectRegister<uint8_t>(ioapic, IND, reg);
-    writeDirectRegister<uint32_t>(ioapic, DAT, val);
+    writeDirectRegister<uint8_t>(IND, reg);
+    writeDirectRegister<uint32_t>(DAT, val);
     // Cpu::enableInterrupts();
 }
 
-REDTBLEntry IoApic::readREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi) {
-    ensureValidGsi(ioapic, gsi);
-    auto interruptInput = static_cast<uint8_t>(gsi - ioapic->gsiBase);
+REDTBLEntry IoApic::readREDTBL(GlobalSystemInterrupt gsi) {
+    ensureValidGsi(gsi);
+    auto interruptInput = static_cast<uint8_t>(gsi - ioInfo->gsiBase);
 
     // The first register is the low DW, the second register is the high DW
     // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
-    uint32_t low = readDoubleWord(ioapic, static_cast<Indirect_Register>(REDTBL + 2 * interruptInput));
-    uint64_t high = readDoubleWord(ioapic, static_cast<Indirect_Register>(REDTBL + 2 * interruptInput + 1));
+    uint32_t low = readDoubleWord(static_cast<Indirect_Register>(REDTBL + 2 * interruptInput));
+    uint64_t high = readDoubleWord(static_cast<Indirect_Register>(REDTBL + 2 * interruptInput + 1));
     // Cpu::enableInterrupts();
     return static_cast<REDTBLEntry>(low | high << 32);
 }
 
-void IoApic::writeREDTBL(IoApicInformation *ioapic, GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl) {
-    ensureValidGsi(ioapic, gsi);
-    auto interruptInput = static_cast<uint8_t>(gsi - ioapic->gsiBase);
+void IoApic::writeREDTBL(GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl) {
+    ensureValidGsi(gsi);
+    auto interruptInput = static_cast<uint8_t>(gsi - ioInfo->gsiBase);
 
     // The first register is the low DW, the second register is the high DW
     auto val = static_cast<uint64_t>(redtbl);
     // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
-    writeDoubleWord(ioapic, static_cast<Indirect_Register>(REDTBL + 2 * interruptInput), val & 0xFFFFFFFF);
-    writeDoubleWord(ioapic, static_cast<Indirect_Register>(REDTBL + 2 * interruptInput + 1), val >> 32);
+    writeDoubleWord(static_cast<Indirect_Register>(REDTBL + 2 * interruptInput), val & 0xFFFFFFFF);
+    writeDoubleWord(static_cast<Indirect_Register>(REDTBL + 2 * interruptInput + 1), val >> 32);
     // Cpu::enableInterrupts();
 }
 
