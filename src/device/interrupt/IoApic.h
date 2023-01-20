@@ -36,7 +36,31 @@ public:
 
     ~IoApic() = default;
 
-    bool isInitialized() const;
+private:
+    /**
+     * @brief MMIO accessible registers.
+     */
+    enum Register : uint8_t {
+        IND = 0x00,
+        DAT = 0x10,
+        IRQPA = 0x20,
+        EOI = 0x40
+    };
+
+    /**
+     * @brief Indirectly accessible registers.
+     */
+    enum IndirectRegister : uint8_t {
+        ID = 0x00, // ID
+        VER = 0x01, // Version
+        ARB = 0x02, // Arbitration ID
+        REDTBL = 0x10 // Redirection table base address (24x 64 bit entry)
+    };
+
+private:
+    // NOTE: IoApic does not expose a public interface (Apic class has to be used)
+
+    [[nodiscard]] bool isInitialized() const;
 
     /**
      * @brief Initialize this existing IO APIC.
@@ -76,46 +100,25 @@ public:
      */
     void sendEndOfInterrupt(InterruptVector vector);
 
-private:
     /**
-     * @brief MMIO accessible registers.
-     */
-    enum Register : uint8_t {
-        IND = 0x00,
-        DAT = 0x10,
-        IRQPA = 0x20,
-        EOI = 0x40
-    };
-
-    /**
-     * @brief Indirectly accessible registers.
-     */
-    enum Indirect_Register : uint8_t {
-        ID = 0x00, // ID
-        VER = 0x01, // Version
-        ARB = 0x02, // Arbitration ID
-        REDTBL = 0x10 // Redirection table base address (24x 64 bit entry)
-    };
-
-private:
-    /**
-     * @brief Ensure that the IO APIC's MMIO region has been initialized.
+     * @brief Ensure that this I/O APIC's MMIO region has been initialized.
      */
     void ensureMMIO() const;
 
     /**
-     * @brief Ensure that the GSI belongs to the supplied IO APIC.
+     * @brief Ensure that a GSI belongs to this I/O APIC.
      */
     void ensureValidGsi(GlobalSystemInterrupt gsi) const;
 
     /**
-     * @brief Allocate the memory region used to access a single IO APIC's registers.
+     * @brief Allocate the memory region used to access this I/O APIC's registers.
      */
     void initializeMMIORegion();
 
     /**
-     * @brief Initialize a single IO APIC's interrupt redirection table.
+     * @brief Initialize a this I/O APIC's interrupt redirection table.
      *
+     * TODO: "unless trigger mode or pin polarity are overridden" is not valid as ACPI is bugged...
      * Marks entries for all supported interrupt inputs of the IO APIC as edge-triggered, active high,
      * masked, physical destination mode to local APIC of the current CPU and fixed delivery mode,
      * unless trigger mode or pin polarity are overridden.
@@ -133,9 +136,9 @@ private:
     template<typename T>
     void writeDirectRegister(Register reg, T val);
 
-    [[nodiscard]] uint32_t readDoubleWord(Indirect_Register reg);
+    [[nodiscard]] uint32_t readDoubleWord(IndirectRegister reg);
 
-    void writeDoubleWord(Indirect_Register reg, uint32_t val);
+    void writeDoubleWord(IndirectRegister reg, uint32_t val);
 
     [[nodiscard]] REDTBLEntry readREDTBL(GlobalSystemInterrupt gsi);
 

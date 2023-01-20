@@ -31,13 +31,12 @@ void IoApic::initialize(IoApicPlatform *platform, IoApicInformation *info) {
     ioInfo = info;
     initializeMMIORegion();
 
-    // NOTE: These are overwritten with every IO APIC but this doesn't matter as they are equal
     // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
     ioPlatform->version = readDoubleWord(VER);
     ioPlatform->eoiSupported = ioPlatform->version >= 0x20;
 
-    // NOTE: With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
-    // NOTE: With ICH5 (and other ICHs?) it is always 24 (also ICH5 only has 1 IO APIC)
+    // With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
+    // With ICH5 (and other ICHs?) it is always 24 (also ICH5 only has 1 IO APIC, as all (?) consumer hardware)
     ioInfo->gsiMax = static_cast<GlobalSystemInterrupt>(ioInfo->gsiBase + (readDoubleWord(VER) >> 16));
     if (ioInfo->gsiMax > ioPlatform->globalMaxGsi) {
         ioPlatform->globalMaxGsi = ioInfo->gsiMax;
@@ -138,21 +137,21 @@ void IoApic::initializeREDTBL() {
     }
 }
 
-uint32_t IoApic::readDoubleWord(Indirect_Register reg) {
+uint32_t IoApic::readDoubleWord(IndirectRegister reg) {
     ensureMMIO();
-    // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
+    Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
     writeDirectRegister<uint8_t>(IND, reg);
     auto val = readDirectRegister<uint32_t>(DAT);
-    // Cpu::enableInterrupts();
+    Cpu::enableInterrupts();
     return val;
 }
 
-void IoApic::writeDoubleWord(Indirect_Register reg, uint32_t val) {
+void IoApic::writeDoubleWord(IndirectRegister reg, uint32_t val) {
     ensureMMIO();
-    // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
+    Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
     writeDirectRegister<uint8_t>(IND, reg);
     writeDirectRegister<uint32_t>(DAT, val);
-    // Cpu::enableInterrupts();
+    Cpu::enableInterrupts();
 }
 
 REDTBLEntry IoApic::readREDTBL(GlobalSystemInterrupt gsi) {
@@ -160,10 +159,10 @@ REDTBLEntry IoApic::readREDTBL(GlobalSystemInterrupt gsi) {
     auto interruptInput = static_cast<uint8_t>(gsi - ioInfo->gsiBase);
 
     // The first register is the low DW, the second register is the high DW
-    // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
-    uint32_t low = readDoubleWord(static_cast<Indirect_Register>(REDTBL + 2 * interruptInput));
-    uint64_t high = readDoubleWord(static_cast<Indirect_Register>(REDTBL + 2 * interruptInput + 1));
-    // Cpu::enableInterrupts();
+    Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
+    uint32_t low = readDoubleWord(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput));
+    uint64_t high = readDoubleWord(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1));
+    Cpu::enableInterrupts();
     return static_cast<REDTBLEntry>(low | high << 32);
 }
 
@@ -173,10 +172,10 @@ void IoApic::writeREDTBL(GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl) {
 
     // The first register is the low DW, the second register is the high DW
     auto val = static_cast<uint64_t>(redtbl);
-    // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
-    writeDoubleWord(static_cast<Indirect_Register>(REDTBL + 2 * interruptInput), val & 0xFFFFFFFF);
-    writeDoubleWord(static_cast<Indirect_Register>(REDTBL + 2 * interruptInput + 1), val >> 32);
-    // Cpu::enableInterrupts();
+    Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
+    writeDoubleWord(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput), val & 0xFFFFFFFF);
+    writeDoubleWord(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1), val >> 32);
+    Cpu::enableInterrupts();
 }
 
 }
