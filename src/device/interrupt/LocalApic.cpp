@@ -2,13 +2,15 @@
 #include "kernel/system/System.h"
 #include "kernel/paging/Paging.h"
 #include "device/cpu/Cpu.h"
+#include "lib/util/cpu/CpuId.h"
+#include "Pic.h"
 
 namespace Device {
 
 bool LocalApic::initialized = false;
-bool LocalApic::smpInitialized = false;
+// bool LocalApic::smpInitialized = false;
 LocalApicPlatform *LocalApic::localPlatform = nullptr;
-Device::ModelSpecificRegister LocalApic::ia32ApicBaseMsr = Device::ModelSpecificRegister(0x1B);
+ModelSpecificRegister LocalApic::ia32ApicBaseMsr = ModelSpecificRegister(0x1B);
 LocalApic::Register LocalApic::lintRegs[7] = {static_cast<Register>(0x2F0),
                                               static_cast<Register>(0x320),
                                               static_cast<Register>(0x330),
@@ -18,15 +20,34 @@ LocalApic::Register LocalApic::lintRegs[7] = {static_cast<Register>(0x2F0),
                                               static_cast<Register>(0x370)};
 Kernel::Logger LocalApic::log = Kernel::Logger::get("LocalApic");
 
-// ! Public member functions start here
+bool LocalApic::supportsXApic() {
+    auto features = Util::Cpu::CpuId::getCpuFeatures();
+    for (auto feature: features) {
+        if (feature == Util::Cpu::CpuId::CpuFeature::APIC) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool LocalApic::supportsX2Apic() {
+    auto features = Util::Cpu::CpuId::getCpuFeatures();
+    for (auto feature: features) {
+        if (feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
+            return true;
+        }
+    }
+    return false;
+}
 
 bool LocalApic::isInitialized() {
     return initialized;
 }
 
-bool LocalApic::isSmpInitialized() {
-    return smpInitialized;
-}
+// TODO: SMP
+// bool LocalApic::isSmpInitialized() {
+//     return smpInitialized;
+// }
 
 // TODO: Does not account for multiple cores
 void LocalApic::ensureInitialized() {
@@ -36,23 +57,30 @@ void LocalApic::ensureInitialized() {
 }
 
 void LocalApic::initialize(LocalApicPlatform *platform) {
-    // TODO: Ensure APIC support
+    BaseMSREntry msrEntry = readBaseMSR();
 
-    if (!readBaseMSR().isBSP) {
+    if (!msrEntry.isBSP) {
         // IA32_APIC_BASE_MSR is unique (every core has its own)
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "May only be called by BSP!");
     }
 
     localPlatform = platform;
 
-    localPlatform->isX2Apic = readBaseMSR().isX2Apic;
-    if (!localPlatform->isX2Apic) {
-        // TODO: Does every AP has to call this before initializing its local APIC?
-        //       - Every AP writes/reads the same physical address, but different registers are affected
-        //       - How does paging work in MP? Do I have to mapIO the same physical address multiple times?
-        //         - Probably not if there is only a single kernel address space
-        //       - Every AP has its own MMU, but are page tables shared or individual?
-        //         - It would make sense to keep the kernel addresses only once
+    // Decide which mode to use (xApic or x2Apic)
+    if (supportsX2Apic()) {
+        // QEMU doesn't support emulation of x2Apic via TCG
+        // KVM would be possible, but then GDB can't be attached, so compatibility mode will be chosen
+        log.info("X2Apic support present but not implemented, running in xApic compatibility mode");
+        localPlatform->isX2Apic = false;
+        initializeMMIORegion();
+
+        // log.info("X2Apic support present -> Enabling x2Apic mode");
+        // msrEntry.isX2Apic = true;
+        // writeBaseMSR(msrEntry);
+        // localPlatform->isX2Apic = true;
+    } else {
+        log.info("Running in xApic mode");
+        localPlatform->isX2Apic = false;
         initializeMMIORegion();
     }
 
@@ -93,7 +121,10 @@ void LocalApic::initialize(LocalApicPlatform *platform) {
     // (IA-32 Architecture Manual Chapter 10.8.3.1)
     writeDoubleWord(TPR, 0);
 
-    // TODO: Mask all the PIC interrupts in the PIC aswell (they should still be all masked though...)
+    // Mask all PIC interrupts that have been enabled previously
+    for (uint8_t i = 0; i < 16; ++i) {
+        Pic::forbid(static_cast<InterruptSource>(i));
+    }
 
     initialized = true;
 }
@@ -159,11 +190,9 @@ void LocalApic::handleErrors() {
     writeDoubleWord(ESR, 0);
 }
 
-// ! Private member functions start here
-
 void LocalApic::ensureMMIO() {
     if (localPlatform->virtAddress == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LApic MMIO region not initialized!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LocalApic MMIO region not initialized!");
     }
 }
 
@@ -171,9 +200,6 @@ uint8_t LocalApic::getId() {
     return readDoubleWord(ID) >> 24;
 }
 
-// TODO: Relocation?
-// TODO: How to make sure the memory at the lapic address will not be allocated by something else?
-//       Right now the memory is not allocated through the memory manager, it is just mapped to virtual space...
 void LocalApic::initializeMMIORegion() {
     uint32_t physAddress = localPlatform->physAddress;
     uint32_t pageOffset = physAddress % Util::Memory::PAGESIZE;
@@ -190,14 +216,14 @@ void LocalApic::initializeLVT() {
 
     // Default values
     LVTEntry lvtEntry{};
-    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED, // TODO
+    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED, // TODO: Do I need to care about deliveryMode?
     lvtEntry.pinPolarity = LVTEntry::PinPolarity::HIGH,
     lvtEntry.triggerMode = LVTEntry::TriggerMode::EDGE,
     lvtEntry.isMasked = true;
 
     // Set all the vector numbers
     lvtEntry.vector = Kernel::InterruptDispatcher::CMCI;
-    writeLVT(CMCI, lvtEntry); // TODO: The CMCI might not exist?
+    writeLVT(CMCI, lvtEntry); // TODO: The CMCI might not exist
     lvtEntry.vector = Kernel::InterruptDispatcher::APICTIMER;
     writeLVT(TIMER, lvtEntry);
     lvtEntry.vector = Kernel::InterruptDispatcher::THERMAL;
@@ -212,21 +238,19 @@ void LocalApic::initializeLVT() {
     writeLVT(ERROR, lvtEntry);
 }
 
-// ! Private register member functions start here
-
-// IA-32 Architecture Manual Chapter 10.4.4
-MSREntry LocalApic::readBaseMSR() {
-    return static_cast<MSREntry>(ia32ApicBaseMsr.readQuadWord());
+BaseMSREntry LocalApic::readBaseMSR() {
+    return static_cast<BaseMSREntry>(ia32ApicBaseMsr.readQuadWord()); // Atmoic read
 }
 
-// IA-32 Architecture Manual Chapter 10.4.4
-void LocalApic::writeBaseMSR(const MSREntry &msrEntry) {
+void LocalApic::writeBaseMSR(const BaseMSREntry &msrEntry) {
     ia32ApicBaseMsr.writeQuadWord(static_cast<uint64_t>(msrEntry)); // Atomic write
 }
 
 uint32_t LocalApic::readDoubleWord(Register reg) {
     if (localPlatform->isX2Apic) {
-        // TODO
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "X2Apic mode not supported!");
+        // ModelSpecificRegister msr = getMSR(reg);
+        // return static_cast<uint32_t>(msr.readQuadWord()); // Atomic read
     } else {
         ensureMMIO();
         return *reinterpret_cast<volatile uint32_t *>(localPlatform->virtAddress + reg);
@@ -235,50 +259,53 @@ uint32_t LocalApic::readDoubleWord(Register reg) {
 
 void LocalApic::writeDoubleWord(Register reg, uint32_t val) {
     if (localPlatform->isX2Apic) {
-        // TODO
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "X2Apic mode not supported!");
+        // ModelSpecificRegister msr = getMSR(reg);
+        // msr.writeQuadWord(static_cast<uint64_t>(val)); // Atomic write
     } else {
         ensureMMIO();
         *reinterpret_cast<volatile uint32_t *>(localPlatform->virtAddress + reg) = val;
     }
 }
 
-// IA-32 Architecture Manual Chapter 10.9
 SVREntry LocalApic::readSVR() {
     return static_cast<SVREntry>(readDoubleWord(SVR));
 }
 
-// IA-32 Architecture Manual Chapter 10.9
 void LocalApic::writeSVR(const SVREntry &svrEntry) {
     writeDoubleWord(SVR, static_cast<uint32_t>(svrEntry));
 }
 
-// IA-32 Architecture Manual Chapter 10.5.1
 LVTEntry LocalApic::readLVT(LocalInterrupt lint) {
     return static_cast<LVTEntry>(readDoubleWord(lintRegs[lint]));
 }
 
-// TODO: Check if it is a problem to write to readonly/reserved areas
-// IA-32 Architecture Manual Chapter 10.5.1
 void LocalApic::writeLVT(LocalInterrupt lint, const LVTEntry &lvtEntry) {
     writeDoubleWord(lintRegs[lint], static_cast<uint32_t>(lvtEntry));
 }
 
 // NOTE: In x2APIC mode this could be read atomically (rdmsr)
 ICREntry LocalApic::readICR() {
-    // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
+    Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
     uint32_t low = readDoubleWord(ICR_LOW);
     uint64_t high = readDoubleWord(ICR_HIGH);
-    // Cpu::enableInterrupts();
+    Cpu::enableInterrupts();
     return static_cast<ICREntry>(low | high << 32);
 }
 
 // NOTE: In x2APIC mode this could be written atomically (wrmsr)
 void LocalApic::writeICR(const ICREntry &icrEntry) {
     auto val = static_cast<uint64_t>(icrEntry);
-    // Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
+    Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
     writeDoubleWord(ICR_HIGH, val >> 32);
     writeDoubleWord(ICR_LOW, val & 0xFFFFFFFF); // Writing the low DW sends the IPI
-    // Cpu::enableInterrupts();
+    Cpu::enableInterrupts();
 }
+
+// x2Apic is not supported
+// ModelSpecificRegister LocalApic::getMSR(Register reg) {
+//     // The MSR offsets match the MMIO offsets, but right shifted by 4 bits
+//     return ModelSpecificRegister(localPlatform->msrAddress + (reg >> 4));
+// }
 
 }

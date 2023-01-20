@@ -8,8 +8,6 @@
 
 namespace Device {
 
-// TODO: The LApic doesn't support individual relocation for SMP systems
-
 /**
  * @brief This class implements the local APIC hardware interrupt controller.
  *
@@ -21,9 +19,11 @@ namespace Device {
 class LocalApic {
     friend class Apic;
     friend class ApicTimer; // ApicTimer is configured by using LApic registers
+    friend class ApicErrorInterruptHandler;
+    friend class IoApic;
 
 public:
-    // TODO: Move this and InterruptSource and GlobalSystemInterrupt to same file?
+    // TODO: Move this to its own file?
     /**
      * @brief This lists the local APIC's local interrupt pins.
      *
@@ -49,11 +49,44 @@ public:
 
     ~LocalApic() = delete; // Static class
 
-    // TODO: Make everything private, use Apic class
+private:
+    // Offsets, IA-32 Architecture Manual Chapter 10.4.1
+    // NOTE: Omitted entries already in LApic::Interrupt and ApicTimer
+    enum Register : uint16_t {
+        ID = 0x20, // ID
+        VER = 0x30, // Version
+        TPR = 0x80, // Task Priority Register
+        APR = 0x90, // Arbitration Priority Register
+        PPR = 0xA0, // Processor Priority Register
+        EOI = 0xB0, // End of Interrupt Register
+        RRD = 0xC0, // Remote Read Register
+        LDR = 0xD0, // Logical Destination Register
+        DFR = 0xE0, // Destination Format Register
+        SVR = 0xF0, // Spurious Interrupt Vector Register
+        ISR = 0x100, // In-Service Register (255 bit)
+        TMR = 0x180, // Trigger Mode Register (255 bit)
+        IRR = 0x200, // Interrupt Request Register (255 bit)
+        ESR = 0x280, // Error Status Register
+        ICR_LOW = 0x300, // Interrupt Command Register (64 bit)
+        ICR_HIGH = 0x310,
+
+        // These are located here, instead of in the ApicTimer class, because this class does the register access
+        TIMER_INITIAL = 0x380, // Timer Initial Count Register
+        TIMER_CURRENT = 0x390, // Timer Current Count Register
+        TIMER_DIVIDE = 0x3E0 // Timer Divide Configuration Register
+    };
+
+private:
+    // NOTE: LocalApic does not expose a public interface (Apic class has to be used)
+
+    static bool supportsXApic();
+
+    static bool supportsX2Apic();
 
     static bool isInitialized();
 
-    static bool isSmpInitialized();
+    // TODO: SMP
+    // static bool isSmpInitialized();
 
     /**
      * @brief Ensure that all local APICs are initialized.
@@ -116,35 +149,6 @@ public:
     static void sendEndOfInterrupt();
 
     static void handleErrors();
-
-private:
-    // Offsets, IA-32 Architecture Manual Chapter 10.4.1
-    // NOTE: Omitted entries already in LApic::Interrupt and ApicTimer
-    enum Register : uint16_t {
-        ID = 0x20, // ID
-        VER = 0x30, // Version
-        TPR = 0x80, // Task Priority Register
-        APR = 0x90, // Arbitration Priority Register
-        PPR = 0xA0, // Processor Priority Register
-        EOI = 0xB0, // End of Interrupt Register
-        RRD = 0xC0, // Remote Read Register
-        LDR = 0xD0, // Logical Destination Register
-        DFR = 0xE0, // Destination Format Register
-        SVR = 0xF0, // Spurious Interrupt Vector Register
-        ISR = 0x100, // In-Service Register (255 bit)
-        TMR = 0x180, // Trigger Mode Register (255 bit)
-        IRR = 0x200, // Interrupt Request Register (255 bit)
-        ESR = 0x280, // Error Status Register
-        ICR_LOW = 0x300, // Interrupt Command Register (64 bit)
-        ICR_HIGH = 0x310,
-
-        // These are located here, instead of in the ApicTimer class, because this class does the register access
-        TIMER_INITIAL = 0x380, // Timer Initial Count Register
-        TIMER_CURRENT = 0x390, // Timer Current Count Register
-        TIMER_DIVIDE = 0x3E0 // Timer Divide Configuration Register
-    };
-
-private:
     /**
      * @brief Ensure that the local APIC's MMIO region has been initialized.
      */
@@ -172,14 +176,13 @@ private:
      */
     static void initializeLVT();
 
-    // NOTE: Reading and writing local APIC's registers
-    // NOTE: Parses the read/written value to/from types from ApicRegisterInterface.h
+    // Reading and writing local APIC's registers
+    // Parses the read/written value to/from types from ApicRegisterInterface.h
     // NOTE: Only registers of currently running CPU will be affected
-    // NOTE: The LApicInformation has to be passed anyway since every LApic could have a different MMIO address
 
-    [[nodiscard]] static MSREntry readBaseMSR();
+    [[nodiscard]] static BaseMSREntry readBaseMSR();
 
-    static void writeBaseMSR(const MSREntry &msrEntry);
+    static void writeBaseMSR(const BaseMSREntry &msrEntry);
 
     [[nodiscard]] static uint32_t readDoubleWord(Register reg);
 
@@ -197,15 +200,17 @@ private:
 
     static void writeICR(const ICREntry &icrEntry); // Issue IPIs
 
+    // static ModelSpecificRegister getMSR(Register reg); // Used for x2Apic mode
+
 private:
     static bool initialized;
-    static bool smpInitialized;
+    // static bool smpInitialized;
     static LocalApicPlatform *localPlatform; ///< @brief General information valid for all local APICs
 
-    static Device::ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (unique although static)
+    static ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (unique although static)
     static Register lintRegs[7]; // Register offsets for the LINTs
 
-    static Kernel::Logger log; // TODO: Remove?
+    static Kernel::Logger log;
 };
 
 }
