@@ -27,6 +27,6 @@ target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/interrupt/ApicRegisterInterface.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/LocalApic.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/ApicTimer.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/ErrorInterruptHandler.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/ApicErrorInterruptHandler.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/IoApic.cpp
         )
