@@ -5,79 +5,72 @@
 #include "IoApic.h"
 #include "ApicAcpiParser.h"
 #include "kernel/log/Logger.h"
-
-// TODO: Should this class really be concerned with stuff other than APIC model?
-//       - Could also be renamed to Apic... or sth.
+#include "ApicTimer.h"
 
 namespace Device {
 
 /**
- * @brief This class implements a way to access information about the running system's interrupt model.
+ * @brief This class implements a way to interact with the APIC interrupt model.
  *
  * The InterruptModel is only concerned about hardware interrupts, software interrupts are independent.
- * Both external (PIC/IO APIC) and local (local APIC) interrupts are considered hardware interrupts.
+ * This class handles initialization of both the LocalApic and IoApic class (it calls the supplied information backend,
+ * for example the ApicAcpiParser, to read the information from the system that is required by those classes).
  *
- * Some values stored in this class have to be read from memory mapped APIC registers.
- * These will be set when initializing the local APICs and IO APICs.
- *
- * Note:
- * For a technically correct implementation of the APIC interrupt model, an AML interpreter is needed
+ * For a technically correct implementation of the APIC interrupt model using ACPI, an AML interpreter is needed
  * to communicate the usage of the IO APIC to ACPI.
- * Hot-plug devices
+ * This would also be needed for hot-plugging support.
  */
 class Apic {
 public:
     /**
-     * @brief Initialize the InterruptModel.
+     * @brief Check if the system supports the APIC interrupt model.
+     */
+    static bool isSupported();
+
+    /**
+     * @brief Ensure that the system supports the APIC interrupt model.
+     */
+    static void ensureSupported();
+
+    /**
+     * @brief Initialize both LocalApic and IoApic devices.
      *
      * @tparam Parser The parser to use
      */
     template<typename Parser>
     static void initialize();
 
-    static void initializeSMP();
-
     /**
-     * @brief Check if the system is running with the APIC interrupt model.
+     * @brief Check if both LocalApic and IoApic devices are initialized.
      */
     static bool isInitialized();
 
-    static bool isSMPInitialized();
-
     /**
-     * @brief Ensure that the InterruptModel has been initialized.
-     *
-     * Only ensures that initial system information was read.
+     * @brief Ensure that both LocalApic and IoApic devices are initialized.
      */
     static void ensureInitialized();
 
-    /**
-     * @brief Ensure that the system supports the APIC interrupt model.
-     */
-    static void ensureApicSupported();
+    static void initializeTimer();
+
+    static bool isTimerInitialized();
+
+    // TODO: SMP
+    // static void initializeSMP();
+    // static bool isSMPInitialized();
+
+    static void printDebugInfo();
+
+    // NOTE: The APIC interrupt model requires differentiation between local and external interrupts.
 
     /**
-     * @brief Check if the system supports the APIC interrupt model.
-     *
-     * Only checks for support, system could still be in PIC mode.
-     */
-    static bool isSupported();
-
-    /**
-     * @brief Check if an interrupt vector belongs to a local interrupt (local APIC).
+     * @brief Check if an interrupt vector belongs to a local interrupt (Local APIC).
      */
     static bool isLocalInterrupt(InterruptVector vector);
-
-    static void allowLocalInterrupt(LocalApic::LocalInterrupt localInterrupt);
-
-    static void forbidLocalInterrupt(LocalApic::LocalInterrupt localInterrupt);
-
-    static bool localInterruptStatus(LocalApic::LocalInterrupt localInterrupt);
 
     static void sendLocalEndOfInterrupt();
 
     /**
-     * @brief Check if an interrupt vector belongs to an external hardware interrupt (PIC/IO APIC).
+     * @brief Check if an interrupt vector belongs to an external hardware interrupt (I/O APIC).
      *
      * Depends on the number of external interrupts (GSIs) the system supports.
      */
@@ -92,43 +85,54 @@ public:
     static void sendExternalEndOfInterrupt(InterruptVector vector);
 
 private:
-    static IoApic *getIoApic(GlobalSystemInterrupt gsi);
+    /**
+     * @brief Get the IoApic instance that is responsible for handling a specific GSI.
+     */
+    static IoApic &getIoApic(GlobalSystemInterrupt gsi);
 
 private:
-    // Local Apics are not accessed through instances because they have the same memory address.
-    // Also, the register access always works with the registers of the currently running processor.
+    // Local APICs are not accessed through instances because they have the same memory address.
+    // Also, the local APIC register access always works with the registers of the currently running processor.
     // Io Apics are accessed through instances because they have different memory addresses and the same
     // processor has to work with multiple Io Apics.
     static Util::Data::ArrayList<IoApic *> ioApics;
+
+    static ApicTimer *apicTimer;
 
     static Kernel::Logger log;
 };
 
 template<typename Parser>
 void Apic::initialize() {
-    // TODO: Ensure not initialized
-    ensureApicSupported();
-
-    // Initialize the local Apic of the BSP
-    auto* localPlatform = new LocalApicPlatform;
-    Parser::parseLocalPlatformInformation(localPlatform);
-    LocalApic::initialize(localPlatform);
-
-    // Initialize all IO Apics
-    auto* ioPlatform = new IoApicPlatform;
-    Parser::parseIoPlatformInformation(ioPlatform);
-
-    Util::Data::ArrayList<IoApicInformation *> ioInfos;
-    Parser::parseIoApicInformation(&ioInfos);
-
-    if (ioInfos.size() > 1) {
-        log.warn("Support for multiple IO APICs is untested!");
+    ensureSupported();
+    if (isInitialized()) {
+        log.warn("The APIC interrupt model has already been initialized, skipping!");
+        return;
     }
 
+    auto* localPlatform = new LocalApicPlatform;
+    auto* ioPlatform = new IoApicPlatform;
+    Util::Data::ArrayList<IoApicInformation *> ioInfos;
+
+    // Get system information from the supplied parser
+    Parser::parseLocalPlatformInformation(localPlatform);
+    Parser::parseIoPlatformInformation(ioPlatform);
+    Parser::parseIoApicInformation(&ioInfos);
+
+    // Initialize the local APIC of the BSP
+    LocalApic::initialize(localPlatform);
+
+    // Initialize all I/O APICs
     for (auto* ioInfo : ioInfos) {
         auto* ioApic = new IoApic;
         ioApic->initialize(ioPlatform, ioInfo);
         ioApics.add(ioApic);
+    }
+
+    // Multiple I/O APICs are theoretically possible, but in the usual Intel consumer processors this is not utilized
+    // TODO: Mention what is used in the Intel consumer chipsets (ICH2, ICH5)
+    if (ioInfos.size() > 1) {
+        log.warn("Support for multiple IO APICs is untested!");
     }
 }
 
