@@ -1,7 +1,9 @@
 #ifndef HHUOS_APIC_H
 #define HHUOS_APIC_H
 
-#include "ApicStructures.h"
+#include "LocalApic.h"
+#include "IoApic.h"
+#include "ApicAcpiParser.h"
 #include "kernel/log/Logger.h"
 
 // TODO: Should this class really be concerned with stuff other than APIC model?
@@ -24,23 +26,23 @@ namespace Device {
  * Hot-plug devices
  */
 class Apic {
-    friend class LocalApic; // Initializes some values depending on MMIO
-    friend class IoApic; // Initializes some values depending on MMIO
-
 public:
-    // TODO: Also initialize LApic/IoApic here?
     /**
      * @brief Initialize the InterruptModel.
      *
-     * @tparam T The parser to use
+     * @tparam Parser The parser to use
      */
-    template<typename T>
+    template<typename Parser>
     static void initialize();
+
+    static void initializeSMP();
 
     /**
      * @brief Check if the system is running with the APIC interrupt model.
      */
     static bool isInitialized();
+
+    static bool isSMPInitialized();
 
     /**
      * @brief Ensure that the InterruptModel has been initialized.
@@ -59,7 +61,20 @@ public:
      *
      * Only checks for support, system could still be in PIC mode.
      */
-    static bool apicSupported();
+    static bool isSupported();
+
+    /**
+     * @brief Check if an interrupt vector belongs to a local interrupt (local APIC).
+     */
+    static bool isLocalInterrupt(InterruptVector vector);
+
+    static void allowLocalInterrupt(LocalApic::LocalInterrupt localInterrupt);
+
+    static void forbidLocalInterrupt(LocalApic::LocalInterrupt localInterrupt);
+
+    static bool localInterruptStatus(LocalApic::LocalInterrupt localInterrupt);
+
+    static void sendLocalEndOfInterrupt();
 
     /**
      * @brief Check if an interrupt vector belongs to an external hardware interrupt (PIC/IO APIC).
@@ -68,132 +83,53 @@ public:
      */
     static bool isExternalInterrupt(InterruptVector vector);
 
-    /**
-     * @brief Check if an interrupt vector belongs to a local interrupt (local APIC).
-     */
-    static bool isLocalInterrupt(InterruptVector vector);
+    static void allowExternalInterrupt(InterruptSource interruptSource);
 
-    /**
-     * @brief Determine the number of GSIs the system supports.
-     *
-     * Returns GlobalSystemInterrupt(15) if running with PIC model,
-     * APIC model usually has max GlobalSystemInterrupt(23) but can vary.
-     *
-     * @return The last supported GSI
-     */
-    static GlobalSystemInterrupt getGlobalMaxGsi();
+    static void forbidExternalInterrupt(InterruptSource interruptSource);
 
-    /**
-     * @brief Log the InterruptModel information.
-     */
-    static void dumpPlatformInformation();
+    static bool externalInterruptStatus(InterruptSource interruptSource);
+
+    static void sendExternalEndOfInterrupt(InterruptVector vector);
 
 private:
-    /**
-     * @brief Get information about the system's local APICs.
-     *
-     * This function is exclusive to the APIC interrupt model.
-     *
-     * @return A list of LApicInformation structures
-     */
-    static Util::Data::ArrayList<LApicInformation *> &lapics();
-
-    /**
-     * @brief Get information about the system's IO APICs.
-     *
-     * This function is exclusive to the APIC interrupt model.
-     *
-     * @return A list of IoApicInformation structures
-     */
-    static Util::Data::ArrayList<IoApicInformation *> &ioapics();
-
-    /**
-     * @brief Get information about a specific local APIC.
-     *
-     * This function is exclusive to the APIC interrupt model.
-     *
-     * @param lapicId The id of the local APIC
-     * @return A LApicInformation structure
-     */
-    static LApicInformation *getLApicInformation(uint8_t lapicId);
-
-    /**
-     * @brief Get information about a specific local APIC's non-maskable-interrupt source.
-     *
-     * This function is exclusive to the APIC interrupt model.
-     *
-     * @param lapic The LApicInformation structure of the local APIC
-     * @return A LNMIConfiguration structure
-     */
-    static LNMIConfiguration *getLNMIConfiguration(LApicInformation *lapic);
-
-    /**
-     * @brief Get information about a specific IO APIC by supplying a pin number.
-     *
-     * This function is exclusive to the APIC interrupt model.
-     *
-     * @param gsi The interrupt input on the IO APIC
-     * @return An IoApicInformation structure
-     */
-    static IoApicInformation *getIoApicInformation(GlobalSystemInterrupt gsi);
-
-    /**
-     * @brief Get information about a specific IO APIC's non-maskable-interrupt source.
-     *
-     * This function is exclusive to the APIC interrupt model.
-     *
-     * @param ioapic The IoApicInformation structure of the local APIC
-     * @return An IoNMIConfiguration structure
-     */
-    static IoNMIConfiguration *getIoNMIConfiguration(IoApicInformation *ioapic);
-
-    /**
-     * @brief Get information about an ISA IRQ override.
-     *
-     * @param source The overridden (PIC) interrupt source
-     * @return An IoInterruptOverride structure or nullptr if the GSI wasn't overridden
-     */
-    static IoInterruptOverride *getInterruptOverride(InterruptSource source);
-
-    /**
-     * @brief Get information about an ISA IRQ override.
-     *
-     * @param target The The overridden interrupt target
-     * @return An IoInterruptOverride structure or nullptr if the GSI wasn't overridden
-     */
-    static IoInterruptOverride *getInterruptOverride(GlobalSystemInterrupt target);
-
-    /**
-     * @brief Get the GSI that is mapped to an InterruptSource.
-     */
-    static GlobalSystemInterrupt getInterruptOverrideTarget(InterruptSource source);
-
-    /**
-     * @brief Get the InterruptSource a GSI is mapped to.
-     */
-    static InterruptSource getInterruptOverrideSource(GlobalSystemInterrupt target);
+    static IoApic *getIoApic(GlobalSystemInterrupt gsi);
 
 private:
-    static bool initialized; ///< @brief Indicates if initial system information was read
-
-    static LPlatformInformation *localPlatform;
-    static IoPlatformInformation *ioPlatform;
+    // Local Apics are not accessed through instances because they have the same memory address.
+    // Also, the register access always works with the registers of the currently running processor.
+    // Io Apics are accessed through instances because they have different memory addresses and the same
+    // processor has to work with multiple Io Apics.
+    static Util::Data::ArrayList<IoApic *> ioApics;
 
     static Kernel::Logger log;
 };
 
-template<typename Backend>
+template<typename Parser>
 void Apic::initialize() {
-    localPlatform = Backend::parseLPlatformInformation();
-    ioPlatform = Backend::parseIoPlatformInformation();
+    // TODO: Ensure not initialized
+    ensureApicSupported();
 
-    if (ioPlatform != nullptr && ioPlatform->ioapics.size() > 1) {
+    // Initialize the local Apic of the BSP
+    auto* localPlatform = new LocalApicPlatform;
+    Parser::parseLocalPlatformInformation(localPlatform);
+    LocalApic::initialize(localPlatform);
+
+    // Initialize all IO Apics
+    auto* ioPlatform = new IoApicPlatform;
+    Parser::parseIoPlatformInformation(ioPlatform);
+
+    Util::Data::ArrayList<IoApicInformation *> ioInfos;
+    Parser::parseIoApicInformation(&ioInfos);
+
+    if (ioInfos.size() > 1) {
         log.warn("Support for multiple IO APICs is untested!");
     }
 
-    // Initialized in this context only means that the system information was parsed,
-    // there are values that will only be set when initializing local APIC and IO APIC.
-    initialized = true;
+    for (auto* ioInfo : ioInfos) {
+        auto* ioApic = new IoApic;
+        ioApic->initialize(ioPlatform, ioInfo);
+        ioApics.add(ioApic);
+    }
 }
 
 }
