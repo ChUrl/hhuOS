@@ -6,6 +6,7 @@
 #include "ApicAcpiParser.h"
 #include "kernel/log/Logger.h"
 #include "ApicTimer.h"
+#include "ApicErrorInterruptHandler.h"
 
 namespace Device {
 
@@ -96,8 +97,8 @@ private:
     // Io Apics are accessed through instances because they have different memory addresses and the same
     // processor has to work with multiple Io Apics.
     static Util::Data::ArrayList<IoApic *> ioApics;
-
     static ApicTimer *apicTimer;
+    static ApicErrorInterruptHandler *errorHandler;
 
     static Kernel::Logger log;
 };
@@ -134,6 +135,10 @@ void Apic::initialize() {
     if (ioInfos.size() > 1) {
         log.warn("Support for multiple IO APICs is untested!");
     }
+
+    // Local APIC error interrupt handler
+    errorHandler = new ApicErrorInterruptHandler();
+    errorHandler->plugin();
 }
 
 }

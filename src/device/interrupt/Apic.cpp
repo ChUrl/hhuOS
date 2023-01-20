@@ -4,6 +4,8 @@
 namespace Device {
 
 Util::Data::ArrayList<IoApic *> Apic::ioApics;
+ApicTimer *Apic::apicTimer = nullptr;
+ApicErrorInterruptHandler *Apic::errorHandler = nullptr;
 Kernel::Logger Apic::log = Kernel::Logger::get("Apic");
 
 bool Apic::isSupported() {
@@ -36,17 +38,18 @@ void Apic::ensureInitialized() {
 // }
 
 void Apic::initializeTimer() {
-    auto* apictimer = new Device::ApicTimer();
-    apictimer->plugin();
+    apicTimer = new Device::ApicTimer();
+    apicTimer->plugin();
 }
 
 bool Apic::isTimerInitialized() {
-    return ApicTimer::isInitialized();
+    return apicTimer != nullptr && ApicTimer::isInitialized();
 }
 
 void Apic::printDebugInfo() {
     if (!isInitialized()) {
-        log.info("APIC interrupt model not initialized!");
+        log.info("APIC not initialized, running in PIC mode");
+        return;
     }
 
     log.info("Local APIC supported modes: [%s%s] (Current mode: [%s])",
@@ -99,6 +102,7 @@ void Apic::printDebugInfo() {
         }
     }
 
+    log.info("Using [%s] for scheduling", ApicTimer::isInitialized() ? "ApicTimer" : "Pit");
 }
 
 // ! Local Apic

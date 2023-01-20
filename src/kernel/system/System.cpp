@@ -124,10 +124,6 @@ void System::initializeSystem() {
     if (Device::Apic::isSupported()) {
         log.info("APIC support detected -> Initializing Local APIC + I/O APIC");
         Device::Apic::initialize<Device::ApicAcpiParser>();
-        Device::Apic::printDebugInfo();
-
-        auto *lapicErrorHandler = new Device::ApicErrorInterruptHandler();
-        lapicErrorHandler->plugin();
     }
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
@@ -158,6 +154,8 @@ void System::initializeSystem() {
         log.info("Running APIC detected -> Initializing APIC Timer");
         Device::Apic::initializeTimer();
     }
+
+    Device::Apic::printDebugInfo();
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));
