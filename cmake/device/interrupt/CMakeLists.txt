@@ -22,6 +22,7 @@ target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/interrupt/ModelSpecificRegister.cpp
 
         ${HHUOS_SRC_DIR}/device/interrupt/Apic.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/ApicAcpiInterface.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/ApicAcpiParser.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/ApicRegisterInterface.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/LocalApic.cpp

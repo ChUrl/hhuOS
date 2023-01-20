@@ -18,8 +18,7 @@
 #ifndef __PIC_include__
 #define __PIC_include__
 
-#include <cstdint>
-#include "Apic.h"
+#include "InterruptSource.h"
 #include "device/cpu/IoPort.h"
 
 namespace Device {
