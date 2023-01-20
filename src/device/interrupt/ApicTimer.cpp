@@ -27,7 +27,7 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInte
 void ApicTimer::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptDispatcher::APICTIMER, *this);
-    LocalApic::allow(LocalApic::TIMER); // TODO: This in interruptservice?
+    LocalApic::allow(LocalApic::TIMER);
 }
 
 void ApicTimer::trigger(const Kernel::InterruptFrame &frame) {
@@ -59,6 +59,10 @@ void ApicTimer::setInterruptRate(uint32_t interval) {
     LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, initialCount);
 
     timerInterval = interval;
+}
+
+bool ApicTimer::isInitialized() {
+    return initialized;
 }
 
 }

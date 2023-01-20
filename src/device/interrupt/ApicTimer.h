@@ -47,6 +47,8 @@ public:
      */
     [[nodiscard]] Util::Time::Timestamp getTime() override;
 
+    static bool isInitialized();
+
 private:
     // IA-32 Architecture Manual Chapter 10.5.4
     enum Divide : uint32_t {
