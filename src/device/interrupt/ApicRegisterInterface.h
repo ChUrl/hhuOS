@@ -19,15 +19,15 @@ using InterruptVector = Kernel::InterruptDispatcher::Interrupt;
 /**
  * Information obtainable from the local APIC's model specific register.
  */
-struct MSREntry {
+struct BaseMSREntry {
     bool isBSP;
     bool isX2Apic;
     bool isHWEnabled;
     uint32_t baseField;
 
-    MSREntry() = default;
+    BaseMSREntry() = default;
 
-    explicit MSREntry(uint64_t registerValue);
+    explicit BaseMSREntry(uint64_t registerValue);
 
     explicit operator uint64_t() const;
 };
