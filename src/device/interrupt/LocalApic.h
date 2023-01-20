@@ -1,9 +1,9 @@
 #ifndef __LAPIC_include__
 #define __LAPIC_include__
 
-#include "ModelSpecificRegister.h"
 #include "ApicRegisterInterface.h"
-#include "Apic.h"
+#include "ApicAcpiInterface.h"
+#include "ModelSpecificRegister.h"
 #include "kernel/log/Logger.h"
 
 namespace Device {
@@ -19,17 +19,18 @@ namespace Device {
  * Using this class mostly means interacting with the local APIC of the current CPU core.
  */
 class LocalApic {
+    friend class Apic;
     friend class ApicTimer; // ApicTimer is configured by using LApic registers
-    friend class IoApic; // IoApic disables EOI suppression if it has no EOI register
 
 public:
+    // TODO: Move this and InterruptSource and GlobalSystemInterrupt to same file?
     /**
      * @brief This lists the local APIC's local interrupt pins.
      *
      * Every individual local APIC has these pins, they are completely separate from
-     * the usual (PIC/IO APIC) hardware interrupt inputs.
+     * the usual (PIC/IO APIC) hardware interrupt inputs/GlobalSystemInterrupts.
      */
-    enum Lint : uint8_t {
+    enum LocalInterrupt : uint8_t {
         CMCI = 0, // TODO: Might not exist
         TIMER = 1,
         THERMAL = 2,
@@ -46,27 +47,19 @@ public:
 
     LocalApic &operator=(const LocalApic &copy) = delete;
 
-    LocalApic(LocalApic &&move) = delete;
-
-    LocalApic &operator=(LocalApic &&move) = delete;
-
     ~LocalApic() = delete; // Static class
 
+    // TODO: Make everything private, use Apic class
 
-    // TODO: Differentiate between different cores (put initialized in the LApicConfiguration struct?)
-    // NOTE: Currently if this is true this means that all APs were initialized
-    /**
-     * @brief Check if all local APICs are initialized.
-     */
     static bool isInitialized();
 
-    // TODO: Differentiate between different cores?
+    static bool isSmpInitialized();
+
     /**
      * @brief Ensure that all local APICs are initialized.
      */
     static void ensureInitialized();
 
-    // TODO: Currently also initializes all APs, should probably remove that?
     /**
      * @brief Initialize the local APIC.
      *
@@ -75,23 +68,31 @@ public:
      * after both local APICs and IO APICs have been initialized!
      *
      * Must be called by the bootstrap processor.
-     * Must not be called with enabled interrupts.
      */
-    static void initialize();
+    static void initialize(LocalApicPlatform *platform);
+
+    /**
+     * @brief Get the ID of the local APIC belonging to the current CPU.
+     *
+     * Can be used to determine what CPU is currently running.
+     *
+     * @return The local APIC's ID
+     */
+    [[nodiscard]] static uint8_t getId();
 
     /**
      * @brief Unmask a local interrupt in the local APIC of the current CPU.
      *
      * @param lint The local interrupt to activate
      */
-    static void allow(Lint lint);
+    static void allow(LocalInterrupt lint);
 
     /**
      * @brief Forbid a local interrupt in the local APIC of the current CPU.
      *
      * @param lint The local interrupt to deactivate
      */
-    static void forbid(Lint lint);
+    static void forbid(LocalInterrupt lint);
 
     /**
      * @brief Get the state of this interrupt - whether it is masked out or not.
@@ -99,7 +100,7 @@ public:
      * @param lint The local interrupt
      * @return True, if the interrupt is disabled in the local APIC of the current CPU
      */
-    static bool status(Lint lint);
+    static bool status(LocalInterrupt lint);
 
     // TODO: For compatibility with older IO APICs (< version 0x20) this has to be used in
     //       combination with temporarily setting all IO APIC redirection entries to level-triggered
@@ -137,6 +138,7 @@ private:
         ICR_LOW = 0x300, // Interrupt Command Register (64 bit)
         ICR_HIGH = 0x310,
 
+        // These are located here, instead of in the ApicTimer class, because this class does the register access
         TIMER_INITIAL = 0x380, // Timer Initial Count Register
         TIMER_CURRENT = 0x390, // Timer Current Count Register
         TIMER_DIVIDE = 0x3E0 // Timer Divide Configuration Register
@@ -148,38 +150,18 @@ private:
      */
     static void ensureMMIO();
 
-    /**
-     * @brief Get the ID of the local APIC belonging to the current CPU.
-     *
-     * Can be used to determine what CPU is currently running.
-     *
-     * @return The local APIC's ID
-     */
-    [[nodiscard]] static uint8_t getId();
-
+    // TODO
     /**
      * @brief Initialize the local APIC of an additional AP (Application Processor).
      *
      * (MultiProcessor Specification Appendix B.4)
-     *
-     * Must not be called with enabled interrupts.
      */
-    static void initializeApplicationProcessor(LApicInformation *lapic);
+    // static void initializeApplicationProcessor(LocalApicInformation *lapic);
 
     /**
      * @brief Allocate the memory region used to access the local APIC's registers.
      */
     static void initializeMMIORegion();
-
-    /**
-     * @brief Initialize a single local APIC.
-     *
-     * Used for the BSP and the APs.
-     * For the APs this is called from the AP entry code.
-     *
-     * @param lapic The local APIC to initialize
-     */
-    static void initializeController(LApicInformation *lapic);
 
     /**
      * @brief Initializes the local APIC's local vector table.
@@ -207,9 +189,9 @@ private:
 
     static void writeSVR(const SVREntry &svrEntry);
 
-    [[nodiscard]] static LVTEntry readLVT(Lint lint);
+    [[nodiscard]] static LVTEntry readLVT(LocalInterrupt lint);
 
-    static void writeLVT(Lint lint, const LVTEntry &lvtEntry);
+    static void writeLVT(LocalInterrupt lint, const LVTEntry &lvtEntry);
 
     [[nodiscard]] static ICREntry readICR(); // Obtain delivery status of IPI
 
@@ -217,10 +199,13 @@ private:
 
 private:
     static bool initialized;
-    static Device::ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR
-    static Kernel::Logger log; // TODO: Remove?
+    static bool smpInitialized;
+    static LocalApicPlatform *localPlatform; ///< @brief General information valid for all local APICs
 
+    static Device::ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (unique although static)
     static Register lintRegs[7]; // Register offsets for the LINTs
+
+    static Kernel::Logger log; // TODO: Remove?
 };
 
 }
