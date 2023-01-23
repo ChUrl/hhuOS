@@ -68,8 +68,8 @@ void LocalApic::initialize(LocalApicPlatform *platform) {
 
     // Decide which mode to use (xApic or x2Apic)
     if (supportsX2Apic()) {
-        // QEMU doesn't support emulation of x2Apic via TCG
-        // KVM would be possible, but then GDB can't be attached, so compatibility mode will be chosen
+        // QEMU doesn't support emulation of x2Apic via TCG (QEMU Tiny Code Generator)
+        // KVM would be possible, but then GDB can't be attached, so compatibility mode will always be chosen
         log.info("X2Apic support present but not implemented, running in xApic compatibility mode");
         localPlatform->isX2Apic = false;
         initializeMMIORegion();
@@ -106,7 +106,7 @@ void LocalApic::initialize(LocalApicPlatform *platform) {
     SVREntry svrEntry{};
     svrEntry.vector = Kernel::InterruptDispatcher::SPURIOUS;
     svrEntry.isSWEnabled = true;
-    svrEntry.hasEOIBroadcastSuppression = true;
+    svrEntry.hasEOIBroadcastSuppression = true; // TODO
     writeSVR(svrEntry);
 
     // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
@@ -118,7 +118,6 @@ void LocalApic::initialize(LocalApicPlatform *platform) {
     sendEndOfInterrupt();
 
     // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
-    // (IA-32 Architecture Manual Chapter 10.8.3.1)
     writeDoubleWord(TPR, 0);
 
     // Mask all PIC interrupts that have been enabled previously
@@ -237,6 +236,22 @@ void LocalApic::initializeLVT() {
     lvtEntry.vector = Kernel::InterruptDispatcher::ERROR;
     writeLVT(ERROR, lvtEntry);
 }
+
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+void LocalApic::dumpLVT() {
+    log.info("Local Vector Table (Local APIC Id: [%d]):", getId());
+    for (uint8_t lint = CMCI; lint <= ERROR; ++lint) {
+        LVTEntry lvtEntry = readLVT(static_cast<LocalInterrupt>(lint));
+        log.info("- Interrupt [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], Polarity: [%s], TriggerMode: [%s])",
+                 lintNames[lint],
+                 static_cast<uint8_t>(lvtEntry.vector),
+                 static_cast<uint8_t>(lvtEntry.isMasked),
+                 static_cast<uint8_t>(lvtEntry.deliveryMode),
+                 lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                 lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+    }
+}
+#endif
 
 BaseMSREntry LocalApic::readBaseMSR() {
     return static_cast<BaseMSREntry>(ia32ApicBaseMsr.readQuadWord()); // Atmoic read

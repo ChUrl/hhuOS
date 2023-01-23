@@ -1,6 +1,7 @@
 #ifndef __IOAPIC_include__
 #define __IOAPIC_include__
 
+#include "LocalApic.h"
 #include "ApicRegisterInterface.h"
 #include "ApicAcpiInterface.h"
 #include "InterruptSource.h"
@@ -88,7 +89,7 @@ private:
      *
      * @param vector The vector number of the interrupt that will be marked as completed
      */
-    void sendEndOfInterrupt(InterruptVector vector);
+    void sendEndOfInterrupt(InterruptVector vector, GlobalSystemInterrupt gsi);
 
     /**
      * @brief Ensure that this I/O APIC's MMIO region has been initialized.
@@ -115,6 +116,10 @@ private:
      * Sets vector numbers to corresponding InterruptDispatcher::Interrupt.
      */
     void initializeREDTBL();
+
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+    void dumpREDTBL();
+#endif
 
     template<typename T>
     [[nodiscard]] T readDirectRegister(Register reg);

@@ -1,5 +1,4 @@
 #include "IoApic.h"
-#include "LocalApic.h"
 #include "device/cpu/Cpu.h"
 #include "kernel/system/System.h"
 #include "kernel/paging/Paging.h"
@@ -26,7 +25,7 @@ void IoApic::initialize(IoApicPlatform *platform, IoApicInformation *info) {
 
     // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
     ioPlatform->version = readDoubleWord(VER);
-    ioPlatform->eoiSupported = ioPlatform->version >= 0x20;
+    ioPlatform->directEoiSupported = ioPlatform->version >= 0x20;
 
     // With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
     // With ICH5 (and other ICHs?) it is always 24 (also ICH5 only has 1 IO APIC, as all (?) consumer hardware)
@@ -72,9 +71,14 @@ bool IoApic::status(GlobalSystemInterrupt gsi) {
     return readREDTBL(gsi).isMasked;
 }
 
-// TODO: EOI compatibility mode
-void IoApic::sendEndOfInterrupt(InterruptVector vector) {
-    writeDirectRegister<uint32_t>(EOI, vector);
+void IoApic::sendEndOfInterrupt(InterruptVector vector, GlobalSystemInterrupt gsi) {
+    if (ioPlatform->directEoiSupported) {
+        writeDirectRegister<uint32_t>(EOI, vector);
+    } else {
+        // TODO: Find this in the manual
+        // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
+        REDTBLEntry redtblEntry = readREDTBL(gsi);
+    }
 }
 
 void IoApic::ensureMMIO() const {
@@ -110,7 +114,7 @@ void IoApic::initializeREDTBL() {
     redtblEntry.isMasked = true;
     redtblEntry.destination = LocalApic::getId(); // TODO: Don't send all interrupts to one CPU
 
-    for (uint8_t interruptInput = ioInfo->gsiBase; interruptInput <= ioInfo->gsiMax; ++interruptInput) {
+    for (uint32_t interruptInput = ioInfo->gsiBase; interruptInput <= ioInfo->gsiMax; ++interruptInput) {
         auto gsi = static_cast<GlobalSystemInterrupt>(interruptInput); // GSIs match interrupt inputs on IO APIC
 
         redtblEntry.vector = static_cast<InterruptVector>(gsi + 32); // If no override exists GSI matches vector
@@ -128,6 +132,24 @@ void IoApic::initializeREDTBL() {
         writeREDTBL(gsi, redtblEntry);
     }
 }
+
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+void IoApic::dumpREDTBL() {
+    log.info("Redirection Table (I/O APIC Id: [%d]):", ioInfo->id);
+    for (uint32_t gsi = ioInfo->gsiBase; gsi < ioInfo->gsiMax; ++gsi) {
+        REDTBLEntry redtblEntry = readREDTBL(static_cast<GlobalSystemInterrupt>(gsi));
+        log.info("- Interrupt [%d]: (Vector: [0x%x], Masked: [%d], Destination: [%d], DeliveryMode: [0b%b], DestinationMode: [%s], Polarity: [%s], TriggerMode: [%s])",
+                 gsi,
+                 static_cast<uint8_t>(redtblEntry.vector),
+                 static_cast<uint8_t>(redtblEntry.isMasked),
+                 redtblEntry.destination,
+                 static_cast<uint8_t>(redtblEntry.deliveryMode),
+                 redtblEntry.destinationMode == REDTBLEntry::DestinationMode::PHYSICAL ? "PHYSICAL" : "LOGICAL",
+                 redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                 redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+    }
+}
+#endif
 
 uint32_t IoApic::readDoubleWord(IndirectRegister reg) {
     ensureMMIO();

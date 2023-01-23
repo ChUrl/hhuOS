@@ -41,7 +41,8 @@ bool Apic::isTimerInitialized() {
     return apicTimer != nullptr && ApicTimer::isInitialized();
 }
 
-void Apic::printDebugInfo() {
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+void Apic::dumpDebugInfo() {
     if (!isInitialized()) {
         log.info("APIC not initialized, running in PIC mode");
         return;
@@ -66,10 +67,11 @@ void Apic::printDebugInfo() {
                  localApic->nmi->polarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
                  localApic->nmi->triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
+    LocalApic::dumpLVT();
 
     log.info("I/O APIC version: [0x%x] (EOI support: [%d])",
              IoApic::ioPlatform->version,
-             IoApic::ioPlatform->eoiSupported);
+             IoApic::ioPlatform->directEoiSupported);
     log.info("I/O APIC max GSI: [%d]", static_cast<uint32_t>(IoApic::ioPlatform->globalMaxGsi));
     log.info("I/O APIC IRQ overrides:");
     for (uint32_t i = 0; i < IoApic::ioPlatform->overrides.size(); ++i) {
@@ -96,9 +98,14 @@ void Apic::printDebugInfo() {
                      ioApic->nmi->triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
         }
     }
+    for (uint32_t i = 0; i < ioApics.size(); ++i) {
+        IoApic *ioApic = ioApics.get(i);
+        ioApic->dumpREDTBL();
+    }
 
     log.info("Using %s for scheduling", ApicTimer::isInitialized() ? "ApicTimer" : "Pit");
 }
+#endif
 
 bool Apic::isLocalInterrupt(InterruptVector vector) {
     return vector >= InterruptVector::CMCI && vector <= InterruptVector::ERROR;
@@ -136,7 +143,7 @@ void Apic::sendExternalEndOfInterrupt(InterruptVector vector) {
     IoApic &ioApic = getIoApic(gsi);
 
     LocalApic::sendEndOfInterrupt();
-    ioApic.sendEndOfInterrupt(vector);
+    ioApic.sendEndOfInterrupt(vector, gsi);
 }
 
 IoApic &Apic::getIoApic(GlobalSystemInterrupt gsi) {

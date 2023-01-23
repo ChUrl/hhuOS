@@ -81,7 +81,7 @@ struct IoApicIrqOverride {
  */
 struct IoApicPlatform {
     uint8_t version;
-    bool eoiSupported; ///< @brief Older IO APICs require recieving EOIs sent by the local APIC
+    bool directEoiSupported; ///< @brief Older IO APICs require recieving EOIs sent by the local APIC
     GlobalSystemInterrupt globalMaxGsi = GlobalSystemInterrupt(0); ///< @brief The last GSI the system supports
     Util::Data::ArrayList<IoApicIrqOverride *> overrides; ///< @brief All overridden ISA IRQs, equal for all IO APICs
 

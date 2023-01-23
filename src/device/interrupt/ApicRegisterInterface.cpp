@@ -5,7 +5,7 @@ namespace Device {
 // ! LApic register interface
 
 /*
- * IA-32 Architecture Manual Chapter 10.12.1
+ * IA-32 Architecture Manual Chapter
  */
 
 BaseMSREntry::BaseMSREntry(uint64_t registerValue) {
@@ -23,7 +23,7 @@ BaseMSREntry::operator uint64_t() const {
 }
 
 /*
- * IA-32 Architecture Manual Chapter 10.9
+ * IA-32 Architecture Manual Chapter
  */
 
 SVREntry::SVREntry(uint32_t registerValue) {
@@ -41,7 +41,7 @@ SVREntry::operator uint32_t() const {
 }
 
 /*
- * IA-32 Architecture Manual Chapter 10.5.1
+ * IA-32 Architecture Manual Chapter
  */
 
 LVTEntry::LVTEntry(uint32_t registerValue) {
@@ -64,7 +64,7 @@ LVTEntry::operator uint32_t() const {
 }
 
 /*
- * IA-32 Architecture Manual Chapter 10.6.1
+ * IA-32 Architecture Manual Chapter
  */
 
 ICREntry::ICREntry(uint64_t registerValue) {
@@ -92,7 +92,7 @@ ICREntry::operator uint64_t() const {
 // ! IoApic register interface
 
 /*
- * Intel ICH5 Specification Chapter 9.5.8
+ * Intel ICH5 Specification Chapter
  */
 
 REDTBLEntry::REDTBLEntry(uint64_t registerValue) {

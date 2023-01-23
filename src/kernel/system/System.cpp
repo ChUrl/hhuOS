@@ -152,7 +152,9 @@ void System::initializeSystem() {
         Device::Apic::initializeTimer();
     }
 
-    Device::Apic::printDebugInfo();
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+    Device::Apic::dumpDebugInfo();
+#endif
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));

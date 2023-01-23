@@ -6,6 +6,8 @@
 #include "ModelSpecificRegister.h"
 #include "kernel/log/Logger.h"
 
+#define HHUOS_APIC_ENABLE_DEBUG 1
+
 namespace Device {
 
 /**
@@ -18,8 +20,10 @@ namespace Device {
  */
 class LocalApic {
     friend class Apic;
+
     friend class ApicTimer; // ApicTimer is configured by using LApic registers
     friend class ApicErrorInterruptHandler;
+
     friend class IoApic;
 
 public:
@@ -147,6 +151,7 @@ private:
     static void sendEndOfInterrupt();
 
     static void handleErrors();
+
     /**
      * @brief Ensure that the local APIC's MMIO region has been initialized.
      */
@@ -161,7 +166,7 @@ private:
     // static void initializeApplicationProcessor(LocalApicInformation *lapic);
 
     /**
-     * @brief Allocate the memory region used to access the local APIC's registers.
+     * @brief Allocate the memory region used to access the local APIC's registers in xApic mode.
      */
     static void initializeMMIORegion();
 
@@ -173,6 +178,10 @@ private:
      * Vector numbers are set to InterruptDispatcher equivalent vectors.
      */
     static void initializeLVT();
+
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+    static void dumpLVT();
+#endif
 
     // Reading and writing local APIC's registers
     // Parses the read/written value to/from types from ApicRegisterInterface.h
@@ -206,6 +215,7 @@ private:
 
     static ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (unique although static)
     static Register lintRegs[7]; // Register offsets for the LINTs
+    static const constexpr char *lintNames[7] = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
 
     static Kernel::Logger log;
 };

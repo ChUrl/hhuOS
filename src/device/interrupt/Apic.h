@@ -55,7 +55,9 @@ public:
 
     static bool isTimerInitialized();
 
-    static void printDebugInfo();
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+    static void dumpDebugInfo();
+#endif
 
     /**
      * @brief Check if an interrupt vector belongs to a local interrupt (Local APIC).
