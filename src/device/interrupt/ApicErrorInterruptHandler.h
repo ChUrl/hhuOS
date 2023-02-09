@@ -2,6 +2,7 @@
 #define HHUOS_APICERRORINTERRUPTHANDLER_H
 
 #include "kernel/interrupt/InterruptHandler.h"
+#include "kernel/log/Logger.h"
 
 namespace Device {
 
@@ -25,6 +26,9 @@ public:
      * Overriding function from InterruptHandler.
      */
     void trigger(const Kernel::InterruptFrame &frame) override;
+
+private:
+    static Kernel::Logger log;
 };
 
 }
