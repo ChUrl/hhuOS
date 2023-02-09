@@ -10,12 +10,10 @@ bool ApicTimer::initialized = false;
 Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
 ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInterval(yieldInterval) {
-    LocalApic::ensureInitialized();
-
-    auto &timeService = Kernel::System::getService<Kernel::TimeService>();
+    LocalApic::ensureBspInitialized();
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
-    LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, Divide::BY_1); // TODO: What divider?
+    LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, Divide::BY_16); // BY_1 is the highest resolution (overkill)
     LVTEntry lvtEntry = LocalApic::readLVT(LocalApic::TIMER);
     lvtEntry.timerMode = LVTEntry::TimerMode::PERIODIC;
     LocalApic::writeLVT(LocalApic::TIMER, lvtEntry);
@@ -26,14 +24,14 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : yieldInte
 
 void ApicTimer::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
-    interruptService.assignInterrupt(Kernel::InterruptDispatcher::APICTIMER, *this);
+    interruptService.assignInterrupt(Kernel::InterruptVector::APICTIMER, *this);
     LocalApic::allow(LocalApic::TIMER);
 }
 
 void ApicTimer::trigger(const Kernel::InterruptFrame &frame) {
-    // TODO: Get the timestamp from the system and remove TimeProvider from ApicTimer
     time.addNanoseconds(timerInterval);
     if (time.toMilliseconds() % yieldInterval == 0) {
+        // Currently there is only one main scheduler, for SMP systems this should yield the core-scheduler
         Kernel::System::getService<Kernel::SchedulerService>().yield();
     }
 }
@@ -42,21 +40,18 @@ Util::Time::Timestamp ApicTimer::getTime() {
     return time;
 }
 
-// TODO: This is very inaccurate, improve by:
-//       1. Get start system timestamp
-//       2. Start the timer with max counter
-//       3. Busywait for fixed interval of 10ms
-//       4. Get end system timestamp
-//       5. Calculate the counter for the given interval
-//          based on the number of counts occured in the end - start interval
-// TODO: Check CPUID if the timer stops in deep C-States (IA-32 10.5.4)
 void ApicTimer::setInterruptRate(uint32_t interval) {
+    // The calibration works by waiting the desired interval and measuring how many ticks the timer does
+    // The interval should not be too small, since the measurement becomes inaccurate for small intervals
+    // This is obviously slow, as time is spent waiting, if two more accurate timestamps could be taken, the initial
+    // counter could be calculated by the difference, with very little waiting time.
+    auto &timeService = Kernel::System::getService<Kernel::TimeService>();
     LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter, writing starts timer
-    Util::Async::Thread::sleep(Util::Time::Timestamp::ofMilliseconds(interval / 1000000));
-    uint32_t initialCount = 0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT);
+    timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(100 * interval / 1000000)); // Interval but in milliseconds
+    uint32_t initialCount = 0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT); // Ticks in interval
 
-    log.info("Setting APIC Timer interval to [%uns] (Initial count: [%u])", interval, initialCount);
-    LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, initialCount);
+    log.info("Setting APIC Timer interval to [%uns] (Initial count: [%u])", interval, initialCount / 100);
+    LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, initialCount / 100);
 
     timerInterval = interval;
 }
