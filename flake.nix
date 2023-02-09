@@ -97,30 +97,19 @@
             }
             {
               name = "build";
-              help = "Build hhuOS using build.sh";
-              # NIX_CC required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
-              command = "NIX_CC=$(which gcc) ./build.sh --type \"Debug\"";
-            }
-            {
-              name = "build-grub";
               help = "Build hhuOS target grub using build.sh";
               # NIX_CC required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
               command = "NIX_CC=$(which gcc) ./build.sh --type \"Debug\" --target \"grub\"";
             }
             {
               name = "run";
-              help = "Run hhuOS in quemu";
-              command = "./run.sh";
-            }
-            {
-              name = "run-grub";
               help = "Run hhuOS in quemu using grub";
               command = "./run.sh --bios \"true\" --file \"hhuOS.iso\"";
             }
             {
               name = "run-gdb";
               help = "Run hhuOS in quemu and wait for gdb connection";
-              command = "./run.sh --debug 1234";
+              command = "./run.sh --bios \"true\" --file \"hhuOS.iso\" --debug 1234";
             }
             {
               name = "connect-gdb";
