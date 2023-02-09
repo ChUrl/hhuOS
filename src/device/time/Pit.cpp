@@ -53,8 +53,8 @@ void Pit::setInterruptRate(uint16_t divisor) {
 
 void Pit::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
-    interruptService.assignInterrupt(Kernel::InterruptDispatcher::PIT, *this);
-    interruptService.allowHardwareInterrupt(InterruptSource::PIT);
+    interruptService.assignInterrupt(Kernel::InterruptVector::PIT, *this);
+    interruptService.allowHardwareInterrupt(InterruptRequest::PIT);
 }
 
 void Pit::trigger(const Kernel::InterruptFrame &frame) {
@@ -62,10 +62,12 @@ void Pit::trigger(const Kernel::InterruptFrame &frame) {
     time.addNanoseconds(timerInterval);
 
     // Don't use PIT for scheduling when APIC Timer is enabled
-    if (!Apic::isTimerInitialized()) {
-        if (time.toMilliseconds() % yieldInterval == 0) {
-            Kernel::System::getService<Kernel::SchedulerService>().yield();
-        }
+    if (Apic::isTimerInitialized()) {
+        return;
+    }
+
+    if (time.toMilliseconds() % yieldInterval == 0) {
+        Kernel::System::getService<Kernel::SchedulerService>().yield();
     }
 }
 
