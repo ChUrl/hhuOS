@@ -56,7 +56,6 @@
 #include "device/interrupt/IoApic.h"
 #include "device/interrupt/ApicErrorInterruptHandler.h"
 #include "device/interrupt/Apic.h"
-#include "device/interrupt/ApicAcpiParser.h"
 #include "lib/util/async/Thread.h"
 
 namespace Kernel {
@@ -119,13 +118,19 @@ void System::initializeSystem() {
     initialized = true;
 
     if (Device::Apic::isSupported()) {
-        log.info("APIC support detected -> Initializing Local APIC + I/O APIC");
-        Device::Apic::initialize<Device::ApicAcpiParser>();
+        log.info("APIC support detected -> Initializing BSP Local APIC + I/O APIC(s)");
+        // Device::Apic::initialize();
     }
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
     log.info("Enabling interrupts");
     Device::Cpu::enableInterrupts();
+
+    // This requires enabled interrupts (for IPIs) // TODO: Does it? Or does IPI sending work without interrupts?
+    if (Device::Apic::isSmpSupported()) {
+        log.info("Detected SMP support -> Initializing AP(s)");
+        // Device::Apic::initializeSmp();
+    }
 
     // Setup time and date devices
     log.info("Initializing PIT");
@@ -147,13 +152,14 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
-    if (Device::Apic::isInitialized()) {
-        log.info("Running APIC detected -> Initializing APIC Timer");
-        Device::Apic::initializeTimer();
+    // TODO: Init timer for each core?
+    if (Device::Apic::isBspInitialized()) {
+        log.info("APIC detected -> Initializing APIC Timer");
+        // Device::Apic::initializeTimer();
     }
 
 #if HHUOS_APIC_ENABLE_DEBUG == 1
-    Device::Apic::dumpDebugInfo();
+    // Device::Apic::dumpDebugInfo();
 #endif
 
     // Create thread to refill block pool of paging area manager
@@ -340,7 +346,7 @@ TaskStateSegment &System::getTaskStateSegment() {
 }
 
 void System::handleEarlyInterrupt(const InterruptFrame &frame) {
-    if (frame.interrupt == InterruptDispatcher::PAGEFAULT) {
+    if (frame.interrupt == InterruptVector::PAGEFAULT) {
         pagefaultHandler->trigger(frame);
     }
 }
