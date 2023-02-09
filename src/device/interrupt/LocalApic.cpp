@@ -1,14 +1,14 @@
 #include "LocalApic.h"
+#include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
 #include "kernel/paging/Paging.h"
-#include "device/cpu/Cpu.h"
 #include "lib/util/cpu/CpuId.h"
-#include "Pic.h"
+#include "smp_startup.h"
+#include "Apic.h"
 
 namespace Device {
 
-bool LocalApic::initialized = false;
-// bool LocalApic::smpInitialized = false;
+bool LocalApic::bspInitialized = false;
 LocalApicPlatform *LocalApic::localPlatform = nullptr;
 ModelSpecificRegister LocalApic::ia32ApicBaseMsr = ModelSpecificRegister(0x1B);
 LocalApic::Register LocalApic::lintRegs[7] = {static_cast<Register>(0x2F0),
@@ -18,7 +18,14 @@ LocalApic::Register LocalApic::lintRegs[7] = {static_cast<Register>(0x2F0),
                                               static_cast<Register>(0x350),
                                               static_cast<Register>(0x360),
                                               static_cast<Register>(0x370)};
+const IoPort LocalApic::registerSelectorPort = IoPort(0x22);
+const IoPort LocalApic::registerDataPort = IoPort(0x23);
 Kernel::Logger LocalApic::log = Kernel::Logger::get("LocalApic");
+
+LocalApic::LocalApic(LocalApicPlatform *localApicPlatform, const LocalApicInformation &&localApicInformation)
+: localInfo(localApicInformation) {
+    localPlatform = localApicPlatform;
+}
 
 bool LocalApic::supportsXApic() {
     auto features = Util::Cpu::CpuId::getCpuFeatures();
@@ -40,109 +47,172 @@ bool LocalApic::supportsX2Apic() {
     return false;
 }
 
-bool LocalApic::isInitialized() {
-    return initialized;
+uint8_t LocalApic::getVersion() {
+    return readDoubleWord(VER);
 }
 
-// TODO: SMP
-// bool LocalApic::isSmpInitialized() {
-//     return smpInitialized;
-// }
+bool LocalApic::isBspInitialized() {
+    return bspInitialized;
+}
 
-// TODO: Does not account for multiple cores
-void LocalApic::ensureInitialized() {
-    if (!initialized) {
+void LocalApic::ensureBspInitialized() {
+    if (!bspInitialized) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Local APICs are not initialized!");
     }
 }
 
-void LocalApic::initialize(LocalApicPlatform *platform) {
+uint8_t LocalApic::initializeBsp() {
+    if (isBspInitialized()) {
+        log.error("BSP already initialized, skipping initialization!");
+        return getId();
+    }
+
     BaseMSREntry msrEntry = readBaseMSR();
 
     if (!msrEntry.isBSP) {
         // IA32_APIC_BASE_MSR is unique (every core has its own)
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "May only be called by BSP!");
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "May only be called by the BSP!");
     }
 
-    localPlatform = platform;
+    disablePicMode(); // Physically connect the APIC to the BSP, just in case
 
     // Decide which mode to use (xApic or x2Apic)
     if (supportsX2Apic()) {
         // QEMU doesn't support emulation of x2Apic via TCG (QEMU Tiny Code Generator)
         // KVM would be possible, but then GDB can't be attached, so compatibility mode will always be chosen
-        log.info("X2Apic support present but not implemented, running in xApic compatibility mode");
+        log.info("X2Apic support detected but not implemented, running in xApic compatibility mode");
         localPlatform->isX2Apic = false;
         initializeMMIORegion();
 
         // log.info("X2Apic support present -> Enabling x2Apic mode");
+        // msrEntry.isXApic = true; // Should be true anyway
         // msrEntry.isX2Apic = true;
         // writeBaseMSR(msrEntry);
         // localPlatform->isX2Apic = true;
     } else {
-        log.info("Running in xApic mode");
+        log.info("No x2Apic mode support detected, running in xApic mode");
         localPlatform->isX2Apic = false;
         initializeMMIORegion();
+
+        msrEntry.isXApic = true; // Should be true anyway
+        msrEntry.isX2Apic = false;
+        writeBaseMSR(msrEntry);
     }
 
-    localPlatform->version = readDoubleWord(VER);
+    // Mask all PIC interrupts that have been enabled previously
+    // This has to be done before bspInitialized is set to true, to reach the PIC through the InterruptService
+    auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
+    for (uint8_t i = 0; i < 16; ++i) {
+        interruptService.forbidHardwareInterrupt(static_cast<InterruptRequest>(i));
+    }
 
+    bspInitialized = true;
+    return getId();
+}
+
+void LocalApic::disablePicMode() {
+    registerSelectorPort.writeByte(0x70); // IMCR address is 0x70
+    registerDataPort.writeByte(0x01); // 0x00 connects PIC to LINT0, 0x01 disconnects
+}
+
+// Unused, since virtual wire mode is not supported by this implementation
+void LocalApic::enablePicMode() {
+    registerSelectorPort.writeByte(0x70); // IMCR address is 0x70
+    registerDataPort.writeByte(0x00); // 0x00 connects PIC to LINT0, 0x01 disconnects
+
+    // For virtual wire mode, LINT0 has to be configured as ExtINT additionaly
+}
+
+void LocalApic::initializeApApic() const {
     // Mask all local interrupt sources
     initializeLVT();
 
     // Configure the non maskable interrupt pin
-    LocalApicNMI *nmi = localPlatform->getLocalNMIConfiguration(getId());
-    if (nmi != nullptr) {
-        LVTEntry lvtEntry{};
-        lvtEntry.vector = static_cast<InterruptVector>(0); // NMI doesn't have vector
-        lvtEntry.deliveryMode = LVTEntry::DeliveryMode::NMI;
-        lvtEntry.pinPolarity = nmi->polarity;
-        lvtEntry.triggerMode = nmi->triggerMode;
-        lvtEntry.isMasked = false;
-        writeLVT(nmi->lint == 0 ? LINT0 : LINT1, lvtEntry);
-    }
+    // This is always LINT1, but as ACPI reports this it doesn't have to be set statically
+    LVTEntry lvtEntry{};
+    lvtEntry.vector = static_cast<Kernel::InterruptVector>(0); // NMI doesn't have vector
+    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::NMI;
+    lvtEntry.pinPolarity = localInfo.nmiPolarity;
+    lvtEntry.triggerMode = localInfo.nmiTriggerMode;
+    lvtEntry.isMasked = false;
+    writeLVT(localInfo.nmiLint == 0 ? LINT0 : LINT1, lvtEntry);
 
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF
     // and the SW ENABLE flag.
     SVREntry svrEntry{};
-    svrEntry.vector = Kernel::InterruptDispatcher::SPURIOUS;
+    svrEntry.vector = Kernel::InterruptVector::SPURIOUS;
     svrEntry.isSWEnabled = true;
     svrEntry.hasEOIBroadcastSuppression = true; // TODO
     writeSVR(svrEntry);
 
-    // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
-    // change a subsequently read value, in fact the register should always be written once before reading)
-    writeDoubleWord(ESR, 0);
-    writeDoubleWord(ESR, 0);
-
-    // Clear other outstanding interrupts
+    // Clear outstanding stuff
+    clearErrors();
     sendEndOfInterrupt();
 
     // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
     writeDoubleWord(TPR, 0);
-
-    // Mask all PIC interrupts that have been enabled previously
-    for (uint8_t i = 0; i < 16; ++i) {
-        Pic::forbid(static_cast<InterruptSource>(i));
-    }
-
-    initialized = true;
 }
 
-// TODO: Does not account for multiple cores
+void LocalApic::sendIpiInit(uint8_t localApicId, ICREntry::Level level) {
+    ICREntry icrEntry{};
+    icrEntry.vector = static_cast<Kernel::InterruptVector>(0), // INIT should have vector number 0
+    icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT,
+    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL,
+    icrEntry.level = level, // ASSERT or DEASSERT
+    icrEntry.triggerMode = ICREntry::TriggerMode::LEVEL,
+    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO, // Only broadcast to CPU in destination field
+    icrEntry.destination = localApicId;
+    writeICR(icrEntry); // Writing ICR issues IPI
+
+    do {
+        asm volatile ("pause" : : : "memory");
+    } while(readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING); // Wait for delivery
+}
+
+void LocalApic::sendIpiStartup(uint8_t localApicId, uint32_t startupCodeAddress) {
+    ICREntry icrEntry{};
+    icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12), // Startup code physical address
+    icrEntry.deliveryMode = ICREntry::DeliveryMode::STARTUP,
+    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL, // Ignored
+    icrEntry.level = ICREntry::Level::DEASSERT, // Ignored
+    icrEntry.triggerMode = ICREntry::TriggerMode::EDGE, // Ignored
+    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO, // Ignored
+    icrEntry.destination = localApicId;
+    writeICR(icrEntry); // Writing ICR issues IPI
+
+    for (uint32_t j = 0; j < 1000000; ++j); // Ugly wait, because we have no PIT yet
+
+    do {
+        asm volatile ("pause" : : : "memory");
+    } while(readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING); // Wait for delivery
+}
+
+void LocalApic::clearErrors() {
+    // Clear possible error interrupts (write twice because ESR is read/write register, writing once does not
+    // change a subsequently read value, in fact the register should always be written once before reading)
+    writeDoubleWord(ESR, 0);
+    writeDoubleWord(ESR, 0);
+}
+
+uint8_t LocalApic::getId() {
+    return readDoubleWord(ID) >> 24;
+}
+
+// TODO: Does not account for multiple cores?
 void LocalApic::allow(LocalInterrupt lint) {
     LVTEntry entry = readLVT(lint);
     entry.isMasked = false;
     writeLVT(lint, entry);
 }
 
-// TODO: Does not account for multiple cores
+// TODO: Does not account for multiple cores?
 void LocalApic::forbid(LocalInterrupt lint) {
     LVTEntry entry = readLVT(lint);
     entry.isMasked = true;
     writeLVT(lint, entry);
 }
 
-// TODO: Does not account for multiple cores
+// TODO: Does not account for multiple cores?
 bool LocalApic::status(LocalInterrupt lint) {
     return readLVT(lint).isMasked;
 }
@@ -153,50 +223,10 @@ void LocalApic::sendEndOfInterrupt() {
     writeDoubleWord(EOI, 0);
 }
 
-// This works for multiple cores because the core that handles the interrupt calls this function
-// and thus reaches the correct local APIC
-void LocalApic::handleErrors() {
-    // Write before read (read/write register, IA-32 Architecture Manual Chapter 10.5.3)
-    writeDoubleWord(ESR, 0);
-    uint32_t errors = readDoubleWord(ESR);
-
-    // TODO: This is architecture dependent...
-    // Errors for all CPUs
-    bool illegalVectorReceived = errors & (1 << 6);
-    bool illegalVectorSent = errors & (1 << 5);
-
-    // Errors reserved on original Pentium CPUs
-    bool illegalRegisterAccess = errors & (1 << 7);
-
-    // Errors reserved on Core, P4, Xeon CPUs
-    bool receiveAcceptError = errors & (1 << 3);
-    bool sendAcceptError = errors & (1 << 2);
-    bool receiveChecksumError = errors & (1 << 1);
-    bool sendChecksumError = errors & 1;
-
-    // TODO: Don't know how to handle, for now just log
-    // TODO: Can I log here? This happens during the ERROR interrupt handler
-    if (illegalVectorReceived) { log.error("ERROR: Illegal vector received!"); }
-    if (illegalVectorSent) { log.error("ERROR: Illegal vector sent!"); }
-    if (illegalRegisterAccess) { log.error("ERROR: Illegal register access!"); }
-    if (receiveAcceptError) { log.error("ERROR: Receive accept error!"); }
-    if (sendAcceptError) { log.error("ERROR: Send accept error!"); }
-    if (receiveChecksumError) { log.error("ERROR: Receive checksum error!"); }
-    if (sendChecksumError) { log.error("ERROR: Send checksum error!"); }
-
-    // Clear errors
-    writeDoubleWord(ESR, 0);
-    writeDoubleWord(ESR, 0);
-}
-
-void LocalApic::ensureMMIO() {
-    if (localPlatform->virtAddress == 0) {
+void LocalApic::ensureRegisterAccess() {
+    if (!localPlatform->isX2Apic && localPlatform->virtAddress == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LocalApic MMIO region not initialized!");
     }
-}
-
-uint8_t LocalApic::getId() {
-    return readDoubleWord(ID) >> 24;
 }
 
 void LocalApic::initializeMMIORegion() {
@@ -211,8 +241,6 @@ void LocalApic::initializeMMIORegion() {
 }
 
 void LocalApic::initializeLVT() {
-    ensureMMIO();
-
     // Default values
     LVTEntry lvtEntry{};
     lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED, // TODO: Do I need to care about deliveryMode?
@@ -221,19 +249,19 @@ void LocalApic::initializeLVT() {
     lvtEntry.isMasked = true;
 
     // Set all the vector numbers
-    lvtEntry.vector = Kernel::InterruptDispatcher::CMCI;
-    writeLVT(CMCI, lvtEntry); // TODO: The CMCI might not exist
-    lvtEntry.vector = Kernel::InterruptDispatcher::APICTIMER;
+    // lvtEntry.vector = Kernel::InterruptVector::CMCI;
+    // writeLVT(CMCI, lvtEntry); // The CMCI might not exist
+    lvtEntry.vector = Kernel::InterruptVector::APICTIMER;
     writeLVT(TIMER, lvtEntry);
-    lvtEntry.vector = Kernel::InterruptDispatcher::THERMAL;
+    lvtEntry.vector = Kernel::InterruptVector::THERMAL;
     writeLVT(THERMAL, lvtEntry);
-    lvtEntry.vector = Kernel::InterruptDispatcher::PERFORMANCE;
+    lvtEntry.vector = Kernel::InterruptVector::PERFORMANCE;
     writeLVT(PERFORMANCE, lvtEntry);
-    lvtEntry.vector = Kernel::InterruptDispatcher::LINT0;
+    lvtEntry.vector = Kernel::InterruptVector::LINT0;
     writeLVT(LINT0, lvtEntry);
-    lvtEntry.vector = Kernel::InterruptDispatcher::LINT1;
+    lvtEntry.vector = Kernel::InterruptVector::LINT1;
     writeLVT(LINT1, lvtEntry);
-    lvtEntry.vector = Kernel::InterruptDispatcher::ERROR;
+    lvtEntry.vector = Kernel::InterruptVector::ERROR;
     writeLVT(ERROR, lvtEntry);
 }
 
@@ -262,23 +290,23 @@ void LocalApic::writeBaseMSR(const BaseMSREntry &msrEntry) {
 }
 
 uint32_t LocalApic::readDoubleWord(Register reg) {
+    ensureRegisterAccess();
     if (localPlatform->isX2Apic) {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "X2Apic mode not supported!");
         // ModelSpecificRegister msr = getMSR(reg);
         // return static_cast<uint32_t>(msr.readQuadWord()); // Atomic read
     } else {
-        ensureMMIO();
         return *reinterpret_cast<volatile uint32_t *>(localPlatform->virtAddress + reg);
     }
 }
 
 void LocalApic::writeDoubleWord(Register reg, uint32_t val) {
+    ensureRegisterAccess();
     if (localPlatform->isX2Apic) {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "X2Apic mode not supported!");
         // ModelSpecificRegister msr = getMSR(reg);
         // msr.writeQuadWord(static_cast<uint64_t>(val)); // Atomic write
     } else {
-        ensureMMIO();
         *reinterpret_cast<volatile uint32_t *>(localPlatform->virtAddress + reg) = val;
     }
 }
@@ -300,19 +328,15 @@ void LocalApic::writeLVT(LocalInterrupt lint, const LVTEntry &lvtEntry) {
 }
 
 ICREntry LocalApic::readICR() {
-    Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
     uint32_t low = readDoubleWord(ICR_LOW);
     uint64_t high = readDoubleWord(ICR_HIGH);
-    Cpu::enableInterrupts();
     return static_cast<ICREntry>(low | high << 32);
 }
 
 void LocalApic::writeICR(const ICREntry &icrEntry) {
     auto val = static_cast<uint64_t>(icrEntry);
-    Cpu::disableInterrupts(); // Do not let another interrupt handler fuck this up
     writeDoubleWord(ICR_HIGH, val >> 32);
     writeDoubleWord(ICR_LOW, val & 0xFFFFFFFF); // Writing the low DW sends the IPI
-    Cpu::enableInterrupts();
 }
 
 // x2Apic is not supported

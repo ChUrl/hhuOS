@@ -20,15 +20,11 @@ namespace Device {
  */
 class LocalApic {
     friend class Apic;
-
     friend class ApicTimer; // ApicTimer is configured by using LApic registers
     friend class ApicErrorInterruptHandler;
-
     friend class IoApic;
 
 public:
-    // TODO: Move this to its own file?
-    //       Maybe "Interrupt" or sth. that contains all types (LocalInterrupt, InterruptSource, InterruptVector...)?
     /**
      * @brief This lists the local APIC's local interrupt pins.
      *
@@ -36,7 +32,7 @@ public:
      * the usual (PIC/IO APIC) hardware interrupt inputs/GlobalSystemInterrupts.
      */
     enum LocalInterrupt : uint8_t {
-        CMCI = 0, // TODO: Might not exist
+        CMCI = 0, // Might not exist
         TIMER = 1,
         THERMAL = 2,
         PERFORMANCE = 3,
@@ -46,17 +42,27 @@ public:
     };
 
 public:
-    LocalApic() = delete; // Static class
+    LocalApic(LocalApicPlatform *localApicPlatform, const LocalApicInformation &&localApicInformation);
 
     LocalApic(const LocalApic &copy) = delete;
 
     LocalApic &operator=(const LocalApic &copy) = delete;
 
-    ~LocalApic() = delete; // Static class
+    ~LocalApic() = default;
+
+    /**
+     * @brief Get the ID of the local APIC belonging to the current CPU.
+     *
+     * Can be used to determine what CPU is currently executing the calling code.
+     *
+     * @return The local APIC's ID
+     */
+    [[nodiscard]] static uint8_t getId();
+
+    void initializeApApic() const; // Gets called by the AP itself
 
 private:
-    // Offsets, IA-32 Architecture Manual Chapter 10.4.1
-    // NOTE: Omitted entries already in LApic::Interrupt and ApicTimer
+    // Offsets, IA-32 Architecture Manual Chapter 11.4.1
     enum Register : uint16_t {
         ID = 0x20, // ID
         VER = 0x30, // Version
@@ -88,12 +94,14 @@ private:
 
     static bool supportsX2Apic();
 
-    static bool isInitialized();
+    static uint8_t getVersion();
+
+    static bool isBspInitialized();
 
     /**
      * @brief Ensure that all local APICs are initialized.
      */
-    static void ensureInitialized();
+    static void ensureBspInitialized();
 
     /**
      * @brief Initialize the local APIC.
@@ -104,16 +112,18 @@ private:
      *
      * Must be called by the bootstrap processor.
      */
-    static void initialize(LocalApicPlatform *platform);
+    static uint8_t initializeBsp();
 
-    /**
-     * @brief Get the ID of the local APIC belonging to the current CPU.
-     *
-     * Can be used to determine what CPU is currently running.
-     *
-     * @return The local APIC's ID
-     */
-    [[nodiscard]] static uint8_t getId();
+    // This is not implemented in QEMU, but on real hardware
+    static void disablePicMode();
+
+    static void enablePicMode();
+
+    static void sendIpiInit(uint8_t localApicId, ICREntry::Level level);
+
+    static void sendIpiStartup(uint8_t localApicId, uint32_t startupCodeAddress);
+
+    static void clearErrors();
 
     /**
      * @brief Unmask a local interrupt in the local APIC of the current CPU.
@@ -137,9 +147,10 @@ private:
      */
     static bool status(LocalInterrupt lint);
 
-    // TODO: For compatibility with older IO APICs (< version 0x20) this has to be used in
-    //       combination with temporarily setting all IO APIC redirection entries to level-triggered
-    //       (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
+    // For compatibility with level-triggered interrupts on older IO APICs (< version 0x20)
+    // this has to be used in combination with temporarily setting all IO APIC redirection
+    // entries to edge-triggered.
+    // (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
     /**
      * @brief Send an end of interrupt signal to the local APIC of the current CPU.
      *
@@ -150,20 +161,10 @@ private:
      */
     static void sendEndOfInterrupt();
 
-    static void handleErrors();
-
     /**
      * @brief Ensure that the local APIC's MMIO region has been initialized.
      */
-    static void ensureMMIO();
-
-    // TODO
-    /**
-     * @brief Initialize the local APIC of an additional AP (Application Processor).
-     *
-     * (MultiProcessor Specification Appendix B.4)
-     */
-    // static void initializeApplicationProcessor(LocalApicInformation *lapic);
+    static void ensureRegisterAccess();
 
     /**
      * @brief Allocate the memory region used to access the local APIC's registers in xApic mode.
@@ -210,12 +211,18 @@ private:
     // static ModelSpecificRegister getMSR(Register reg); // Used for x2Apic mode
 
 private:
-    static bool initialized;
-    static LocalApicPlatform *localPlatform; ///< @brief General information valid for all local APICs
+    static bool bspInitialized; // TODO: Unstatic and rename to initialized
+    static LocalApicPlatform *localPlatform;
+    const LocalApicInformation localInfo;
 
-    static ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (unique although static)
-    static Register lintRegs[7]; // Register offsets for the LINTs
+    // TODO: Const the stuff
+    static ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (every core can only address its own MSR)
+    static Register lintRegs[7]; ///< @brief Local interrupt to register offset translation
     static const constexpr char *lintNames[7] = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
+
+    // IMCR register, MultiProcessor Specification Chapter 3.6.2.1
+    static const IoPort registerSelectorPort;
+    static const IoPort registerDataPort;
 
     static Kernel::Logger log;
 };
