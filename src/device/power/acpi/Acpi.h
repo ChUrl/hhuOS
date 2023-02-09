@@ -139,9 +139,7 @@ public:
         uint32_t flags;
     } __attribute__ ((packed));
 
-    // TODO: Keep here, move into acpi/Madt class or move into APIC classes?
-    // NOTE: Only ACPI 1.0b, later versions have significantly more stuff
-    // NOTE: APIC tables I added:
+    // Only ACPI 1.0, later versions have more stuff that needs to be accounted for
     enum ApicStructureType : uint8_t {
         PROCESSOR_LOCAL_APIC = 0x0,
         IO_APIC = 0x1,
@@ -185,13 +183,13 @@ public:
         uint16_t flags; // INTI Flags
     } __attribute__ ((packed));
 
-    struct NMISource {
+    struct NmiSource {
         ApicStructureHeader header;
         uint16_t flags; // INTI Flags
         uint32_t globalSystemInterrupt;
     } __attribute__ ((packed));
 
-    struct LocalApicNMI {
+    struct LocalApicNmi {
         ApicStructureHeader header;
         uint8_t acpiProcessorId;
         uint16_t flags; // INTI Flags
@@ -243,13 +241,12 @@ public:
 
     static Util::Data::Array<Util::Memory::String> getAvailableTables();
 
-    // TODO: Is this okay?
     // Convenience function to directly receive pointer to specific table
     template<typename T = SdtHeader>
     static const T *getTable(const char *signature);
 
     template<typename T>
-    static void getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type);
+    static void collectMadtStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type);
 
 private:
 
@@ -269,23 +266,13 @@ private:
     static const constexpr uint8_t SIGNATURE_LENGTH = 8;
 };
 
-// TODO: Is this okay?
-// Convenience function to directly receive pointer to specific table
 template<typename T>
 const T *Acpi::getTable(const char *signature) {
     return reinterpret_cast<const T *>(&getTable(signature));
 }
 
-    static Util::Array<Util::String> getAvailableTables();
-
-    // TODO: Move?
-    template<typename T>
-    static void getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type) {
-        auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
-        auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
-// TODO: Move?
 template<typename T>
-void Acpi::getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type) {
+void Acpi::collectMadtStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type) {
     auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
     auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
 
@@ -297,7 +284,7 @@ void Acpi::getApicStructures(Util::Data::ArrayList<const T *> *structures, ApicS
         if (header->length == 0) {
             // If this happens there is a bug in this function o_O
             Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                            "Acpi::getApicStructures(): Header length must not be 0!");
+                                            "Acpi::collectMadtStructures(): Header length must not be 0!");
         }
 
         if (header->type == type) {
