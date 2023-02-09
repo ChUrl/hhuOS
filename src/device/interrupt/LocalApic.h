@@ -45,7 +45,7 @@ public:
     /**
      * @brief Constructs a LocalApic instance.
      *
-     * @param localApicPlatform General information about the local APIC, parsed from ACPI
+     * @param localApicPlatform General information about the local APICs, parsed from ACPI
      * @param localApicInformation Information about the specific local APIC, parsed from ACPI
      */
     LocalApic(LocalApicPlatform *localApicPlatform, const LocalApicInformation &&localApicInformation);
@@ -208,10 +208,10 @@ private:
     /**
      * @brief Send an end-of-interrupt signal to the local APIC of the current CPU.
      *
-     * The signal will be broadcasted to IO APICs if the interrupt was level-triggered and broadcasting
-     * is enabled in the SVR (IA-32 Architecture Manual Chapter 10.8.5).
-     *
-     * For IO APICs with version >= 0x20 prefer sending the EOI to the IO APIC.
+     * The signal will be broadcasted to all I/O APICs if the interrupt was level-triggered and broadcasting
+     * is enabled in the SVR (IA-32 manual, sec. 3.11.8.5), as for level-triggered interrupts servicing
+     * completion has to be signaled to both, the local APIC and the I/O APIC(s).
+     * Edge-triggered interrupts are only EOI'd to the local APIC.
      */
     static void sendEndOfInterrupt();
 

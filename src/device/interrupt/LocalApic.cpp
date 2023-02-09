@@ -56,7 +56,7 @@ uint8_t LocalApic::getVersion() {
 }
 
 void LocalApic::ensureBspInitialized() {
-    if (bspInitialized) {
+    if (!bspInitialized) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "BSP not initialized!");
     }
 }

@@ -15,21 +15,16 @@ IoApic::IoApic(IoApicPlatform *ioApicPlatform, IoApicInformation &&ioApicInforma
     ioPlatform = ioApicPlatform;
 }
 
-bool IoApic::isInitialized() const {
-    return initialized;
-}
-
 void IoApic::initialize() {
-    LocalApic::ensureBspInitialized();
     initializeMMIORegion();
 
     // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
-    ioPlatform->version = readDoubleWord(VER);
+    ioPlatform->version = readIndirectRegister(VER);
     ioPlatform->directEoiSupported = ioPlatform->version >= 0x20;
 
     // With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
     // With ICH5 (and other ICHs?) it is always 24 (also ICH5 only has 1 IO APIC, as other  consumer hardware)
-    ioInfo.gsiMax = static_cast<Kernel::GlobalSystemInterrupt>(ioInfo.gsiBase + (readDoubleWord(VER) >> 16));
+    ioInfo.gsiMax = static_cast<Kernel::GlobalSystemInterrupt>(ioInfo.gsiBase + (readIndirectRegister(VER) >> 16));
     if (ioInfo.gsiMax > ioPlatform->globalMaxGsi) {
         ioPlatform->globalMaxGsi = ioInfo.gsiMax;
     }
@@ -78,7 +73,7 @@ void IoApic::sendEndOfInterrupt(Kernel::InterruptVector vector, Kernel::GlobalSy
     }
 
     if (ioPlatform->directEoiSupported) {
-        writeDirectRegister<uint32_t>(EOI, vector);
+        writeMMIORegister<uint32_t>(EOI, vector);
     } else {
         // Marking a level triggered interrupt as edge triggered and masked clears the remote IRR bit
         // See https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
@@ -91,15 +86,15 @@ void IoApic::sendEndOfInterrupt(Kernel::InterruptVector vector, Kernel::GlobalSy
     }
 }
 
-void IoApic::ensureRegisterAccess() const {
-    if (ioInfo.virtAddress == 0) {
-        Util::Exception::throwException(Util::Exception::NULL_POINTER, "IoApic MMIO not initialized!");
-    }
-}
-
 void IoApic::ensureValidGsi(Kernel::GlobalSystemInterrupt gsi) const {
     if (gsi < ioInfo.gsiBase || gsi > ioInfo.gsiMax) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI not handled by this IO APIC!");
+    }
+}
+
+void IoApic::ensureRegisterAccess() const {
+    if (ioInfo.virtAddress == 0) {
+        Util::Exception::throwException(Util::Exception::NULL_POINTER, "IoApic MMIO not initialized!");
     }
 }
 
@@ -119,7 +114,7 @@ void IoApic::initializeREDTBL() {
     redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::FIXED;
     redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL;
     redtblEntry.isMasked = true;
-    redtblEntry.destination = LocalApic::getId(); // NOTE: All interrupts are sent to the BSP, which is inefficient
+    redtblEntry.destination = LocalApic::getId(); // ! All interrupts are sent to the BSP, which is inefficient
 
     for (uint32_t interruptInput = ioInfo.gsiBase; interruptInput <= ioInfo.gsiMax; ++interruptInput) {
         auto gsi = static_cast<Kernel::GlobalSystemInterrupt>(interruptInput); // GSIs match interrupt inputs on IO APIC
@@ -131,7 +126,7 @@ void IoApic::initializeREDTBL() {
         const IoApicPlatform::IoApicIrqOverride *override = ioPlatform->getIoApicIrqOverride(gsi);
         if (override != nullptr) {
             redtblEntry.vector = static_cast<Kernel::InterruptVector>(override->source + 32);
-            // NOTE: This is disabled because some ACPI entries are bugged (for example the PIT redirect)
+            // ! This is disabled, because some ACPI entries are wrong somehow (for example the PIT entry)
             // redtblEntry.pinPolarity = override->polarity;
             // redtblEntry.triggerMode = override->triggerMode;
         }
@@ -158,17 +153,17 @@ void IoApic::dumpREDTBL() {
 }
 #endif
 
-uint32_t IoApic::readDoubleWord(IndirectRegister reg) {
+uint32_t IoApic::readIndirectRegister(IndirectRegister reg) {
     ensureRegisterAccess();
-    writeDirectRegister<uint8_t>(IND, reg);
-    auto val = readDirectRegister<uint32_t>(DAT);
+    writeMMIORegister<uint8_t>(IND, reg);
+    auto val = readMMIORegister<uint32_t>(DAT);
     return val;
 }
 
-void IoApic::writeDoubleWord(IndirectRegister reg, uint32_t val) {
+void IoApic::writeIndirectRegister(IndirectRegister reg, uint32_t val) {
     ensureRegisterAccess();
-    writeDirectRegister<uint8_t>(IND, reg);
-    writeDirectRegister<uint32_t>(DAT, val);
+    writeMMIORegister<uint8_t>(IND, reg);
+    writeMMIORegister<uint32_t>(DAT, val);
 }
 
 REDTBLEntry IoApic::readREDTBL(Kernel::GlobalSystemInterrupt gsi) {
@@ -176,8 +171,8 @@ REDTBLEntry IoApic::readREDTBL(Kernel::GlobalSystemInterrupt gsi) {
     auto interruptInput = static_cast<uint8_t>(gsi - ioInfo.gsiBase);
 
     // The first register is the low DW, the second register is the high DW
-    uint32_t low = readDoubleWord(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput));
-    uint64_t high = readDoubleWord(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1));
+    uint32_t low = readIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput));
+    uint64_t high = readIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1));
     return static_cast<REDTBLEntry>(low | high << 32);
 }
 
@@ -187,8 +182,8 @@ void IoApic::writeREDTBL(Kernel::GlobalSystemInterrupt gsi, const REDTBLEntry &r
 
     // The first register is the low DW, the second register is the high DW
     auto val = static_cast<uint64_t>(redtbl);
-    writeDoubleWord(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput), val & 0xFFFFFFFF);
-    writeDoubleWord(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1), val >> 32);
+    writeIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput), val & 0xFFFFFFFF);
+    writeIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1), val >> 32);
 }
 
 }
