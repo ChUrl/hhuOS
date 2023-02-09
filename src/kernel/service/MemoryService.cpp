@@ -340,7 +340,7 @@ void* MemoryService::getPhysicalAddress(void *virtualAddress) {
 }
 
 void MemoryService::plugin() {
-    System::getService<Kernel::InterruptService>().assignInterrupt(InterruptDispatcher::PAGEFAULT, *this);
+    System::getService<Kernel::InterruptService>().assignInterrupt(InterruptVector::PAGEFAULT, *this);
 }
 
 void MemoryService::trigger(const Kernel::InterruptFrame &frame) {

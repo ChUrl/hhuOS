@@ -1,17 +1,17 @@
-#ifndef HHUOS_INTERRUPTSOURCE_H
-#define HHUOS_INTERRUPTSOURCE_H
+#ifndef HHUOS_INTERRUPTREQUEST_H
+#define HHUOS_INTERRUPTREQUEST_H
 
 #include <cstdint>
 
 namespace Device {
 
 /**
- * @brief This enumerates devices that trigger external interrupts.
+ * @brief This allows addressing an interrupt line by device name.
  *
- * InterruptSources map 1:1 to PIC interrupt inputs and system interrupt vectors (translated by 32).
+ * InterruptRequests map 1:1 to PIC interrupt inputs, and to system InterruptVectors translated by 32.
  * They do not translate 1:1 to the IO APIC's GlobalSystemInterrupts.
  */
-enum InterruptSource : uint8_t {
+enum InterruptRequest : uint8_t {
     // PIC compatible devices
     PIT = 0x00,
     KEYBOARD = 0x01,
@@ -32,4 +32,4 @@ enum InterruptSource : uint8_t {
 
 }
 
-#endif //HHUOS_INTERRUPTSOURCE_H
+#endif //HHUOS_INTERRUPTREQUEST_H

@@ -18,7 +18,7 @@
 #ifndef __PIC_include__
 #define __PIC_include__
 
-#include "InterruptSource.h"
+#include "InterruptRequest.h"
 #include "device/cpu/IoPort.h"
 
 namespace Device {
@@ -61,7 +61,7 @@ public:
      *
      * @param interruptSource The number of the interrupt to activated
      */
-    static void allow(InterruptSource interruptSource);
+    static void allow(InterruptRequest interruptSource);
 
     /**
      * Forbid an interrupt. If this is done, the interrupt is masked out
@@ -70,7 +70,7 @@ public:
      *
      * @param interruptSource The number of the interrupt to deactivate
      */
-    static void forbid(InterruptSource interruptSource);
+    static void forbid(InterruptRequest interruptSource);
 
     /**
      * Get the state of this interrupt - whether it is masked out or not.
@@ -78,21 +78,21 @@ public:
      * @param interruptSource The number of the interrupt
      * @return true, if the interrupt is disabled
      */
-    static bool status(InterruptSource interruptSource);
+    static bool status(InterruptRequest interruptSource);
 
     /**
      * Send an end of interrupt signal to the corresponding PIC.
      *
      * @param interruptSource The number of the interrupt for which to send an EOI
      */
-    static void sendEndOfInterrupt(InterruptSource interruptSource);
+    static void sendEndOfInterrupt(InterruptRequest interruptSource);
 
     /**
      * Check if a spurious interrupt has occurred.
      *
      * @return true, if a spurious interrupt has occurred
      */
-    static bool isSpurious(InterruptSource interruptSource);
+    static bool isSpurious(InterruptRequest interruptSource);
 
 private:
 
@@ -102,7 +102,7 @@ private:
      * @param interruptSource The interrupt
      * @return The corresponding PIC's data port
      */
-    static const IoPort& getDataPort(InterruptSource interruptSource);
+    static const IoPort& getDataPort(InterruptRequest interruptSource);
 
     /**
      * Get the mask for the specified interrupt.
@@ -110,7 +110,7 @@ private:
      * @param interruptSource The interrupt
      * @return The interrupt's mask
      */
-    static uint8_t getMask(InterruptSource interruptSource);
+    static uint8_t getMask(InterruptRequest interruptSource);
 
 private:
 

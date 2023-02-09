@@ -11,14 +11,14 @@ namespace Device {
 BaseMSREntry::BaseMSREntry(uint64_t registerValue) {
     isBSP = registerValue & (1 << 8);
     isX2Apic = registerValue & (1 << 10);
-    isHWEnabled = registerValue & (1 << 11);
+    isXApic = registerValue & (1 << 11);
     baseField = registerValue & 0xFFFFF000;
 }
 
 BaseMSREntry::operator uint64_t() const {
     return static_cast<uint64_t>(isBSP) << 8
            | static_cast<uint64_t>(isX2Apic) << 10
-           | static_cast<uint64_t>(isHWEnabled) << 11
+           | static_cast<uint64_t>(isXApic) << 11
            | static_cast<uint64_t>(baseField) << 12;
 }
 
@@ -27,7 +27,7 @@ BaseMSREntry::operator uint64_t() const {
  */
 
 SVREntry::SVREntry(uint32_t registerValue) {
-    vector = static_cast<InterruptVector>(registerValue & 0xFF);
+    vector = static_cast<Kernel::InterruptVector>(registerValue & 0xFF);
     isSWEnabled = registerValue & (1 << 8);
     hasFocusProcessorChecking = registerValue & (1 << 9);
     hasEOIBroadcastSuppression = registerValue & (1 << 12);
@@ -45,7 +45,7 @@ SVREntry::operator uint32_t() const {
  */
 
 LVTEntry::LVTEntry(uint32_t registerValue) {
-    vector = static_cast<InterruptVector>(registerValue & 0xFF);
+    vector = static_cast<Kernel::InterruptVector>(registerValue & 0xFF);
     deliveryMode = static_cast<DeliveryMode>((registerValue & (0b111 << 8)) >> 8);
     deliveryStatus = static_cast<DeliveryStatus>((registerValue & (1 << 12)) >> 12);
     pinPolarity = static_cast<PinPolarity>((registerValue & (1 << 13)) >> 13);
@@ -68,7 +68,7 @@ LVTEntry::operator uint32_t() const {
  */
 
 ICREntry::ICREntry(uint64_t registerValue) {
-    vector = static_cast<InterruptVector>(registerValue & 0xFF);
+    vector = static_cast<Kernel::InterruptVector>(registerValue & 0xFF);
     deliveryMode = static_cast<DeliveryMode>((registerValue & (0b111 << 8)) >> 8);
     destinationMode = static_cast<DestinationMode>((registerValue & (1 << 11)) >> 11);
     deliveryStatus = static_cast<DeliveryStatus>((registerValue & (1 << 12)) >> 12);
@@ -96,7 +96,7 @@ ICREntry::operator uint64_t() const {
  */
 
 REDTBLEntry::REDTBLEntry(uint64_t registerValue) {
-    vector = static_cast<InterruptVector>(registerValue & 0xFF);
+    vector = static_cast<Kernel::InterruptVector>(registerValue & 0xFF);
     deliveryMode = static_cast<DeliveryMode>((registerValue & (0b111 << 8)) >> 8);
     destinationMode = static_cast<DestinationMode>((registerValue & (1 << 11)) >> 11);
     deliveryStatus = static_cast<DeliveryStatus>((registerValue & (1 << 12)) >> 12);

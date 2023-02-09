@@ -41,7 +41,7 @@ InterruptDispatcher::InterruptDispatcher() : handler(new Util::List<InterruptHan
 
 void InterruptDispatcher::dispatch(const InterruptFrame &frame) {
     auto &interruptService = System::getService<InterruptService>();
-    auto slot = static_cast<Interrupt>(frame.interrupt);
+    auto slot = static_cast<InterruptVector>(frame.interrupt);
 
     // Handle exceptions (except page fault and device not available)
     if (isUnrecoverableException(slot)) {
@@ -91,14 +91,14 @@ uint32_t InterruptDispatcher::getInterruptDepth() const {
     return interruptDepth;
 }
 
-bool InterruptDispatcher::isUnrecoverableException(InterruptDispatcher::Interrupt slot) {
+bool InterruptDispatcher::isUnrecoverableException(InterruptVector slot) {
     // Apic interrupts
-    if (Device::Apic::isInitialized() && (Device::Apic::isLocalInterrupt(slot) || Device::Apic::isExternalInterrupt(slot))) {
+    if (Device::Apic::isBspInitialized() && (Device::Apic::isLocalInterrupt(slot) || Device::Apic::isExternalInterrupt(slot))) {
         return false;
     }
 
     // Pic interrupts
-    if (!Device::Apic::isInitialized() && slot - 32 <= Device::InterruptSource::SECONDARY_ATA) {
+    if (!Device::Apic::isBspInitialized() && slot - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
         return false;
     }
 

@@ -21,6 +21,8 @@
 #include <cstdint>
 
 #include "lib/util/async/Atomic.h"
+#include "InterruptHandler.h"
+#include "InterruptVector.h"
 
 namespace Util {
 
@@ -41,41 +43,6 @@ struct InterruptFrame;
  */
 class InterruptDispatcher {
 public:
-    enum Interrupt : uint8_t {
-        DEVICE_NOT_AVAILABLE = 7,
-        PAGEFAULT = 14,
-
-        // PIC compatible interrupts
-        PIT = 32,
-        KEYBOARD = 33,
-        COM2 = 35,
-        COM1 = 36,
-        LPT2 = 37,
-        FLOPPY = 38,
-        LPT1 = 39,
-        RTC = 40,
-        FREE1 = 41,
-        FREE2 = 42,
-        FREE3 = 43,
-        MOUSE = 44,
-        FPU = 45,
-        PRIMARY_ATA = 46,
-        SECONDARY_ATA = 47,
-
-        // Some other interrupts supported by IO APICs
-
-        SYSTEM_CALL = 0x86,
-
-        // Local APIC interrupts (248 - 255)
-        CMCI = 0xF8,
-        APICTIMER = 0xF9,
-        THERMAL = 0xFA,
-        PERFORMANCE = 0xFB,
-        LINT0 = 0xFC,
-        LINT1 = 0xFD,
-        ERROR = 0xFE,
-        SPURIOUS = 0xFF
-    };
 
     /**
      * Default Constructor.
@@ -107,7 +74,7 @@ public:
 
 private:
 
-    static bool isUnrecoverableException(Interrupt slot);
+    static bool isUnrecoverableException(InterruptVector slot);
 
     uint32_t interruptDepth = 0;
     uint32_t spuriousCounter = 0;

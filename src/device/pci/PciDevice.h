@@ -21,6 +21,7 @@
 #include <cstdint>
 
 #include "Pci.h"
+#include "device/interrupt/InterruptRequest.h"
 #include "device/interrupt/GlobalSystemInterrupt.h"
 #include "device/interrupt/Pic.h"
 #include "lib/util/collection/Array.h"
@@ -95,7 +96,7 @@ public:
 
     [[nodiscard]] uint16_t getSubsystemId() const;
 
-    [[nodiscard]] GlobalSystemInterrupt getInterruptLine() const;
+    [[nodiscard]] InterruptRequest getInterruptLine() const;
 
 private:
 
@@ -111,7 +112,7 @@ private:
     uint16_t subsystemVendorId{};
     uint16_t subsystemId{};
     uint8_t capabilitiesPointer{};
-    GlobalSystemInterrupt interruptLine{};
+    InterruptRequest interruptLine{};
 };
 
 }

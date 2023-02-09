@@ -23,6 +23,8 @@
 
 #include "device/interrupt/Pic.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
+#include "kernel/interrupt/InterruptVector.h"
+#include "device/interrupt/InterruptRequest.h"
 #include "kernel/service/Service.h"
 #include "device/interrupt/InterruptSource.h"
 #include "MemoryService.h"
@@ -54,17 +56,17 @@ public:
      */
     ~InterruptService() override = default;
 
-    void assignInterrupt(InterruptDispatcher::Interrupt slot, InterruptHandler &handler);
+    void assignInterrupt(InterruptVector slot, InterruptHandler &handler);
 
     void dispatchInterrupt(const InterruptFrame &frame);
 
-    void allowHardwareInterrupt(Device::InterruptSource interruptSource);
+    void allowHardwareInterrupt(Device::InterruptRequest interruptRequest);
 
-    void forbidHardwareInterrupt(Device::InterruptSource interruptSource);
+    void forbidHardwareInterrupt(Device::InterruptRequest interruptRequest);
 
-    void sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt);
+    void sendEndOfInterrupt(InterruptVector interruptVector);
 
-    bool checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt);
+    bool checkSpuriousInterrupt(InterruptVector interruptVector);
 
     static const constexpr uint8_t SERVICE_ID = 1;
 

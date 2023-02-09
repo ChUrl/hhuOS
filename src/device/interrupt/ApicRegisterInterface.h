@@ -1,7 +1,7 @@
 #ifndef HHUOS_APICREGISTERINTERFACE_H
 #define HHUOS_APICREGISTERINTERFACE_H
 
-#include "kernel/interrupt/InterruptDispatcher.h"
+#include "kernel/interrupt/InterruptVector.h"
 
 /*
  * I chose to implement the APIC register interaction this way because:
@@ -13,16 +13,13 @@
 
 namespace Device {
 
-// TODO: What about this...
-using InterruptVector = Kernel::InterruptDispatcher::Interrupt;
-
 /**
  * Information obtainable from the local APIC's model specific register.
  */
 struct BaseMSREntry {
     bool isBSP;
     bool isX2Apic;
-    bool isHWEnabled;
+    bool isXApic;
     uint32_t baseField;
 
     BaseMSREntry() = default;
@@ -37,7 +34,7 @@ struct BaseMSREntry {
  * current CPU's local APIC.
  */
 struct SVREntry {
-    InterruptVector vector;
+    Kernel::InterruptVector vector;
     bool isSWEnabled;
     bool hasFocusProcessorChecking;
     bool hasEOIBroadcastSuppression;
@@ -74,7 +71,7 @@ struct LVTEntry {
         ONESHOT = 0, PERIODIC = 1
     };
 
-    InterruptVector vector;
+    Kernel::InterruptVector vector;
     DeliveryMode deliveryMode; // All except timer
     DeliveryStatus deliveryStatus; // RO
     PinPolarity pinPolarity; // Only LINT0, LINT1
@@ -115,12 +112,13 @@ struct ICREntry {
         EDGE = 0, LEVEL = 1
     };
     enum class DestinationShorthand : uint8_t { // If used ICR_DESTINATION_FIELD is ignored
+        NO = 0,
         SELF = 1,
         ALL = 0b10,
         ALL_NO_SELF = 0b11
     };
 
-    InterruptVector vector;
+    Kernel::InterruptVector vector;
     DeliveryMode deliveryMode;
     DestinationMode destinationMode;
     DeliveryStatus deliveryStatus; // RO
@@ -162,7 +160,7 @@ struct REDTBLEntry {
         EDGE = 0, LEVEL = 1
     };
 
-    InterruptVector vector;
+    Kernel::InterruptVector vector;
     DeliveryMode deliveryMode;
     DestinationMode destinationMode;
     DeliveryStatus deliveryStatus; // RO

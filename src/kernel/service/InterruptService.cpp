@@ -18,12 +18,13 @@
 #include "InterruptService.h"
 #include "device/interrupt/Apic.h"
 #include "device/interrupt/Pic.h"
+#include "kernel/interrupt/InterruptVector.h"
 
 namespace Kernel {
 class InterruptHandler;
 struct InterruptFrame;
 
-void InterruptService::assignInterrupt(InterruptDispatcher::Interrupt slot, InterruptHandler &handler) {
+void InterruptService::assignInterrupt(InterruptVector slot, InterruptHandler &handler) {
     dispatcher.assign(slot, handler);
 }
 
@@ -31,46 +32,47 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
     dispatcher.dispatch(frame);
 }
 
-void InterruptService::allowHardwareInterrupt(Device::InterruptSource interruptSource) {
-    if (Device::Apic::isInitialized()) {
-        Device::Apic::allowExternalInterrupt(interruptSource);
+void InterruptService::allowHardwareInterrupt(Device::InterruptRequest interruptRequest) {
+    if (Device::Apic::isBspInitialized()) {
+        Device::Apic::allowExternalInterrupt(interruptRequest);
     } else {
-        Device::Pic::allow(interruptSource);
+        Device::Pic::allow(interruptRequest);
     }
 }
 
-void InterruptService::forbidHardwareInterrupt(Device::InterruptSource interruptSource) {
-    if (Device::Apic::isInitialized()) {
-        Device::Apic::forbidExternalInterrupt(interruptSource);
+void InterruptService::forbidHardwareInterrupt(Device::InterruptRequest interruptRequest) {
+    if (Device::Apic::isBspInitialized()) {
+        Device::Apic::forbidExternalInterrupt(interruptRequest);
     } else {
-        Device::Pic::forbid(interruptSource);
+        Device::Pic::forbid(interruptRequest);
     }
 }
 
-void InterruptService::sendEndOfInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (Device::Apic::isInitialized()) {
-        if (Device::Apic::isExternalInterrupt(interrupt)) {
-            Device::Apic::sendExternalEndOfInterrupt(interrupt);
-        } else if (Device::Apic::isLocalInterrupt(interrupt)) {
+void InterruptService::sendEndOfInterrupt(InterruptVector interruptVector) {
+    if (Device::Apic::isBspInitialized()) {
+        // NMI, SMI, INIT, ExtINT and STARTUP don't receive EOI
+        if (Device::Apic::isExternalInterrupt(interruptVector)) {
+            Device::Apic::sendExternalEndOfInterrupt(interruptVector);
+        } else if (Device::Apic::isLocalInterrupt(interruptVector) && interruptVector != InterruptVector::LINT1) {
             Device::Apic::sendLocalEndOfInterrupt();
         }
     }
 
-    if (!Device::Apic::isInitialized() && interrupt - 32 <= Device::InterruptSource::SECONDARY_ATA) {
-        Device::Pic::sendEndOfInterrupt(static_cast<Device::InterruptSource>(interrupt - 32));
+    else if (interruptVector - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
+        Device::Pic::sendEndOfInterrupt(static_cast<Device::InterruptRequest>(interruptVector - 32));
     }
 }
 
-bool InterruptService::checkSpuriousInterrupt(InterruptDispatcher::Interrupt interrupt) {
-    if (Device::Apic::isInitialized()) {
-        return interrupt == InterruptDispatcher::SPURIOUS;
+bool InterruptService::checkSpuriousInterrupt(InterruptVector interruptVector) {
+    if (Device::Apic::isBspInitialized()) {
+        return interruptVector == InterruptVector::SPURIOUS;
     }
 
-    else if (interrupt != InterruptDispatcher::LPT1 && interrupt != InterruptDispatcher::SECONDARY_ATA) {
+    else if (interruptVector != InterruptVector::LPT1 && interruptVector != InterruptVector::SECONDARY_ATA) {
         return false;
     }
 
-    return Device::Pic::isSpurious(static_cast<Device::InterruptSource>(interrupt - 32));
+    return Device::Pic::isSpurious(static_cast<Device::InterruptRequest>(interruptVector - 32));
 }
 
 }
