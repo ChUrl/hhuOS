@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-namespace Device {
+namespace Kernel {
 
 /**
  * @brief The GlobalSystemInterrupts abstract the hardware interrupt model from the system.
