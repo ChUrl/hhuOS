@@ -2,10 +2,6 @@
 #define __IOAPIC_include__
 
 #include "LocalApic.h"
-#include "ApicRegisterInterface.h"
-#include "ApicAcpiInterface.h"
-#include "InterruptSource.h"
-#include "kernel/log/Logger.h"
 
 namespace Device {
 
@@ -21,7 +17,7 @@ class IoApic {
     friend class Apic;
 
 public:
-    IoApic() = default;
+    IoApic(IoApicPlatform *ioApicPlatform, IoApicInformation &&ioApicInformation);
 
     IoApic(const IoApic &copy) = delete;
 
@@ -56,21 +52,21 @@ private:
     /**
      * @brief Initialize this existing IO APIC.
      */
-    void initialize(IoApicPlatform *platform, IoApicInformation *info);
+    void initialize();
 
     /**
      * @brief Unmask an interrupt in this IO APIC.
      *
      * @param gsi The GSI to unmask
      */
-    void allow(GlobalSystemInterrupt gsi);
+    void allow(Kernel::GlobalSystemInterrupt gsi);
 
     /**
      * @brief Mask an interrupt in the local APIC.
      *
      * @param gsi The GSI to mask
      */
-    void forbid(GlobalSystemInterrupt gsi);
+    void forbid(Kernel::GlobalSystemInterrupt gsi);
 
     /**
      * @brief Get the state of this interrupt - whether it is masked out or not.
@@ -78,28 +74,24 @@ private:
      * @param gsi The GSI
      * @return True, if the GSI is masked
      */
-    bool status(GlobalSystemInterrupt gsi);
+    bool status(Kernel::GlobalSystemInterrupt gsi);
 
     /**
-     * @brief Send an end of interrupt signal.
-     *
-     * Only compatible with IO APIC version >= 0x20.
-     * (https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470)
-     * (Intel ICH5 Datasheet Chapter 9.5.5)
+     * @brief Send an end of interrupt signal (only acts on level-triggered interrupts).
      *
      * @param vector The vector number of the interrupt that will be marked as completed
      */
-    void sendEndOfInterrupt(InterruptVector vector, GlobalSystemInterrupt gsi);
+    void sendEndOfInterrupt(Kernel::InterruptVector vector, Kernel::GlobalSystemInterrupt gsi);
 
     /**
      * @brief Ensure that this I/O APIC's MMIO region has been initialized.
      */
-    void ensureMMIO() const;
+    void ensureRegisterAccess() const;
 
     /**
      * @brief Ensure that a GSI belongs to this I/O APIC.
      */
-    void ensureValidGsi(GlobalSystemInterrupt gsi) const;
+    void ensureValidGsi(Kernel::GlobalSystemInterrupt gsi) const;
 
     /**
      * @brief Allocate the memory region used to access this I/O APIC's registers.
@@ -113,7 +105,7 @@ private:
      * Marks entries for all supported interrupt inputs of the IO APIC as edge-triggered, active high,
      * masked, physical destination mode to local APIC of the current CPU and fixed delivery mode,
      * unless trigger mode or pin polarity are overridden.
-     * Sets vector numbers to corresponding InterruptDispatcher::Interrupt.
+     * Sets vector numbers to corresponding InterruptVector.
      */
     void initializeREDTBL();
 
@@ -131,29 +123,28 @@ private:
 
     void writeDoubleWord(IndirectRegister reg, uint32_t val);
 
-    [[nodiscard]] REDTBLEntry readREDTBL(GlobalSystemInterrupt gsi);
+    [[nodiscard]] REDTBLEntry readREDTBL(Kernel::GlobalSystemInterrupt gsi);
 
-    void writeREDTBL(GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl);
+    void writeREDTBL(Kernel::GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl);
 
 private:
     bool initialized = false;
-
-    IoApicInformation *ioInfo = nullptr; ///< @brief General information about a single (this) IO APIC
-    static IoApicPlatform *ioPlatform; ///< @brief General information valid for all IO APICs
+    static IoApicPlatform *ioPlatform;
+    IoApicInformation ioInfo;
 
     static Kernel::Logger log;
 };
 
 template<typename T>
 T IoApic::readDirectRegister(Register reg) {
-    ensureMMIO();
-    return *reinterpret_cast<volatile T *>(ioInfo->virtAddress + reg);
+    ensureRegisterAccess();
+    return *reinterpret_cast<volatile T *>(ioInfo.virtAddress + reg);
 }
 
 template<typename T>
 void IoApic::writeDirectRegister(Register reg, T val) {
-    ensureMMIO();
-    *reinterpret_cast<volatile T *>(ioInfo->virtAddress + reg) = val;
+    ensureRegisterAccess();
+    *reinterpret_cast<volatile T *>(ioInfo.virtAddress + reg) = val;
 }
 
 }
