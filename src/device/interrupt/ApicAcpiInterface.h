@@ -1,94 +1,94 @@
 #ifndef HHUOS_APICACPIINTERFACE_H
 #define HHUOS_APICACPIINTERFACE_H
 
+#include "kernel/interrupt/GlobalSystemInterrupt.h"
+#include "device/power/acpi/Acpi.h"
 #include "ApicRegisterInterface.h"
-#include "GlobalSystemInterrupt.h"
-#include "InterruptSource.h"
+#include "InterruptRequest.h"
 
 namespace Device {
-
-// TODO: Rename Information to Configuration
-
-/**
- * @brief Information about a single local APIC's non maskable interrupt source.
- */
-struct LocalApicNMI {
-    LVTEntry::PinPolarity polarity;
-    LVTEntry::TriggerMode triggerMode;
-    uint8_t lint; ///< @brief Local APIC pin number
-};
 
 /**
  * @brief Information about a single local APIC.
  */
 struct LocalApicInformation {
-    uint8_t id;
-    bool enabled = false; ///< @brief If false this processor can't be used
-    LocalApicNMI *nmi = nullptr; ///< @brief Information about this local APIC's non maskable interrupt pin
+    const uint8_t id; ///< @brief The local APIC id, in SMP systems this is also the processor id
+    const bool enabled; ///< @brief If false, this processor can't be used by the OS
+    const uint8_t nmiLint; ///< @brief Local APIC pin number used as NMI source, usually 0x01
+    const LVTEntry::PinPolarity nmiPolarity;
+    const LVTEntry::TriggerMode nmiTriggerMode;
+
+    LocalApicInformation(const Acpi::ProcessorLocalApic *processorLocalApic, const Acpi::LocalApicNmi *localApicNmi);
+
+    ~LocalApicInformation() = default;
 };
 
 /**
  * @brief Information about all local APICs.
  */
 struct LocalApicPlatform {
-    bool isX2Apic; ///< @brief The xApic architecture uses MMIO for register access, x2Apic uses MSRs
-    uint8_t version;
-    uint32_t physAddress = 0; // xApic MMIO
-    uint32_t virtAddress = 0; // xApic MMIO
-    uint32_t msrAddress = 0x800; // x2Apic
-    Util::Data::ArrayList<LocalApicInformation *> localApics;
+    bool isX2Apic = false; ///< @brief The APIC architecture used (xApic or x2Apic)
+    const uint32_t physAddress; ///< @brief The physical MMIO address used for register access in xApic mode
+    uint32_t virtAddress = 0; ///< @brief The virtual MMIO address used for register access in xApic mode
+    const uint32_t msrAddress = 0x800; ///< @brief The MSR base address used for register access in x2Apic mode
 
-    [[nodiscard]] LocalApicInformation *getLocalApicInformation(uint8_t id) const;
-    [[nodiscard]] LocalApicNMI *getLocalNMIConfiguration(uint8_t id) const;
-};
+    explicit LocalApicPlatform(uint32_t physAddress);
 
-/**
- * @brief Information about a single IO APIC's non maskable interrupt source.
- */
-struct IoApicNMI {
-    REDTBLEntry::PinPolarity polarity;
-    REDTBLEntry::TriggerMode triggerMode;
-    GlobalSystemInterrupt gsi;
+    ~LocalApicPlatform() = default;
 };
 
 /**
  * @brief Information about a single IO APIC.
  */
 struct IoApicInformation {
-    uint8_t id;
-    uint32_t physAddress = 0;
+    const uint8_t id;
+    const uint32_t physAddress;
     uint32_t virtAddress = 0;
-    GlobalSystemInterrupt gsiBase; ///< @brief First GSI handled by this IO APIC
-    GlobalSystemInterrupt gsiMax = GlobalSystemInterrupt(0); ///< @brief Last GSI handled by this IO APIC
-    IoApicNMI *nmi = nullptr; ///< @brief Information about this IO APIC's non maskable interrupt pin
-};
+    const Kernel::GlobalSystemInterrupt gsiBase; ///< @brief First GSI handled by this IO APIC
+    Kernel::GlobalSystemInterrupt gsiMax = Kernel::GlobalSystemInterrupt(0); ///< @brief Last GSI handled by this IO APIC
+    const bool hasNmi;
+    const Kernel::GlobalSystemInterrupt nmiGsi;
+    const REDTBLEntry::PinPolarity nmiPolarity;
+    const REDTBLEntry::TriggerMode nmiTriggerMode;
 
-/**
- * @brief Represents an ISA IRQ to GSI mapping/override.
- *
- * Example: When PIT (IRQ0) is connected to IO APIC INTI2: source = 0, target = 2.
- */
-struct IoApicIrqOverride {
-    uint8_t bus; ///< @brief 0 means irqSource is ISA IRQ relative
-    InterruptSource source; ///< @brief The ISA IRQ equivalent GSI that will be remapped
-    GlobalSystemInterrupt target; ///< @brief The GSI the device is actually connected to
-    REDTBLEntry::PinPolarity polarity;
-    REDTBLEntry::TriggerMode triggerMode;
+    IoApicInformation(const Acpi::IoApic *ioApic, const Acpi::NmiSource *nmiSource);
+
+    ~IoApicInformation() = default;
 };
 
 /**
  * @brief Information about all IO APICs.
  */
 struct IoApicPlatform {
-    uint8_t version;
-    bool directEoiSupported; ///< @brief Older IO APICs require recieving EOIs sent by the local APIC
-    GlobalSystemInterrupt globalMaxGsi = GlobalSystemInterrupt(0); ///< @brief The last GSI the system supports
-    Util::Data::ArrayList<IoApicIrqOverride *> overrides; ///< @brief All overridden ISA IRQs, equal for all IO APICs
 
-    [[nodiscard]] IoApicIrqOverride *getIoApicIrqOverride(GlobalSystemInterrupt target) const;
-    [[nodiscard]] IoApicIrqOverride *getIoApicIrqOverride(InterruptSource source) const;
-    [[nodiscard]] InterruptSource getIoApicIrqOverrideSource(GlobalSystemInterrupt target) const;
-    [[nodiscard]] GlobalSystemInterrupt getIoApicIrqOverrideTarget(InterruptSource source) const;
+    /**
+    * @brief Represents an IRQ to GSI mapping/override.
+    */
+    struct IoApicIrqOverride {
+        const uint8_t bus; ///< @brief 0 means irqSource is ISA IRQ relative
+        const InterruptRequest source; ///< @brief The ISA IRQ equivalent GSI that will be remapped
+        const Kernel::GlobalSystemInterrupt target; ///< @brief The GSI the device is actually connected to
+        const REDTBLEntry::PinPolarity polarity;
+        const REDTBLEntry::TriggerMode triggerMode;
+
+        explicit IoApicIrqOverride(const Acpi::InterruptSourceOverride *interruptSourceOverride);
+
+        ~IoApicIrqOverride() = default;
+    };
+
+    uint8_t version = 0;
+    bool directEoiSupported = false; ///< @brief Older IO APICs require recieving EOIs sent by the local APIC
+    Kernel::GlobalSystemInterrupt globalMaxGsi = Kernel::GlobalSystemInterrupt(0); ///< @brief The last GSI the system supports
+    Util::Data::ArrayList<const IoApicIrqOverride *> overrides; ///< @brief All overridden ISA IRQs, equal for all IO APICs
+
+    explicit IoApicPlatform(Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> *interruptSourceOverrides);
+
+    ~IoApicPlatform() = default;
+
+    [[nodiscard]] const IoApicIrqOverride *getIoApicIrqOverride(Kernel::GlobalSystemInterrupt target) const;
+    [[nodiscard]] const IoApicIrqOverride *getIoApicIrqOverride(InterruptRequest source) const;
+    [[nodiscard]] InterruptRequest getIoApicIrqOverrideSource(Kernel::GlobalSystemInterrupt target) const;
+    [[nodiscard]] Kernel::GlobalSystemInterrupt getIoApicIrqOverrideTarget(InterruptRequest source) const;
 };
 
 }
