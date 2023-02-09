@@ -170,7 +170,7 @@ parse_debug() {
 }
 
 start_gdb() {
-  gdb -x "/tmp/gdbcommands.$(id -u)" "loader/boot/hhuOS.bin"
+  gdb -x "/tmp/gdbcommands.$(id -u)" "loader/grub/boot/hhuOS.bin"
   exit $?
 }
 
