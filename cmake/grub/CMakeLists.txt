@@ -27,7 +27,6 @@ string(APPEND GRUB_LIB_PATH "/grub")
 message(STATUS "Grub lib path: ${GRUB_LIB_PATH}")
 
 add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hhuOS.iso"
-        # TODO: Change grub paths, needs systemwide install for deterministic path?
         COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.bin"
         COMMAND /run/current-system/sw/bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.initrd"
         COMMAND grub-mkrescue "${GRUB_LIB_PATH}/i386-pc" "${GRUB_LIB_PATH}/i386-efi" -o "${HHUOS_ROOT_DIR}/hhuOS.iso" "${HHUOS_ROOT_DIR}/loader/grub/"
