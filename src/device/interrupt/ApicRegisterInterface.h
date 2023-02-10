@@ -154,10 +154,10 @@ struct REDTBLEntry {
         IDLE = 0, PENDING = 1
     };
     enum class PinPolarity : uint8_t {
-        HIGH = 0, LOW = 1
+        HIGH = 0, LOW = 1, BUS = 2
     };
     enum class TriggerMode : uint8_t {
-        EDGE = 0, LEVEL = 1
+        EDGE = 0, LEVEL = 1, BUS = 2
     };
 
     Kernel::InterruptVector vector;
