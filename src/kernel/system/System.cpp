@@ -129,7 +129,7 @@ void System::initializeSystem() {
     // This requires enabled interrupts (for IPIs) // TODO: Does it? Or does IPI sending work without interrupts?
     if (Device::Apic::isSmpSupported()) {
         log.info("Detected SMP support -> Initializing AP(s)");
-        // Device::Apic::initializeSmp();
+        Device::Apic::initializeSmp();
     }
 
     // Setup time and date devices
