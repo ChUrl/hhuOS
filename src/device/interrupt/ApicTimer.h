@@ -2,27 +2,27 @@
 #define HHUOS_APICTIMER_H
 
 #include "kernel/interrupt/InterruptHandler.h"
-#include "kernel/service/InterruptService.h"
 #include "kernel/log/Logger.h"
-#include "kernel/system/System.h"
 #include "device/time/TimeProvider.h"
-
-// NOTE: The APIC Timer's counter is decremented at external CPU frequency (bus frequency)
-// NOTE: divided by the divisor specified in the divide register (thus Divide::BY_1 is the fastest)
 
 namespace Device {
 
-// This class implements the TimeProvider interface, but is currently not used for the TimeService
-// Its purpose is to trigger the preemption in SMP systems for individual cores
+/**
+ * @brief This class implements the APIC timer device.
+ *
+ * Its purpose is to trigger per-core scheduler preemption in SMP systems, although it is also used
+ * in singlecore systems. It is not used for system-time keeping, this is still done by the PIT.
+ */
 class ApicTimer : public Kernel::InterruptHandler, public TimeProvider {
+    friend class Apic;
 public:
     /**
-     * Constructor.
+     * @brief Construct an ApicTimer instance.
      *
      * @param timerInterval The tick interval in nanoseconds (10 milliseconds by default)
      * @param yieldInterval The preemption interval in milliseconds (10 milliseconds by default)
      */
-    explicit ApicTimer(uint32_t timerInterval = 1000000, uint32_t yieldInterval = 10);
+    explicit ApicTimer(uint32_t timerInterval = 10'000'000, uint32_t yieldInterval = 10);
 
     ApicTimer(const ApicTimer &copy) = delete;
 
@@ -45,10 +45,16 @@ public:
      */
     [[nodiscard]] Util::Time::Timestamp getTime() override;
 
-    static bool isInitialized();
-
 private:
-    // IA-32 Architecture Manual Chapter 10.5.4
+    /**
+     * @brief These are the different divider mode the APIC timer's counter supports.
+     *
+     * The APIC timer generates signals of a certain frequency by counting down a register.
+     * If the divider is set to "BY_1", the register is counted down on every bus clock, yielding
+     * the highest precision. If this is not required, the countdown can be slowed by dividing with
+     * a higher value. This can achieve longer intervals that would otherwise not be possible with
+     * a 32-bit counter register. See IA-32 manual, sec. 3.11.5.4
+     */
     enum Divide : uint32_t {
         BY_1 = 0b1011,
         BY_2 = 0b0000,
@@ -62,19 +68,19 @@ private:
 
 private:
     /**
-     * Sets the interval at which the APIC Timer fires interrupts.
+     * @brief Calibrates the APIC timer to fire interrupts in the interval set at construction.
      *
-     * @param interval The interval in nanoseconds
+     * Because the APIC timer has no fixed frequency, it is calibrated using the PIT as calibration source.
      */
-    void setInterruptRate(uint32_t interval);
+    [[nodiscard]] uint32_t setInterruptRate() const;
 
 private:
-    static bool initialized;
-
+    const uint8_t cpuId; ///< @brief The id of the CPU that uses this timer.
     Util::Time::Timestamp time{};
-    uint32_t timerInterval = 0;
-    uint32_t yieldInterval;
+    uint32_t timerInterval = 0; ///< @brief The interrupt trigger interval in nanoseconds.
+    uint32_t yieldInterval; ///< @brief The preemption trigger interval in milliseconds.
 
+    static uint32_t counter; ///< @brief The counter the BSP's APIC timer was initialized with.
     static Kernel::Logger log;
 };
 
