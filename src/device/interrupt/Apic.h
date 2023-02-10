@@ -13,97 +13,121 @@
 namespace Device {
 
 /**
- * @brief This class implements a way to interact with the APIC interrupt model.
- *
- * The InterruptModel is only concerned about hardware interrupts, software interrupts are independent.
- * This class handles initialization of both the LocalApic and IoApic class (it calls the supplied information backend,
- * for example the ApicAcpiParser, to read the information from the system that is required by those classes).
- *
- * For a technically correct implementation of the APIC interrupt model using ACPI, an AML interpreter is needed
- * to communicate the usage of the IO APIC to ACPI.
- * This would also be needed for hot-plugging support.
+ * @brief This class provides a common interface to the APIC interrupt model.
  */
 class Apic {
 public:
+    Apic() = delete; // Static class
+
+    Apic(const Apic &move) = delete;
+
+    Apic &operator=(const Apic &move) = delete;
+
+    ~Apic() = delete; // Static class
+
     /**
-     * @brief Check if the system supports the APIC interrupt model.
+     * @brief Check if the system supports the APIC interrupt architecture.
      */
     static bool isSupported();
 
     /**
-     * @brief Ensure that the system supports the APIC interrupt model.
+     * @brief Check if both LocalApic and IoApic devices are initialized.
      */
-    static void ensureSupported();
+    static bool isInitialized();
 
     /**
-     * @brief Initialize both LocalApic and IoApic devices.
-     *
-     * @tparam Parser The parser to use
+     * @brief Initialize the BSP's local APIC and all I/O APICs.
      */
     static void initialize();
 
     /**
-     * @brief Check if both LocalApic and IoApic devices are initialized.
+     * @brief Check if the system supports symmetric multiprocessing mode with multiple processors.
      */
-    static bool isBspInitialized();
-
-    /**
-     * @brief Ensure that both LocalApic and IoApic devices are initialized.
-     */
-    static void ensureBspInitialized();
-
     static bool isSmpSupported();
 
-    static void ensureSmpSupported();
-
+    /**
+     * @brief Initialize the APs when SMP is supported.
+     */
     static void initializeSmp();
 
+    /**
+     * @brief Check if the BSP's local APIC timer has been initialized.
+     */
+    static bool isBspTimerInitialized();
+
+    /**
+     * @brief Initialize the current processor's local APIC timer.
+     */
     static void initializeTimer();
 
-    static bool isTimerInitialized();
+    /**
+     * @brief Unmask an external interrupt.
+     */
+    static void allow(InterruptRequest interruptRequest);
 
-#if HHUOS_APIC_ENABLE_DEBUG == 1
-    static void dumpDebugInfo();
-#endif
+    /**
+     * @brief Mask an external interrupt.
+     */
+    static void forbid(InterruptRequest interruptRequest);
+
+    /**
+     * @brief Check if an external interrupt is masked or unmasked.
+     *
+     * @return True, if the interrupt is masked.
+     */
+    static bool status(InterruptRequest interruptRequest);
+
+    /**
+     * @brief Signal the completion of an interrupt, local or external.
+     */
+    static void sendEndOfInterrupt(Kernel::InterruptVector vector);
 
     /**
      * @brief Check if an interrupt vector belongs to a local interrupt (Local APIC).
      */
     static bool isLocalInterrupt(Kernel::InterruptVector vector);
 
-    static void sendLocalEndOfInterrupt();
-
     /**
      * @brief Check if an interrupt vector belongs to an external hardware interrupt (I/O APIC).
-     *
-     * Depends on the number of external interrupts (GSIs) the system supports.
      */
     static bool isExternalInterrupt(Kernel::InterruptVector vector);
 
-    static void allowExternalInterrupt(InterruptRequest interruptRequest);
-
-    static void forbidExternalInterrupt(InterruptRequest interruptRequest);
-
-    static bool externalInterruptStatus(InterruptRequest interruptRequest);
-
-    static void sendExternalEndOfInterrupt(Kernel::InterruptVector vector);
-
 private:
 
+    /**
+     * @brief Prepare the memory regions used by the AP's stacks.
+     */
     static void initializeSmpStartupStacks();
 
+    /**
+     * @brief Copy the AP startup routine to lower kernel memory.
+     *
+     * @return The page, on which the startup routine is located
+     */
     static uint32_t initializeSmpStartupCode();
+
+    /**
+     * @brief Get the LocalApic instance that belongs to the BSP.
+     */
+    static LocalApic &getBsp();
 
     /**
      * @brief Get the IoApic instance that is responsible for handling a specific GSI.
      */
     static IoApic &getIoApic(Kernel::GlobalSystemInterrupt gsi);
 
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+    static void dumpDebugInfo();
+#endif
+
 private:
-    static Util::Data::ArrayList<IoApic *> ioApics;
-    static Util::Data::ArrayList<LocalApic *> localApics;
-    static ApicTimer *apicTimer;
-    static ApicErrorInterruptHandler *errorHandler;
+    static bool initialized; ///< @brief Indicates if Apic::initialize() has been called.
+    static bool timerInitialized; ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
+    static uint8_t bspId; ///< @brief The local APIC id/CPU id of the BSP.
+    static Util::Data::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
+    static Util::Data::ArrayList<IoApic *> ioApics; ///< @brief All IoApic instance..
+    static Util::Data::ArrayList<ApicTimer *> timers; ///< @brief All ApicTimer instances.
+    static ApicErrorInterruptHandler *errorHandler; ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
     static Kernel::Logger log;
 };

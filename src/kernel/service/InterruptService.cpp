@@ -17,8 +17,6 @@
 
 #include "InterruptService.h"
 #include "device/interrupt/Apic.h"
-#include "device/interrupt/Pic.h"
-#include "kernel/interrupt/InterruptVector.h"
 
 namespace Kernel {
 class InterruptHandler;
@@ -33,46 +31,37 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
 }
 
 void InterruptService::allowHardwareInterrupt(Device::InterruptRequest interruptRequest) {
-    if (Device::Apic::isBspInitialized()) {
-        Device::Apic::allowExternalInterrupt(interruptRequest);
+    if (Device::Apic::isInitialized()) {
+        Device::Apic::allow(interruptRequest);
     } else {
-        Device::Pic::allow(interruptRequest);
+        pic.allow(interruptRequest);
     }
 }
 
 void InterruptService::forbidHardwareInterrupt(Device::InterruptRequest interruptRequest) {
-    if (Device::Apic::isBspInitialized()) {
-        Device::Apic::forbidExternalInterrupt(interruptRequest);
+    if (Device::Apic::isInitialized()) {
+        Device::Apic::forbid(interruptRequest);
     } else {
-        Device::Pic::forbid(interruptRequest);
+        pic.forbid(interruptRequest);
     }
 }
 
 void InterruptService::sendEndOfInterrupt(InterruptVector interruptVector) {
-    if (Device::Apic::isBspInitialized()) {
-        // NMI, SMI, INIT, ExtINT and STARTUP don't receive EOI
-        if (Device::Apic::isExternalInterrupt(interruptVector)) {
-            Device::Apic::sendExternalEndOfInterrupt(interruptVector);
-        } else if (Device::Apic::isLocalInterrupt(interruptVector) && interruptVector != InterruptVector::LINT1) {
-            Device::Apic::sendLocalEndOfInterrupt();
-        }
-    }
-
-    else if (interruptVector - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
-        Device::Pic::sendEndOfInterrupt(static_cast<Device::InterruptRequest>(interruptVector - 32));
+    if (Device::Apic::isInitialized()) {
+        Device::Apic::sendEndOfInterrupt(interruptVector);
+    } else if (interruptVector - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
+        pic.sendEndOfInterrupt(static_cast<Device::InterruptRequest>(interruptVector - 32));
     }
 }
 
 bool InterruptService::checkSpuriousInterrupt(InterruptVector interruptVector) {
-    if (Device::Apic::isBspInitialized()) {
+    if (Device::Apic::isInitialized()) {
         return interruptVector == InterruptVector::SPURIOUS;
-    }
-
-    else if (interruptVector != InterruptVector::LPT1 && interruptVector != InterruptVector::SECONDARY_ATA) {
+    } else if (interruptVector != InterruptVector::LPT1 && interruptVector != InterruptVector::SECONDARY_ATA) {
         return false;
     }
 
-    return Device::Pic::isSpurious(static_cast<Device::InterruptRequest>(interruptVector - 32));
+    return pic.isSpurious(static_cast<Device::InterruptRequest>(interruptVector - 32));
 }
 
 }

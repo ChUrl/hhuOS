@@ -8,9 +8,12 @@
 
 namespace Device {
 
+bool Apic::initialized = false;
+bool Apic::timerInitialized = false;
+uint8_t Apic::bspId = 0;
 Util::Data::ArrayList<LocalApic *> Apic::localApics;
 Util::Data::ArrayList<IoApic *> Apic::ioApics;
-ApicTimer *Apic::apicTimer = nullptr;
+Util::Data::ArrayList<ApicTimer *> Apic::timers;
 ApicErrorInterruptHandler *Apic::errorHandler = nullptr;
 Kernel::Logger Apic::log = Kernel::Logger::get("Apic");
 
@@ -18,15 +21,13 @@ bool Apic::isSupported() {
     return LocalApic::supportsXApic();
 }
 
-void Apic::ensureSupported() {
-    if (!isSupported()) {
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "APIC support not present!");
-    }
+bool Apic::isInitialized() {
+    return initialized;
 }
 
 void Apic::initialize() {
     if (!isSupported()) {
-        log.warn("APIC not supported, skippint initialization!");
+        log.warn("APIC not supported, skipping initialization!");
         return;
     }
 
@@ -35,7 +36,7 @@ void Apic::initialize() {
         return;
     }
 
-    if (isBspInitialized()) {
+    if (isInitialized()) {
         log.warn("APIC already initialized, skipping initialization!");
         return;
     }
@@ -92,12 +93,12 @@ void Apic::initialize() {
     // Currently, we can't know the id of the BSP, but we know that it is the running processor.
     // Because the running processor can only acccess its own local APIC's registers, we can reach the
     // BSP local APIC by calling this static function, without an instance.
-    uint8_t bspId = LocalApic::initializeBsp();
+    bspId = LocalApic::initializeBsp();
 
     // Now that we know which local APIC is the BSP, we can initialize the rest of its local APIC
     for (auto *localApic : localApics) {
         if (localApic->localInfo.id == bspId) {
-            localApic->initializeApApic();
+            localApic->initializeAp();
             break;
         }
     }
@@ -144,24 +145,16 @@ void Apic::initialize() {
     // We only require one of these, as every AP can only access its own local APIC's error register
     errorHandler = new ApicErrorInterruptHandler();
     errorHandler->plugin();
-}
 
-bool Apic::isBspInitialized() {
-    bool initialized = LocalApic::isBspInitialized();
-    for (uint32_t i = 0; i < ioApics.size(); ++i) {
-        initialized &= ioApics.get(i)->isInitialized();
-    }
-    return initialized;
+#if HHUOS_APIC_ENABLE_DEBUG == 1
+    dumpDebugInfo();
+#endif
+
+    initialized = true;
 }
 
 bool Apic::isSmpSupported() {
-    return isBspInitialized() && localApics.size() > 1;
-}
-
-void Apic::ensureSmpSupported() {
-    if (!isSmpSupported()) {
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "SMP support not present!");
-    }
+    return getBsp().initialized && localApics.size() > 1;
 }
 
 // TODO: This works if local APIC IDs are contiguous
@@ -279,28 +272,90 @@ uint32_t Device::Apic::initializeSmpStartupCode() {
     return startupCodeDestinationPhys;
 }
 
-void Apic::ensureBspInitialized() {
-    if (!isBspInitialized()) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
-    }
+bool Apic::isBspTimerInitialized() {
+    return timerInitialized;
 }
 
 void Apic::initializeTimer() {
-    apicTimer = new Device::ApicTimer();
+    for (uint32_t i = 0; i < timers.size(); ++i) {
+        ApicTimer *timer = timers.get(i);
+        if (timer->cpuId == LocalApic::getId()) {
+            log.warn("APIC timer for CPU [%d] has already been initialized, skipping initialization!", timer->cpuId);
+            return;
+        }
+    }
+
+    auto *apicTimer = new Device::ApicTimer();
     apicTimer->plugin();
+    timers.add(apicTimer);
+    timerInitialized = true;
 }
 
-bool Apic::isTimerInitialized() {
-    return apicTimer != nullptr && ApicTimer::isInitialized();
+void Apic::allow(InterruptRequest interruptRequest) {
+    Kernel::GlobalSystemInterrupt gsi = IoApic::ioPlatform->getIoApicIrqOverrideTarget(interruptRequest);
+    IoApic &ioApic = getIoApic(gsi); // Select responsible I/O APIC
+    ioApic.allow(gsi);
+}
+
+void Apic::forbid(InterruptRequest interruptRequest) {
+    Kernel::GlobalSystemInterrupt gsi = IoApic::ioPlatform->getIoApicIrqOverrideTarget(interruptRequest);
+    IoApic &ioApic = getIoApic(gsi);
+    ioApic.forbid(gsi);
+}
+
+bool Apic::status(InterruptRequest interruptRequest) {
+    Kernel::GlobalSystemInterrupt gsi = IoApic::ioPlatform->getIoApicIrqOverrideTarget(interruptRequest);
+    IoApic &ioApic = getIoApic(gsi);
+    return ioApic.status(gsi);
+}
+
+void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
+    if (isLocalInterrupt(vector) && vector != Kernel::InterruptVector::LINT1) {
+        // Excludes LINT1 (NMI)
+        LocalApic::sendEndOfInterrupt();
+    } else if (isExternalInterrupt(vector)) {
+        auto interruptRequest = static_cast<InterruptRequest>(vector - 32); // Hardware interrupt pin
+        Kernel::GlobalSystemInterrupt gsi = IoApic::ioPlatform->getIoApicIrqOverrideTarget(interruptRequest);
+        IoApic &ioApic = getIoApic(gsi);
+
+        LocalApic::sendEndOfInterrupt(); // External interrupts get forwarded by the local APIC, so local EOI required
+        ioApic.sendEndOfInterrupt(vector, gsi); // This is only required for level-triggered interrupts
+    }
+}
+
+bool Apic::isLocalInterrupt(Kernel::InterruptVector vector) {
+    return vector >= Kernel::InterruptVector::CMCI && vector <= Kernel::InterruptVector::ERROR;
+}
+
+bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
+    // Remapping can be ignored here, as all GSIs are contiguous anyway
+    return static_cast<Kernel::GlobalSystemInterrupt>(vector - 32) <= IoApic::ioPlatform->globalMaxGsi;
+}
+
+LocalApic &Apic::getBsp() {
+    for (uint32_t i = 0; i < localApics.size(); ++i) {
+        LocalApic *localApic = localApics.get(i);
+        if (localApic->localInfo.id == bspId) {
+            return *localApic;
+        }
+    }
+
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "BSP instance not found!");
+}
+
+IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
+    for (uint32_t i = 0; i < ioApics.size(); ++i) {
+        IoApic *ioApic = ioApics.get(i);
+        if (gsi >= ioApic->ioInfo.gsiBase && gsi <= ioApic->ioInfo.gsiMax) {
+            return *ioApic;
+        }
+    }
+
+    Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "No I/O APIC found for the supplied GSI!");
 }
 
 #if HHUOS_APIC_ENABLE_DEBUG == 1
 void Apic::dumpDebugInfo() {
-    if (!isBspInitialized()) {
-        log.info("APIC not initialized, running in PIC mode");
-        return;
-    }
-
     log.info("Local APIC supported modes: [%s%s] (Current mode: [%s])",
              LocalApic::supportsXApic() ? "xApic" : "None",
              LocalApic::supportsX2Apic() ? ", x2Apic" : "",
@@ -332,8 +387,10 @@ void Apic::dumpDebugInfo() {
         log.info("- Source: [%d], Target: [%d], Polarity: [%s], TriggerMode: [%s]",
                  static_cast<uint32_t>(override->source),
                  static_cast<uint32_t>(override->target),
-                 override->polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                 override->triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+                 override->polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH"
+                                                                      : (override->polarity == REDTBLEntry::PinPolarity::LOW ? "LOW" : "BUS"),
+                 override->triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE"
+                                                                         : (override->triggerMode == REDTBLEntry::TriggerMode::LEVEL ? "LEVEL" : "BUS"));
     }
     log.info("I/O APICs:");
     for (uint32_t i = 0; i < ioApics.size(); ++i) {
@@ -355,64 +412,7 @@ void Apic::dumpDebugInfo() {
         IoApic *ioApic = ioApics.get(i);
         ioApic->dumpREDTBL();
     }
-
-    log.info("Using %s for scheduling", ApicTimer::isInitialized() ? "ApicTimer" : "Pit");
 }
 #endif
-
-bool Apic::isLocalInterrupt(Kernel::InterruptVector vector) {
-    return vector >= Kernel::InterruptVector::CMCI && vector <= Kernel::InterruptVector::ERROR;
-}
-
-// The LocalApic::allow etc. functions are not exposed intentionally
-
-void Apic::sendLocalEndOfInterrupt() {
-    LocalApic::sendEndOfInterrupt();
-}
-
-bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
-    // Remapping can be ignored here, as all GSIs are contiguous anyway
-    return static_cast<Kernel::GlobalSystemInterrupt>(vector - 32) <= IoApic::ioPlatform->globalMaxGsi;
-}
-
-void Apic::allowExternalInterrupt(InterruptRequest interruptRequest) {
-    Kernel::GlobalSystemInterrupt gsi = IoApic::ioPlatform->getIoApicIrqOverrideTarget(interruptRequest);
-    IoApic &ioApic = getIoApic(gsi); // Select responsible I/O APIC
-    ioApic.allow(gsi);
-}
-
-void Apic::forbidExternalInterrupt(InterruptRequest interruptRequest) {
-    Kernel::GlobalSystemInterrupt gsi = IoApic::ioPlatform->getIoApicIrqOverrideTarget(interruptRequest);
-    IoApic &ioApic = getIoApic(gsi);
-    ioApic.forbid(gsi);
-}
-
-bool Apic::externalInterruptStatus(InterruptRequest interruptRequest) {
-    Kernel::GlobalSystemInterrupt gsi = IoApic::ioPlatform->getIoApicIrqOverrideTarget(interruptRequest);
-    IoApic &ioApic = getIoApic(gsi);
-    return ioApic.status(gsi);
-}
-
-void Apic::sendExternalEndOfInterrupt(Kernel::InterruptVector vector) {
-    auto interruptRequest = static_cast<InterruptRequest>(vector - 32); // Hardware interrupt pin
-    Kernel::GlobalSystemInterrupt gsi = IoApic::ioPlatform->getIoApicIrqOverrideTarget(interruptRequest);
-    IoApic &ioApic = getIoApic(gsi);
-
-    LocalApic::sendEndOfInterrupt(); // External interrupts get forwarded by the local APIC, so local EOI required
-    ioApic.sendEndOfInterrupt(vector, gsi); // This is only required for level-triggered interrupts
-}
-
-IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
-    ensureBspInitialized();
-
-    for (uint32_t i = 0; i < ioApics.size(); ++i) {
-        IoApic *ioApic = ioApics.get(i);
-        if (gsi >= ioApic->ioInfo.gsiBase && gsi <= ioApic->ioInfo.gsiMax) {
-            return *ioApic;
-        }
-    }
-
-    Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "No I/O APIC found for the supplied GSI!");
-}
 
 }
