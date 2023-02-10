@@ -11,7 +11,7 @@ Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 uint8_t ioApicId = 0; // IoApics don't start with an assigned id
 
 IoApic::IoApic(IoApicPlatform *ioApicPlatform, IoApicInformation &&ioApicInformation)
-: ioInfo(ioApicInformation) {
+        : ioInfo(ioApicInformation) {
     ioPlatform = ioApicPlatform;
 }
 
@@ -120,15 +120,23 @@ void IoApic::initializeREDTBL() {
         auto gsi = static_cast<Kernel::GlobalSystemInterrupt>(interruptInput); // GSIs match interrupt inputs on IO APIC
 
         redtblEntry.vector = static_cast<Kernel::InterruptVector>(gsi + 32); // If no override exists GSI matches vector
-        redtblEntry.pinPolarity = REDTBLEntry::PinPolarity::HIGH;
-        redtblEntry.triggerMode = REDTBLEntry::TriggerMode::EDGE;
+        redtblEntry.pinPolarity = REDTBLEntry::PinPolarity::HIGH; // ISA bus default
+        redtblEntry.triggerMode = REDTBLEntry::TriggerMode::EDGE; // ISA bus default
 
         const IoApicPlatform::IoApicIrqOverride *override = ioPlatform->getIoApicIrqOverride(gsi);
         if (override != nullptr) {
+            // Apply a mapping differing from the identity mapping
             redtblEntry.vector = static_cast<Kernel::InterruptVector>(override->source + 32);
-            // ! This is disabled, because some ACPI entries are wrong somehow (for example the PIT entry)
-            // redtblEntry.pinPolarity = override->polarity;
-            // redtblEntry.triggerMode = override->triggerMode;
+
+            // Apply a specified trigger mode and polarity. If the trigger mode/polarity is configured to "BUS",
+            // it means that the bus defaults are used. In this case, the ISA bus defaults (edge-triggered, active
+            // high) are assumed.
+            if (override->polarity != REDTBLEntry::PinPolarity::BUS) {
+                redtblEntry.pinPolarity = override->polarity;
+            }
+            if (override->triggerMode != REDTBLEntry::TriggerMode::BUS) {
+                redtblEntry.triggerMode = override->triggerMode;
+            }
         }
 
         writeREDTBL(gsi, redtblEntry);

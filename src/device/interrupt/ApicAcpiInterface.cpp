@@ -40,12 +40,16 @@ IoApicPlatform::IoApicIrqOverride::IoApicIrqOverride(const Acpi::InterruptSource
         : bus(interruptSourceOverride->bus),
           source(static_cast<InterruptRequest>(interruptSourceOverride->source)),
           target(static_cast<Kernel::GlobalSystemInterrupt>(interruptSourceOverride->globalSystemInterrupt)),
-          polarity(interruptSourceOverride->flags & Acpi::IntiFlag::ACTIVE_HIGH
-                   ? REDTBLEntry::PinPolarity::HIGH
-                   : REDTBLEntry::PinPolarity::LOW),
-          triggerMode(interruptSourceOverride->flags & Acpi::IntiFlag::EDGE_TRIGGERED
-                      ? REDTBLEntry::TriggerMode::EDGE
-                      : REDTBLEntry::TriggerMode::LEVEL) {}
+          polarity((interruptSourceOverride->flags & 0x3) == 0 ? REDTBLEntry::PinPolarity::BUS
+                                                               : (interruptSourceOverride->flags &
+                                                                  Acpi::IntiFlag::ACTIVE_HIGH
+                                                                  ? REDTBLEntry::PinPolarity::HIGH
+                                                                  : REDTBLEntry::PinPolarity::LOW)),
+          triggerMode((interruptSourceOverride->flags & 0xc) == 0 ? REDTBLEntry::TriggerMode::BUS
+                                                                  : (interruptSourceOverride->flags &
+                                                                     Acpi::IntiFlag::EDGE_TRIGGERED
+                                                                     ? REDTBLEntry::TriggerMode::EDGE
+                                                                     : REDTBLEntry::TriggerMode::LEVEL)) {}
 
 IoApicPlatform::IoApicPlatform(Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> *interruptSourceOverrides) {
     for (const auto *interruptSourceOverride: *interruptSourceOverrides) {
@@ -53,7 +57,8 @@ IoApicPlatform::IoApicPlatform(Util::Data::ArrayList<const Acpi::InterruptSource
     }
 }
 
-const IoApicPlatform::IoApicIrqOverride *IoApicPlatform::getIoApicIrqOverride(Kernel::GlobalSystemInterrupt target) const {
+const IoApicPlatform::IoApicIrqOverride *
+IoApicPlatform::getIoApicIrqOverride(Kernel::GlobalSystemInterrupt target) const {
     for (uint32_t i = 0; i < overrides.size(); ++i) {
         const IoApicIrqOverride *override = overrides.get(i);
         if (override->target == target) {

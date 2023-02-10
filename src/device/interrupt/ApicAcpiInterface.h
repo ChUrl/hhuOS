@@ -65,11 +65,11 @@ struct IoApicPlatform {
     * @brief Represents an IRQ to GSI mapping/override.
     */
     struct IoApicIrqOverride {
-        const uint8_t bus; ///< @brief 0 means irqSource is ISA IRQ relative
-        const InterruptRequest source; ///< @brief The ISA IRQ equivalent GSI that will be remapped
-        const Kernel::GlobalSystemInterrupt target; ///< @brief The GSI the device is actually connected to
-        const REDTBLEntry::PinPolarity polarity;
-        const REDTBLEntry::TriggerMode triggerMode;
+        const uint8_t bus; ///< @brief 0 means irqSource is ISA IRQ relative.
+        const InterruptRequest source; ///< @brief The ISA IRQ equivalent GSI that will be remapped.
+        const Kernel::GlobalSystemInterrupt target; ///< @brief The GSI the device is actually connected to.
+        const REDTBLEntry::PinPolarity polarity; ///< @brief If this is BUS, then the polarity is the bus default.
+        const REDTBLEntry::TriggerMode triggerMode; ///< @brief If this is BUS, then the trigger mode is the bus default.
 
         explicit IoApicIrqOverride(const Acpi::InterruptSourceOverride *interruptSourceOverride);
 
