@@ -1,15 +1,7 @@
-#ifndef HHUOS_APICREGISTERINTERFACE_H
-#define HHUOS_APICREGISTERINTERFACE_H
+#ifndef HHUOS_APICREGISTERS_H
+#define HHUOS_APICREGISTERS_H
 
 #include "kernel/interrupt/InterruptVector.h"
-
-/*
- * I chose to implement the APIC register interaction this way because:
- * 1. Only standard C bitfields have guaranteed ordering (C99 Standard Chapter 6.7.2.1.13),
- *    as soon as the "struct" becomes a C++ "class", the ordering is implementation defined,
- *    GCC's __attribute__ ((packed)) doesn't help there
- * 2. Doing the masking everytime manually is bug prone
- */
 
 namespace Device {
 
@@ -178,4 +170,4 @@ struct REDTBLEntry {
 
 }
 
-#endif //HHUOS_APICREGISTERINTERFACE_H
+#endif //HHUOS_APICREGISTERS_H

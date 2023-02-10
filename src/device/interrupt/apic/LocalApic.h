@@ -1,10 +1,10 @@
 #ifndef __LAPIC_include__
 #define __LAPIC_include__
 
-#include "ApicRegisterInterface.h"
+#include "ApicRegisters.h"
 #include "ApicAcpiInterface.h"
-#include "ModelSpecificRegister.h"
 #include "kernel/log/Logger.h"
+#include "device/cpu/ModelSpecificRegister.h"
 
 // Enable of disable all APIC debug logs
 #define HHUOS_APIC_ENABLE_DEBUG 1
@@ -22,7 +22,7 @@ namespace Device {
 class LocalApic {
     friend class Apic; // Apic exposes this class' functionality to the OS
     friend class ApicTimer; // ApicTimer is configured by using LApic registers
-    friend class ApicErrorInterruptHandler; // ApicErrorInterruptHandler uses the ERR register
+    friend class ApicErrorHandler; // ApicErrorInterruptHandler uses the ERR register
 
 public:
     /**

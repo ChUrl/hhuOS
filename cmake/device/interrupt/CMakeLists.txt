@@ -16,17 +16,11 @@
 
 cmake_minimum_required(VERSION 3.14)
 
-# TODO: Some files have to be relocated
 target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/interrupt/Pic.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/ModelSpecificRegister.cpp # TODO: Move
-        ${HHUOS_SRC_DIR}/device/interrupt/Apic.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/ApicAcpiInterface.cpp # TODO: Move?
-        ${HHUOS_SRC_DIR}/device/interrupt/ApicRegisterInterface.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/LocalApic.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/ApicTimer.cpp # TODO: Move to device/time
-        ${HHUOS_SRC_DIR}/device/interrupt/ApicErrorInterruptHandler.cpp # TODO: Move?
-        ${HHUOS_SRC_DIR}/device/interrupt/IoApic.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/smp_startup.asm # TODO: Move
-        ${HHUOS_SRC_DIR}/device/interrupt/smp_startup.cpp # TODO: Move
-        )
+        ${HHUOS_SRC_DIR}/device/interrupt/apic/Apic.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/apic/LocalApic.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/apic/IoApic.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/apic/ApicRegisters.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/apic/ApicAcpiInterface.cpp
+        ${HHUOS_SRC_DIR}/device/interrupt/apic/ApicErrorHandler.cpp)

@@ -1,4 +1,4 @@
-#include "ApicRegisterInterface.h"
+#include "ApicRegisters.h"
 
 namespace Device {
 

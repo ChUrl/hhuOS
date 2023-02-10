@@ -33,7 +33,7 @@
 #include "lib/util/base/System.h"
 #include "device/interrupt/IoApic.h"
 #include "InterruptDispatcher.h"
-#include "device/interrupt/Apic.h"
+#include "device/interrupt/apic/Apic.h"
 
 namespace Kernel {
 

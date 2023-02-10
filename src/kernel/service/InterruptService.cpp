@@ -16,7 +16,7 @@
  */
 
 #include "InterruptService.h"
-#include "device/interrupt/Apic.h"
+#include "device/interrupt/apic/Apic.h"
 
 namespace Kernel {
 class InterruptHandler;

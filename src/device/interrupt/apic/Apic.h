@@ -1,14 +1,13 @@
 #ifndef HHUOS_APIC_H
 #define HHUOS_APIC_H
 
-#include "ModelSpecificRegister.h"
 #include "ApicAcpiInterface.h"
-#include "ApicRegisterInterface.h"
+#include "ApicRegisters.h"
 #include "kernel/log/Logger.h"
 #include "LocalApic.h"
 #include "IoApic.h"
-#include "ApicTimer.h"
-#include "ApicErrorInterruptHandler.h"
+#include "ApicErrorHandler.h"
+#include "device/time/ApicTimer.h"
 
 namespace Device {
 
@@ -93,18 +92,17 @@ public:
     static bool isExternalInterrupt(Kernel::InterruptVector vector);
 
 private:
-
     /**
      * @brief Prepare the memory regions used by the AP's stacks.
      */
-    static void initializeSmpStartupStacks();
+    static void allocateSmpStacks();
 
     /**
      * @brief Copy the AP startup routine to lower kernel memory.
      *
      * @return The page, on which the startup routine is located
      */
-    static uint32_t initializeSmpStartupCode();
+    static void copySmpStartupCode();
 
     /**
      * @brief Get the LocalApic instance that belongs to the BSP.
@@ -127,7 +125,11 @@ private:
     static Util::Data::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
     static Util::Data::ArrayList<IoApic *> ioApics; ///< @brief All IoApic instance..
     static Util::Data::ArrayList<ApicTimer *> timers; ///< @brief All ApicTimer instances.
-    static ApicErrorInterruptHandler *errorHandler; ///< @brief The interrupt handler that gets triggered on an internal APIC error.
+    static ApicErrorHandler *errorHandler; ///< @brief The interrupt handler that gets triggered on an internal APIC error.
+
+    // If any of these two are changed, smp_startup.asm has to be changed too!
+    static const constexpr uint32_t apStackSize = 0x1000; ///< @brief Size of the stack allocated for each AP.
+    static const constexpr uint32_t apStartupAddress = 0x8000; ///< @brief Physical address the AP startup routine is copied to.
 
     static Kernel::Logger log;
 };

@@ -1,4 +1,4 @@
-#include "ApicErrorInterruptHandler.h"
+#include "ApicErrorHandler.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
 #include "LocalApic.h"
@@ -7,15 +7,15 @@ namespace Device {
 
 // TODO: Check how serenityOS does error handling
 
-Kernel::Logger ApicErrorInterruptHandler::log = Kernel::Logger::get("Apic Error Handler");
+Kernel::Logger ApicErrorHandler::log = Kernel::Logger::get("Apic Error Handler");
 
-void ApicErrorInterruptHandler::plugin() {
+void ApicErrorHandler::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptVector::ERROR, *this);
     LocalApic::allow(LocalApic::ERROR);
 }
 
-void ApicErrorInterruptHandler::trigger(const Kernel::InterruptFrame &frame) {
+void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {
     // This works for multiple cores because the core that handles the interrupt calls this function
     // and thus reaches the correct local APIC
 

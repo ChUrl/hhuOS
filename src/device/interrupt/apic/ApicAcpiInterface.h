@@ -2,9 +2,9 @@
 #define HHUOS_APICACPIINTERFACE_H
 
 #include "kernel/interrupt/GlobalSystemInterrupt.h"
+#include "device/interrupt/InterruptRequest.h"
 #include "device/power/acpi/Acpi.h"
-#include "ApicRegisterInterface.h"
-#include "InterruptRequest.h"
+#include "ApicRegisters.h"
 
 namespace Device {
 

@@ -7,9 +7,6 @@ namespace Device {
 IoApicPlatform *IoApic::ioPlatform = nullptr;
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 
-// TODO: Should I arbitrarily assign IDs like this or does ACPI already contain valid IDs?
-uint8_t ioApicId = 0; // IoApics don't start with an assigned id
-
 IoApic::IoApic(IoApicPlatform *ioApicPlatform, IoApicInformation &&ioApicInformation)
         : ioInfo(ioApicInformation) {
     ioPlatform = ioApicPlatform;
@@ -144,21 +141,24 @@ void IoApic::initializeREDTBL() {
 }
 
 #if HHUOS_APIC_ENABLE_DEBUG == 1
+
 void IoApic::dumpREDTBL() {
     log.info("Redirection Table (I/O APIC Id: [%d]):", ioInfo.id);
     for (uint32_t gsi = ioInfo.gsiBase; gsi < ioInfo.gsiMax; ++gsi) {
         REDTBLEntry redtblEntry = readREDTBL(static_cast<Kernel::GlobalSystemInterrupt>(gsi));
-        log.info("- Interrupt [%d]: (Vector: [0x%x], Masked: [%d], Destination: [%d], DeliveryMode: [0b%b], DestinationMode: [%s], Polarity: [%s], TriggerMode: [%s])",
-                 gsi,
-                 static_cast<uint8_t>(redtblEntry.vector),
-                 static_cast<uint8_t>(redtblEntry.isMasked),
-                 redtblEntry.destination,
-                 static_cast<uint8_t>(redtblEntry.deliveryMode),
-                 redtblEntry.destinationMode == REDTBLEntry::DestinationMode::PHYSICAL ? "PHYSICAL" : "LOGICAL",
-                 redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                 redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+        log.debug(
+                "- Interrupt [%d]: (Vector: [0x%x], Masked: [%d], Destination: [%d], DeliveryMode: [0b%b], DestinationMode: [%s], PinPolarity: [%s], TriggerMode: [%s])",
+                gsi,
+                static_cast<uint8_t>(redtblEntry.vector),
+                static_cast<uint8_t>(redtblEntry.isMasked),
+                redtblEntry.destination,
+                static_cast<uint8_t>(redtblEntry.deliveryMode),
+                redtblEntry.destinationMode == REDTBLEntry::DestinationMode::PHYSICAL ? "PHYSICAL" : "LOGICAL",
+                redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 }
+
 #endif
 
 uint32_t IoApic::readIndirectRegister(IndirectRegister reg) {

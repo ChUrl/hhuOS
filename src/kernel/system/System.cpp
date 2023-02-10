@@ -33,6 +33,7 @@
 #include "device/power/acpi/Acpi.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "kernel/interrupt/InterruptHandler.h"
+#include "device/interrupt/apic/Apic.h"
 #include "kernel/log/Logger.h"
 #include "kernel/memory/PageFrameAllocator.h"
 #include "kernel/memory/PagingAreaManager.h"
@@ -49,13 +50,6 @@
 #include "lib/util/collection/Array.h"
 #include "lib/util/base/FreeListMemoryManager.h"
 #include "lib/util/base/HeapMemoryManager.h"
-
-// NOTE: My stuff
-#include "device/interrupt/ApicTimer.h"
-#include "device/interrupt/LocalApic.h"
-#include "device/interrupt/IoApic.h"
-#include "device/interrupt/ApicErrorInterruptHandler.h"
-#include "device/interrupt/Apic.h"
 #include "lib/util/async/Thread.h"
 
 namespace Kernel {

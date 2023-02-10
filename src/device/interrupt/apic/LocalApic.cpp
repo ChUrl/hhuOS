@@ -1,9 +1,7 @@
 #include "LocalApic.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
-#include "kernel/paging/Paging.h"
 #include "lib/util/cpu/CpuId.h"
-#include "smp_startup.h"
 #include "Apic.h"
 
 namespace Device {
@@ -157,7 +155,7 @@ void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
 
 void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     ICREntry icrEntry{};
-    icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12), // Startup code physical address
+    icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12), // Startup code physical page
     icrEntry.deliveryMode = ICREntry::DeliveryMode::STARTUP,
     icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL, // Ignored
     icrEntry.level = ICREntry::Level::DEASSERT, // Ignored
@@ -250,13 +248,13 @@ void LocalApic::dumpLVT() {
     log.info("Local Vector Table (Local APIC Id: [%d]):", getId());
     for (uint8_t lint = CMCI; lint <= ERROR; ++lint) {
         LVTEntry lvtEntry = readLVT(static_cast<LocalInterrupt>(lint));
-        log.info("- Int [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], Polarity: [%s], Trigger: [%s])",
-                 lintNames[lint],
-                 static_cast<uint8_t>(lvtEntry.vector),
-                 static_cast<uint8_t>(lvtEntry.isMasked),
-                 static_cast<uint8_t>(lvtEntry.deliveryMode),
-                 lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                 lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+        log.debug("- Interrupt [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], PinPolarity: [%s], TriggerMode: [%s])",
+                  lintNames[lint],
+                  static_cast<uint8_t>(lvtEntry.vector),
+                  static_cast<uint8_t>(lvtEntry.isMasked),
+                  static_cast<uint8_t>(lvtEntry.deliveryMode),
+                  lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                  lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 }
 

@@ -18,12 +18,11 @@
 #include "kernel/service/InterruptService.h"
 #include "Pit.h"
 #include "kernel/system/System.h"
-#include "device/interrupt/Apic.h"
+#include "device/interrupt/apic/Apic.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "kernel/log/Logger.h"
 #include "kernel/service/SchedulerService.h"
 #include "lib/util/base/Exception.h"
-#include "device/interrupt/ApicTimer.h"
 
 namespace Kernel {
 struct InterruptFrame;
