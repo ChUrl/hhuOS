@@ -61,7 +61,7 @@ public:
      *
      * @param interruptSource The number of the interrupt to activated
      */
-    static void allow(InterruptRequest interruptSource);
+    void allow(InterruptRequest interruptSource);
 
     /**
      * Forbid an interrupt. If this is done, the interrupt is masked out
@@ -70,7 +70,7 @@ public:
      *
      * @param interruptSource The number of the interrupt to deactivate
      */
-    static void forbid(InterruptRequest interruptSource);
+    void forbid(InterruptRequest interruptSource);
 
     /**
      * Get the state of this interrupt - whether it is masked out or not.
@@ -78,21 +78,21 @@ public:
      * @param interruptSource The number of the interrupt
      * @return true, if the interrupt is disabled
      */
-    static bool status(InterruptRequest interruptSource);
+    bool status(InterruptRequest interruptSource);
 
     /**
      * Send an end of interrupt signal to the corresponding PIC.
      *
      * @param interruptSource The number of the interrupt for which to send an EOI
      */
-    static void sendEndOfInterrupt(InterruptRequest interruptSource);
+    void sendEndOfInterrupt(InterruptRequest interruptSource);
 
     /**
      * Check if a spurious interrupt has occurred.
      *
      * @return true, if a spurious interrupt has occurred
      */
-    static bool isSpurious(InterruptRequest interruptSource);
+    bool isSpurious(InterruptRequest interruptSource);
 
 private:
 
@@ -102,7 +102,7 @@ private:
      * @param interruptSource The interrupt
      * @return The corresponding PIC's data port
      */
-    static const IoPort& getDataPort(InterruptRequest interruptSource);
+    const IoPort& getDataPort(InterruptRequest interruptSource);
 
     /**
      * Get the mask for the specified interrupt.
@@ -114,10 +114,11 @@ private:
 
 private:
 
-    static const IoPort masterCommandPort;
-    static const IoPort masterDataPort;
-    static const IoPort slaveCommandPort;
-    static const IoPort slaveDataPort;
+    const IoPort masterCommandPort = IoPort(0x20);
+    const IoPort masterDataPort = IoPort(0x21);
+
+    const IoPort slaveCommandPort = IoPort(0xA0);
+    const IoPort slaveDataPort = IoPort(0xA1);
 
     static const constexpr uint8_t EOI = 0x20;
     static const constexpr uint8_t READ_ISR = 0x0B;

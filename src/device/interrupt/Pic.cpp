@@ -19,11 +19,6 @@
 
 namespace Device {
 
-const IoPort Pic::masterCommandPort = IoPort(0x20);
-const IoPort Pic::masterDataPort = IoPort(0x21);
-const IoPort Pic::slaveCommandPort = IoPort(0xA0);
-const IoPort Pic::slaveDataPort = IoPort(0xA1);
-
 void Pic::allow(InterruptRequest interruptSource) {
     auto &port = getDataPort(interruptSource);
     uint8_t mask = getMask(interruptSource);

@@ -28,6 +28,7 @@
 #include "kernel/service/Service.h"
 #include "device/interrupt/InterruptSource.h"
 #include "MemoryService.h"
+#include "device/interrupt/Pic.h"
 
 namespace Kernel {
 class InterruptHandler;
@@ -72,7 +73,7 @@ public:
 
 private:
 
-    // TODO: I removed the Pic instance because it is static now, confirm this
+    Device::Pic pic;
     InterruptDispatcher dispatcher;
 };
 
