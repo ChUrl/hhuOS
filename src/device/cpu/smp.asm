@@ -106,21 +106,16 @@ boot_ap_32:
     ; Set cr3 to BSP value (for the page directory)
     mov eax, [boot_ap_cr3 - boot_ap + startup_address]
     mov cr3, eax
-
-    ; Enable paging + page protection
-    mov ecx, cr0
-    or  ecx, 0x80000001
-    mov cr0, ecx
+    ; Set cr0 to BSP value (to enable paging + page protection)
+    mov eax, [boot_ap_cr0 - boot_ap + startup_address]
+    mov cr0, eax
+    ; Set cr4 to BSP value (for PAE + PSE or other features)
+    mov eax, [boot_ap_cr4 - boot_ap + startup_address]
+    mov cr4, eax
 
     ; Load the system GDT and IDT
 	lgdt [boot_ap_gdtr - boot_ap + startup_address]
 	lidt [boot_ap_idtr - boot_ap + startup_address]
-
-    ; Set cr0/cr4 to BSP values
-    mov eax, [boot_ap_cr0 - boot_ap + startup_address]
-    mov cr0, eax
-    mov eax, [boot_ap_cr4 - boot_ap + startup_address]
-    mov cr4, eax
 
     ; Get the local APIC's id/CPU id using CPUID
     mov eax, 0x1

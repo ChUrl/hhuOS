@@ -8,8 +8,9 @@ Kernel::Logger log = Kernel::Logger::get("SMP");
 
 [[noreturn]] void smpEntry(uint8_t apicid) {
     runningAPs |= (1 << apicid); // Mark that this AP is running
-    log.info("CPU [%d] online", apicid);
+    log.info("CPU [%d] is now online!", apicid);
 
+    // TODO: Print periodic messages using ApicTimer
     // Device::LocalApic::initializeAp();
     // Device::Apic::initializeTimer();
 
