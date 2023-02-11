@@ -1,7 +1,7 @@
 #include "kernel/paging/Paging.h"
 #include "kernel/system/System.h"
 #include "kernel/service/InterruptService.h"
-#include "device/cpu/smp.h"
+#include "device/cpu/Smp.h"
 #include "LocalApic.h"
 #include "Apic.h"
 #include "lib/util/base/Constants.h"
