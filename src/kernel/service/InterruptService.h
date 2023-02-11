@@ -18,7 +18,6 @@
 #ifndef HHUOS_INTERRUPTSERVICE_H
 #define HHUOS_INTERRUPTSERVICE_H
 
-#include "device/interrupt/Apic.h"
 #include <cstdint>
 
 #include "device/interrupt/Pic.h"
@@ -26,7 +25,6 @@
 #include "kernel/interrupt/InterruptVector.h"
 #include "device/interrupt/InterruptRequest.h"
 #include "kernel/service/Service.h"
-#include "device/interrupt/InterruptSource.h"
 #include "MemoryService.h"
 #include "device/interrupt/Pic.h"
 

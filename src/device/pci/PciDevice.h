@@ -22,7 +22,6 @@
 
 #include "Pci.h"
 #include "device/interrupt/InterruptRequest.h"
-#include "device/interrupt/GlobalSystemInterrupt.h"
 #include "device/interrupt/Pic.h"
 #include "lib/util/collection/Array.h"
 

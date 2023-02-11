@@ -1,19 +1,19 @@
-#include "lib/util/cpu/CpuId.h"
 #include "kernel/paging/Paging.h"
 #include "kernel/system/System.h"
 #include "kernel/service/InterruptService.h"
 #include "device/cpu/smp.h"
 #include "LocalApic.h"
 #include "Apic.h"
+#include "lib/util/base/Constants.h"
 
 namespace Device {
 
 bool Apic::initialized = false;
 bool Apic::timerInitialized = false;
 uint8_t Apic::bspId = 0;
-Util::Data::ArrayList<LocalApic *> Apic::localApics;
-Util::Data::ArrayList<IoApic *> Apic::ioApics;
-Util::Data::ArrayList<ApicTimer *> Apic::timers;
+Util::ArrayList<LocalApic *> Apic::localApics;
+Util::ArrayList<IoApic *> Apic::ioApics;
+Util::ArrayList<ApicTimer *> Apic::timers;
 ApicErrorHandler *Apic::errorHandler = nullptr;
 Kernel::Logger Apic::log = Kernel::Logger::get("Apic");
 
@@ -43,11 +43,11 @@ void Apic::initialize() {
 
     // Get our required information from ACPI
     auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
-    Util::Data::ArrayList<const Acpi::ProcessorLocalApic *> acpiProcessorLocalApics;
-    Util::Data::ArrayList<const Acpi::LocalApicNmi *> acpiLocalApicNmis;
-    Util::Data::ArrayList<const Acpi::IoApic *> acpiIoApics;
-    Util::Data::ArrayList<const Acpi::NmiSource *> acpiNmiSources;
-    Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> acpiInterruptSourceOverrides;
+    Util::ArrayList<const Acpi::ProcessorLocalApic *> acpiProcessorLocalApics;
+    Util::ArrayList<const Acpi::LocalApicNmi *> acpiLocalApicNmis;
+    Util::ArrayList<const Acpi::IoApic *> acpiIoApics;
+    Util::ArrayList<const Acpi::NmiSource *> acpiNmiSources;
+    Util::ArrayList<const Acpi::InterruptSourceOverride *> acpiInterruptSourceOverrides;
     Acpi::collectMadtStructures(&acpiProcessorLocalApics, Acpi::PROCESSOR_LOCAL_APIC);
     Acpi::collectMadtStructures(&acpiLocalApicNmis, Acpi::LOCAL_APIC_NMI);
     Acpi::collectMadtStructures(&acpiIoApics, Acpi::IO_APIC);
@@ -257,7 +257,7 @@ void Device::Apic::copySmpStartupCode() {
 
     // Allocate physical memory for copying the startup code
     // void *startupCodeDestination = memoryService.allocateLowerMemory(Kernel::Paging::PAGESIZE);
-    void *startupCodeMemory = memoryService.mapIO(apStartupAddress, Util::Memory::PAGESIZE);
+    void *startupCodeMemory = memoryService.mapIO(apStartupAddress, Util::PAGESIZE);
 
     // Identity map the allocated physical memory to the kernel address space
     memoryService.unmap(reinterpret_cast<uint32_t>(startupCodeMemory));
@@ -270,8 +270,8 @@ void Device::Apic::copySmpStartupCode() {
     }
 
     // Virtual addresses
-    Util::Memory::Address<uint32_t> startupCode = Util::Memory::Address<uint32_t>(reinterpret_cast<uint32_t>(&boot_ap));
-    Util::Memory::Address<uint32_t> destination = Util::Memory::Address<uint32_t>(apStartupAddress);
+    Util::Address<uint32_t> startupCode = Util::Address<uint32_t>(reinterpret_cast<uint32_t>(&boot_ap));
+    Util::Address<uint32_t> destination = Util::Address<uint32_t>(apStartupAddress);
 
     // Prepare the empty variables in the startup routine
     asm volatile ("sgdt %0" : "=m" (boot_ap_gdtr));

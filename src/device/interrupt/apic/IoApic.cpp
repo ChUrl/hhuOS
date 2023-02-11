@@ -1,6 +1,8 @@
 #include "IoApic.h"
 #include "kernel/system/System.h"
 #include "kernel/paging/Paging.h"
+#include "lib/util/base/Constants.h"
+#include "kernel/service/MemoryService.h"
 
 namespace Device {
 
@@ -97,10 +99,10 @@ void IoApic::ensureRegisterAccess() const {
 
 void IoApic::initializeMMIORegion() {
     uint32_t physAddress = ioInfo.physAddress;
-    uint32_t pageOffset = physAddress % Util::Memory::PAGESIZE;
+    uint32_t pageOffset = physAddress % Util::PAGESIZE;
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(physAddress, Util::Memory::PAGESIZE, true);
+    void *virtAddress = memoryService.mapIO(physAddress, Util::PAGESIZE, true);
 
     // Account for possible misalignment
     ioInfo.virtAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;

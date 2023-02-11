@@ -1,7 +1,8 @@
 #include "LocalApic.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
-#include "lib/util/cpu/CpuId.h"
+#include "lib/util/hardware/CpuId.h"
+#include "lib/util/base/Constants.h"
 #include "Apic.h"
 
 namespace Device {
@@ -30,9 +31,9 @@ uint8_t LocalApic::getId() {
 }
 
 bool LocalApic::supportsXApic() {
-    auto features = Util::Cpu::CpuId::getCpuFeatures();
+    auto features = Util::Hardware::CpuId::getCpuFeatures();
     for (auto feature: features) {
-        if (feature == Util::Cpu::CpuId::CpuFeature::APIC) {
+        if (feature == Util::Hardware::CpuId::CpuFeature::APIC) {
             return true;
         }
     }
@@ -40,9 +41,9 @@ bool LocalApic::supportsXApic() {
 }
 
 bool LocalApic::supportsX2Apic() {
-    auto features = Util::Cpu::CpuId::getCpuFeatures();
+    auto features = Util::Hardware::CpuId::getCpuFeatures();
     for (auto feature: features) {
-        if (feature == Util::Cpu::CpuId::CpuFeature::X2APIC) {
+        if (feature == Util::Hardware::CpuId::CpuFeature::X2APIC) {
             return true;
         }
     }
@@ -208,10 +209,10 @@ void LocalApic::ensureRegisterAccess() {
 
 void LocalApic::initializeXApicMMIO() {
     uint32_t physAddress = localPlatform->physAddress;
-    uint32_t pageOffset = physAddress % Util::Memory::PAGESIZE;
+    uint32_t pageOffset = physAddress % Util::PAGESIZE;
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(physAddress, Util::Memory::PAGESIZE, true);
+    void *virtAddress = memoryService.mapIO(physAddress, Util::PAGESIZE, true);
 
     // Account for possible misalignment
     localPlatform->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;

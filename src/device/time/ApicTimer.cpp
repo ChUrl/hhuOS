@@ -2,6 +2,7 @@
 #include "kernel/system/System.h"
 #include "kernel/service/TimeService.h"
 #include "kernel/service/InterruptService.h"
+#include "kernel/service/SchedulerService.h"
 #include "device/interrupt/apic/LocalApic.h"
 
 namespace Device {

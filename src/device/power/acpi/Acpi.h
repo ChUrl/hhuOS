@@ -21,6 +21,7 @@
 #include <cstdint>
 
 #include "lib/util/collection/Array.h"
+#include "lib/util/collection/ArrayList.h"
 
 namespace Util {
 
@@ -239,14 +240,14 @@ public:
 
     static const SdtHeader& getTable(const char *signature);
 
-    static Util::Data::Array<Util::Memory::String> getAvailableTables();
+    static Util::Array<Util::String> getAvailableTables();
 
     // Convenience function to directly receive pointer to specific table
     template<typename T = SdtHeader>
     static const T *getTable(const char *signature);
 
     template<typename T>
-    static void collectMadtStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type);
+    static void collectMadtStructures(Util::ArrayList<const T *> *structures, ApicStructureType type);
 
 private:
 
@@ -272,7 +273,7 @@ const T *Acpi::getTable(const char *signature) {
 }
 
 template<typename T>
-void Acpi::collectMadtStructures(Util::Data::ArrayList<const T *> *structures, ApicStructureType type) {
+void Acpi::collectMadtStructures(Util::ArrayList<const T *> *structures, ApicStructureType type) {
     auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
     auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
 

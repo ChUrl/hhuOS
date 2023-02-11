@@ -5,6 +5,7 @@
 #include "ApicAcpiInterface.h"
 #include "kernel/log/Logger.h"
 #include "device/cpu/ModelSpecificRegister.h"
+#include "device/cpu/IoPort.h"
 
 // Enable of disable all APIC debug logs
 #define HHUOS_APIC_ENABLE_DEBUG 1

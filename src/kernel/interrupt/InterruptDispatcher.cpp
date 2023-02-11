@@ -31,7 +31,6 @@
 #include "lib/util/collection/List.h"
 #include "lib/util/io/stream/PrintStream.h"
 #include "lib/util/base/System.h"
-#include "device/interrupt/IoApic.h"
 #include "InterruptDispatcher.h"
 #include "device/interrupt/apic/Apic.h"
 

@@ -6,6 +6,8 @@
 #include "device/power/acpi/Acpi.h"
 #include "ApicRegisters.h"
 
+struct IoApicIrqOverride;
+
 namespace Device {
 
 /**
@@ -79,9 +81,9 @@ struct IoApicPlatform {
     uint8_t version = 0;
     bool directEoiSupported = false; ///< @brief Older IO APICs require recieving EOIs sent by the local APIC
     Kernel::GlobalSystemInterrupt globalMaxGsi = Kernel::GlobalSystemInterrupt(0); ///< @brief The last GSI the system supports
-    Util::Data::ArrayList<const IoApicIrqOverride *> overrides; ///< @brief All overridden ISA IRQs, equal for all IO APICs
+    Util::ArrayList<const IoApicIrqOverride *> overrides; ///< @brief All overridden ISA IRQs, equal for all IO APICs
 
-    explicit IoApicPlatform(Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> *interruptSourceOverrides);
+    explicit IoApicPlatform(Util::ArrayList<const Acpi::InterruptSourceOverride *> *interruptSourceOverrides);
 
     ~IoApicPlatform() = default;
 

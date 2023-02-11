@@ -51,7 +51,7 @@ IoApicPlatform::IoApicIrqOverride::IoApicIrqOverride(const Acpi::InterruptSource
                                                                      ? REDTBLEntry::TriggerMode::EDGE
                                                                      : REDTBLEntry::TriggerMode::LEVEL)) {}
 
-IoApicPlatform::IoApicPlatform(Util::Data::ArrayList<const Acpi::InterruptSourceOverride *> *interruptSourceOverrides) {
+IoApicPlatform::IoApicPlatform(Util::ArrayList<const Acpi::InterruptSourceOverride *> *interruptSourceOverrides) {
     for (const auto *interruptSourceOverride: *interruptSourceOverrides) {
         overrides.add(new IoApicIrqOverride(interruptSourceOverride));
     }

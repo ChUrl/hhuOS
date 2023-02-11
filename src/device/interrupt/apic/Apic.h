@@ -122,9 +122,9 @@ private:
     static bool initialized; ///< @brief Indicates if Apic::initialize() has been called.
     static bool timerInitialized; ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
     static uint8_t bspId; ///< @brief The local APIC id/CPU id of the BSP.
-    static Util::Data::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
-    static Util::Data::ArrayList<IoApic *> ioApics; ///< @brief All IoApic instance..
-    static Util::Data::ArrayList<ApicTimer *> timers; ///< @brief All ApicTimer instances.
+    static Util::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
+    static Util::ArrayList<IoApic *> ioApics; ///< @brief All IoApic instance..
+    static Util::ArrayList<ApicTimer *> timers; ///< @brief All ApicTimer instances.
     static ApicErrorHandler *errorHandler; ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
     // If any of these two are changed, smp_startup.asm has to be changed too!
