@@ -7,12 +7,29 @@
 
 namespace Device {
 
+uint32_t ApicTimer::timerInt = 0;
+uint32_t ApicTimer::yieldInt = 0;
 uint32_t ApicTimer::counter = 0;
 Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
 ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval)
-        : cpuId(LocalApic::getId()), timerInterval(timerInterval), yieldInterval(yieldInterval) {
+        : cpuId(LocalApic::getId()) {
     LocalApic::ensureBspInitialized();
+
+    if (timerInterval == 0) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "APIC timer interval can't be 0!");
+    }
+    if (yieldInterval == 0) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "APIC timer yield interval can't be 0!");
+    }
+
+    // Only set these once, so they are equal for all cores
+    if (timerInt == 0) {
+        timerInt = timerInterval;
+    }
+    if (yieldInt == 0) {
+        yieldInt = yieldInterval;
+    }
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
     LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, Divide::BY_16); // BY_1 is the highest resolution (overkill)
@@ -29,7 +46,7 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval)
         counter = setInterruptRate();
     }
 
-    log.info("Setting APIC timer interval for CPU [%d] to [%uns] (Initial count: [%u])", cpuId, timerInterval, counter);
+    log.info("Setting APIC timer interval for CPU [%d] to [%uns] (Initial count: [%u])", cpuId, timerInt, counter);
     LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, counter);
 }
 
@@ -40,8 +57,14 @@ void ApicTimer::plugin() {
 }
 
 void ApicTimer::trigger(const Kernel::InterruptFrame &frame) {
-    time.addNanoseconds(timerInterval);
-    if (time.toMilliseconds() % yieldInterval == 0) {
+    time.addNanoseconds(timerInt);
+
+    if (cpuId != 0) {
+        // Currently there is only a scheduler in the BSP
+        return;
+    }
+
+    if (time.toMilliseconds() % yieldInt == 0) {
         // Currently there is only one main scheduler, for SMP systems this should yield the core-scheduler
         Kernel::System::getService<Kernel::SchedulerService>().yield();
     }
@@ -51,7 +74,7 @@ Util::Time::Timestamp ApicTimer::getTime() {
     return time;
 }
 
-uint32_t ApicTimer::setInterruptRate() const {
+uint32_t ApicTimer::setInterruptRate() {
     auto &timeService = Kernel::System::getService<Kernel::TimeService>();
 
     // If the timerInterval is 10ms, we wait longer, because calibrating with too few PIT ticks is imprecise
@@ -65,8 +88,7 @@ uint32_t ApicTimer::setInterruptRate() const {
     // This is obviously slow, as time is spent waiting, if two very accurate timestamps could be taken, the initial
     // counter could be calculated by the difference, with very little waiting time.
     LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter, writing starts timer
-    timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(
-            timerInterval / 1'000'000 * calibrationTimeFactor)); // Interval but in milliseconds
+    timeService.busyWait(Util::Time::Timestamp::ofMilliseconds((timerInt / 1'000'000) * calibrationTimeFactor)); // Interval but in milliseconds
     uint32_t initialCount = 0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT); // Ticks in interval
 
     return initialCount / calibrationTimeFactor; // Return the counter to initialize AP timers with the same value

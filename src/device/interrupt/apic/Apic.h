@@ -39,6 +39,7 @@ public:
      */
     static void initialize();
 
+#if HHUOS_APIC_ENABLE_SMP == 1
     /**
      * @brief Check if the system supports symmetric multiprocessing mode with multiple processors.
      */
@@ -48,6 +49,12 @@ public:
      * @brief Initialize the APs when SMP is supported.
      */
     static void initializeSmp();
+#endif
+
+    /**
+     * @brief Get the LocalApic instance that belongs to the current CPU.
+     */
+     static LocalApic &getCurrentLocalApic();
 
     /**
      * @brief Check if the BSP's local APIC timer has been initialized.
@@ -58,6 +65,16 @@ public:
      * @brief Initialize the current processor's local APIC timer.
      */
     static void initializeTimer();
+
+    /**
+     * @brief Get the ApicTimer instance that belongs to the current CPU.
+     */
+    static ApicTimer &getCurrentTimer();
+
+    /**
+     * @brief Create an ErrorHandler instance (if it hasn't been created yet) and allow the local ERROR interrupt.
+     */
+    static void initializeErrorHandling();
 
     /**
      * @brief Unmask an external interrupt.
@@ -92,6 +109,7 @@ public:
     static bool isExternalInterrupt(Kernel::InterruptVector vector);
 
 private:
+#if HHUOS_APIC_ENABLE_SMP == 1
     /**
      * @brief Prepare the memory regions used by the AP's stacks.
      */
@@ -103,11 +121,7 @@ private:
      * @return The page, on which the startup routine is located
      */
     static void copySmpStartupCode();
-
-    /**
-     * @brief Get the LocalApic instance that belongs to the BSP.
-     */
-    static LocalApic &getBsp();
+#endif
 
     /**
      * @brief Get the IoApic instance that is responsible for handling a specific GSI.

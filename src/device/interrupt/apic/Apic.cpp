@@ -88,22 +88,21 @@ void Apic::initialize() {
         localApics.add(new LocalApic(localPlatform, LocalApicInformation(localInfo, nmiInfo)));
     }
 
+    // I don't know if there are cases where this throws...
     if (localApics.get(0)->localInfo.id != 0) {
         // ACPI 6.5 specification says that the BSP's Acpi::LocalApic MADT entry is the first one (sec. 5.2.12.1),
         // but ACPI 1.0 specification (what hhuOS uses) does not mention any order...
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "BSP does not have id 0 or was not mentioned first!");
     }
 
-    // First step of BSP's local APIC initialization
-    LocalApic::initializeBsp();
-
-    // Initialize the rest of the BSP's local APIC
-    getBsp().initializeAp();
+    // Initialize our local APIC, all others are only initialized when SMP is started up
+    LocalApic::initializeBsp(); // First step of BSP's local APIC initialization
+    getCurrentLocalApic().initializeAp(); // Initialize the rest of the BSP's local APIC
 
     // Create IoApic instances
     auto *ioPlatform = new IoApicPlatform(&acpiInterruptSourceOverrides);
     for (auto *ioInfo: acpiIoApics) {
-        // The Nmi is assigned to the correct I/O APIC. This is kind of a mess, because ACPI does not report
+        // The Nmi is assigned to the correct I/O APIC. This is a mess, because ACPI does not report
         // the maximum GSI an I/O APIC supports.
 
         // Find the maximum GSI of ioInfo by finding the next larger GSI base
@@ -134,14 +133,12 @@ void Apic::initialize() {
         log.warn("Support for multiple I/O APICs is untested!");
     }
 
+    // Initialize all I/O APICs
     for (auto *ioApic: ioApics) {
         ioApic->initialize();
     }
 
-    // Local APIC error interrupt handler
-    // We only require one of these, as every AP can only access its own local APIC's error register
-    errorHandler = new ApicErrorHandler();
-    errorHandler->plugin();
+    initializeErrorHandling();
 
 #if HHUOS_APIC_ENABLE_DEBUG == 1
     dumpDebugInfo();
@@ -150,6 +147,7 @@ void Apic::initialize() {
     initialized = true;
 }
 
+#if HHUOS_APIC_ENABLE_SMP == 1
 bool Apic::isSmpSupported() {
     return initialized && localApics.size() > 1;
 }
@@ -290,6 +288,18 @@ void Device::Apic::copySmpStartupCode() {
                          reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
 }
+#endif
+
+LocalApic &Apic::getCurrentLocalApic() {
+    for (uint32_t i = 0; i < localApics.size(); ++i) {
+        LocalApic *localApic = localApics.get(i);
+        if (localApic->localInfo.id == LocalApic::getId()) {
+            return *localApic;
+        }
+    }
+
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find local APIC for current CPU!");
+}
 
 bool Apic::isBspTimerInitialized() {
     return timerInitialized;
@@ -307,7 +317,30 @@ void Apic::initializeTimer() {
     auto *apicTimer = new Device::ApicTimer();
     apicTimer->plugin();
     timers.add(apicTimer);
-    timerInitialized = true;
+    timerInitialized = true; // Only used to skip the PIT preemption trigger when APIC timer is online
+}
+
+ApicTimer &Apic::getCurrentTimer() {
+    for (uint32_t i = 0; i < timers.size(); ++i) {
+        ApicTimer *timer = timers.get(i);
+        if (timer->cpuId == LocalApic::getId()) {
+            return *timer;
+        }
+    }
+
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find timer for current CPU!");
+}
+
+void Apic::initializeErrorHandling() {
+    // Local APIC error interrupt handler
+    // We only require one of these, as every AP can only access its own local APIC's error register
+    if (errorHandler == nullptr) {
+        errorHandler = new ApicErrorHandler();
+        errorHandler->plugin();
+    }
+
+    // This is also done when an AP calls this
+    LocalApic::allow(LocalApic::ERROR);
 }
 
 void Apic::allow(InterruptRequest interruptRequest) {
@@ -349,11 +382,6 @@ bool Apic::isLocalInterrupt(Kernel::InterruptVector vector) {
 bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
     // Remapping can be ignored here, as all GSIs are contiguous anyway
     return static_cast<Kernel::GlobalSystemInterrupt>(vector - 32) <= IoApic::ioPlatform->globalMaxGsi;
-}
-
-LocalApic &Apic::getBsp() {
-    // This is based on the assumption that the BSP is mentioned first in the MADT and has id 0
-    return *localApics.get(0);
 }
 
 IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {

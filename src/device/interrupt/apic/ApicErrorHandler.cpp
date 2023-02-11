@@ -12,7 +12,6 @@ Kernel::Logger ApicErrorHandler::log = Kernel::Logger::get("Apic Error Handler")
 void ApicErrorHandler::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptVector::ERROR, *this);
-    LocalApic::allow(LocalApic::ERROR);
 }
 
 void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {

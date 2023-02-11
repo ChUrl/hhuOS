@@ -1,6 +1,8 @@
 ; This code is adapted from the OsDev "SMP" page and SerenityOS (and the hhuOS' boot.asm of course):
 ; https://github.com/SerenityOS/serenity/blob/master/Kernel/Arch/x86_64/Boot/ap_setup.S (visited on 10/02/23).
 ; This code is relocated by the OS on SMP initialization, so it has to be position independent.
+; Because of the relocation, some variables are contained in the .text section, those get initialized
+; during runtime.
 ; The startup is relatively simple (in comparison to the BSP's startup sequence), because we just reuse
 ; all the stuff already initialized for the BSP (like GDT, IDT, cr0, cr3, cr4).
 
@@ -117,13 +119,13 @@ boot_ap_32:
 	lgdt [boot_ap_gdtr - boot_ap + startup_address]
 	lidt [boot_ap_idtr - boot_ap + startup_address]
 
-    ; Get the local APIC's id/CPU id using CPUID
+    ; Get the local APIC id/CPU id of this AP
     mov eax, 0x1
     cpuid
     shr ebx, 0x18 ; >> 24
     mov edi, ebx ; Save the id
 
-    ; Load our stack (allocated by Apic::allocateSmpStacks)
+    ; Load the correct stack for this AP (allocated by Apic::allocateSmpStacks)
     mov ebx, [boot_ap_stacks - boot_ap + startup_address] ; Stackpointer array
     mov esp, [ebx + edi * 0x4] ; Choose correct stack, each apStacks entry is a 4 byte pointer to a stack
     add esp, stack_size ; Stack starts at the bottom

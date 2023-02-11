@@ -120,12 +120,6 @@ void System::initializeSystem() {
     log.info("Enabling interrupts");
     Device::Cpu::enableInterrupts();
 
-    // This requires enabled interrupts (for IPIs) // TODO: Does it? Or does IPI sending work without interrupts?
-    if (Device::Apic::isSmpSupported()) {
-        log.info("Detected SMP support -> Initializing AP(s)");
-        Device::Apic::initializeSmp();
-    }
-
     // Setup time and date devices
     log.info("Initializing PIT");
     auto *pit = new Device::Pit();
@@ -151,6 +145,14 @@ void System::initializeSystem() {
         log.info("APIC detected -> Initializing BSP APIC Timer");
         Device::Apic::initializeTimer();
     }
+
+#if HHUOS_APIC_ENABLE_SMP == 1
+    // Requires an initialized BSP APIC timer
+    if (Device::Apic::isInitialized() && Device::Apic::isSmpSupported()) {
+        log.info("Detected SMP support -> Initializing AP(s)");
+        Device::Apic::initializeSmp();
+    }
+#endif
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));

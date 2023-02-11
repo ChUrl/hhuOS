@@ -72,14 +72,14 @@ private:
      *
      * Because the APIC timer has no fixed frequency, it is calibrated using the PIT as calibration source.
      */
-    [[nodiscard]] uint32_t setInterruptRate() const;
+    [[nodiscard]] static uint32_t setInterruptRate() ;
 
 private:
     const uint8_t cpuId; ///< @brief The id of the CPU that uses this timer.
     Util::Time::Timestamp time{};
-    uint32_t timerInterval = 0; ///< @brief The interrupt trigger interval in nanoseconds.
-    uint32_t yieldInterval; ///< @brief The preemption trigger interval in milliseconds.
 
+    static uint32_t timerInt; ///< @brief The interrupt trigger interval in nanoseconds.
+    static uint32_t yieldInt; ///< @brief The preemption trigger interval in milliseconds.
     static uint32_t counter; ///< @brief The counter the BSP's APIC timer was initialized with.
     static Kernel::Logger log;
 };

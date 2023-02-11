@@ -30,7 +30,7 @@ readonly CONST_QEMU_DEFAULT_BOOT_DEVICE="-drive driver=raw,node-name=boot,file.d
 readonly CONST_QEMU_STORAGE_ARGS="-drive driver=raw,index=0,if=floppy,file=floppy0.img -drive driver=raw,node-name=hdd0,file.driver=file,file.filename=hdd0.img"
 readonly CONST_QEMU_FIRMWARE_CONFIGURATION_ARGS="-fw_cfg name=opt/bin/echo,file=initrd/bin/echo"
 readonly CONST_QEMU_NETWORK_ARGS="-nic model=rtl8139,id=eth0,hostfwd=udp::1797-:1797 -object filter-dump,id=filter0,netdev=eth0,file=eth0.dump"
-readonly CONST_QEMU_ARGS="-boot d -vga std -serial stdio -rtc base=localtime -device isa-debug-exit -smp 4"
+readonly CONST_QEMU_ARGS="-boot d -vga std -serial stdio -rtc base=localtime -device isa-debug-exit -smp 2"
 readonly CONST_QEMU_OLD_AUDIO_ARGS="-soundhw pcspk"
 readonly CONST_QEMU_NEW_AUDIO_ARGS="-audiodev id=pa,driver=pa -machine pcspk-audiodev=pa"
 

@@ -7,8 +7,8 @@
 #include "device/cpu/ModelSpecificRegister.h"
 #include "device/cpu/IoPort.h"
 
-// Enable of disable all APIC debug logs
 #define HHUOS_APIC_ENABLE_DEBUG 1
+#define HHUOS_APIC_ENABLE_SMP 1
 
 namespace Device {
 
@@ -56,6 +56,19 @@ public:
     LocalApic &operator=(const LocalApic &copy) = delete;
 
     ~LocalApic() = default;
+
+    /**
+     * @brief Initialize LVT, SVR and TPR of the executing core's local APIC.
+     *
+     * The local APIC initialization consists of multiple steps:
+     * 1. The BSP calls LocalApic::initializeBsp(), to set up the system for local APIC initialization.
+     * 2. The BSP calls LocalApic::initializeAp(), to complete the BSP's local APIC initialization.
+     * 3. The APs are booted up.
+     * 4. Every AP calls LocalApic::initializeAp() individually.
+     *
+     * This function must not be called before LocalApic::initializeBsp().
+     */
+    void initializeAp(); // Gets called by the AP itself
 
 private:
     /**
@@ -137,19 +150,6 @@ private:
      * @return The BSP's local APIC id
      */
     static uint8_t initializeBsp();
-
-    /**
-     * @brief Initialize LVT, SVR and TPR of the executing core's local APIC.
-     *
-     * The local APIC initialization consists of multiple steps:
-     * 1. The BSP calls LocalApic::initializeBsp(), to set up the system for local APIC initialization.
-     * 2. The BSP calls LocalApic::initializeAp(), to complete the BSP's local APIC initialization.
-     * 3. The APs are booted up.
-     * 4. Every AP calls LocalApic::initializeAp() individually.
-     *
-     * This function must not be called before LocalApic::initializeBsp().
-     */
-    void initializeAp(); // Gets called by the AP itself
 
     /**
      * @brief Set the IMCR to disconnect the PIC from the CPU.
