@@ -154,7 +154,7 @@ void Apic::initialize() {
 }
 
 bool Apic::isSmpSupported() {
-    return getBsp().initialized && localApics.size() > 1;
+    return initialized && localApics.size() > 1;
 }
 
 // ! SMP was only an afterthought for me, so the inspiration for this code comes from
