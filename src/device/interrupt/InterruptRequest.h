@@ -30,6 +30,6 @@ enum InterruptRequest : uint8_t {
     // Other devices
 };
 
-}
+} // namespace Device
 
 #endif //HHUOS_INTERRUPTREQUEST_H

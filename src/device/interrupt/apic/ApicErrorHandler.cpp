@@ -5,8 +5,6 @@
 
 namespace Device {
 
-// TODO: Check how serenityOS does error handling
-
 Kernel::Logger ApicErrorHandler::log = Kernel::Logger::get("Apic Error Handler");
 
 void ApicErrorHandler::plugin() {
@@ -53,4 +51,4 @@ void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {
     LocalApic::clearErrors();
 }
 
-}
+} // namespace Device

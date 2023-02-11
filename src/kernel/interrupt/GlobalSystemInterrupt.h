@@ -14,6 +14,6 @@ namespace Kernel {
  */
 enum GlobalSystemInterrupt : uint32_t {};
 
-}
+} // namespace Kernel
 
 #endif //HHUOS_GLOBALSYSTEMINTERRUPT_H

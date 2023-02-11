@@ -24,7 +24,8 @@ global boot_ap_entry
 align 8
 bits 16
 boot_ap:
-    cli ; Disable interrupts
+    ; Disable interrupts
+    cli
 
     ; Enable A20 address line
     in al, 0x92
@@ -41,8 +42,8 @@ boot_ap:
     or al, 0x1 ; Set PE bit
     mov cr0, eax
 
-    ; Far jump to protected mode
-    jmp dword 0x8:boot_ap_32 - boot_ap + startup_address ; Sets cs (code segment register)
+    ; Far jump to protected mode, sets cs (code segment register)
+    jmp dword 0x8:boot_ap_32 - boot_ap + startup_address
 
 ; =================================================================================================
 ; Keep these variables in the .text section, so they get copied to startup_address and can be accessed
@@ -105,13 +106,13 @@ boot_ap_32:
     mov fs, ax ; General purpose segment register
     mov gs, ax ; General purpose segment register
 
-    ; Set cr3 to BSP value (for the page directory)
+    ; 1. Set cr3 to BSP value (for the page directory)
     mov eax, [boot_ap_cr3 - boot_ap + startup_address]
     mov cr3, eax
-    ; Set cr0 to BSP value (to enable paging + page protection)
+    ; 2. Set cr0 to BSP value (to enable paging + page protection)
     mov eax, [boot_ap_cr0 - boot_ap + startup_address]
     mov cr0, eax
-    ; Set cr4 to BSP value (for PAE + PSE or other features)
+    ; 3. Set cr4 to BSP value (for PAE + PSE or other features)
     mov eax, [boot_ap_cr4 - boot_ap + startup_address]
     mov cr4, eax
 
@@ -122,12 +123,12 @@ boot_ap_32:
     ; Get the local APIC id/CPU id of this AP
     mov eax, 0x1
     cpuid
-    shr ebx, 0x18 ; >> 24
-    mov edi, ebx ; Save the id
+    shr ebx, 0x18
+    mov edi, ebx
 
     ; Load the correct stack for this AP (allocated by Apic::allocateSmpStacks)
     mov ebx, [boot_ap_stacks - boot_ap + startup_address] ; Stackpointer array
-    mov esp, [ebx + edi * 0x4] ; Choose correct stack, each apStacks entry is a 4 byte pointer to a stack
+    mov esp, [ebx + edi * 0x4] ; Choose correct stack, each boot_ap_stacks entry is a 4 byte pointer to a stack
     add esp, stack_size ; Stack starts at the bottom
     mov ebp, esp ; Update base pointer
 
@@ -141,4 +142,4 @@ boot_ap_finish:
 [SECTION .data]
 align 8
 boot_ap_size:
-    db boot_ap_finish - boot_ap + 1
+    db boot_ap_finish - boot_ap + 1 ; Also include the last jmp $

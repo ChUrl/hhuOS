@@ -51,23 +51,27 @@ struct LVTEntry {
         EXTINT = 0b111
     };
     enum class DeliveryStatus : uint8_t {
-        IDLE = 0, PENDING = 1
+        IDLE = 0,
+        PENDING = 1
     };
     enum class PinPolarity : uint8_t {
-        HIGH = 0, LOW = 1
+        HIGH = 0,
+        LOW = 1
     };
     enum class TriggerMode : uint8_t {
-        EDGE = 0, LEVEL = 1
+        EDGE = 0,
+        LEVEL = 1
     };
     enum class TimerMode : uint8_t {
-        ONESHOT = 0, PERIODIC = 1
+        ONESHOT = 0,
+        PERIODIC = 1
     };
 
     Kernel::InterruptVector vector;
-    DeliveryMode deliveryMode; // All except timer
+    DeliveryMode deliveryMode;     // All except timer
     DeliveryStatus deliveryStatus; // RO
-    PinPolarity pinPolarity; // Only LINT0, LINT1
-    TriggerMode triggerMode; // Only LINT0, LINT1
+    PinPolarity pinPolarity;       // Only LINT0, LINT1
+    TriggerMode triggerMode;       // Only LINT0, LINT1
     bool isMasked;
     TimerMode timerMode; // Only timer
 
@@ -92,16 +96,20 @@ struct ICREntry {
         STARTUP = 0b110
     };
     enum class DestinationMode : uint8_t {
-        PHYSICAL = 0, LOGICAL = 1
+        PHYSICAL = 0,
+        LOGICAL = 1
     };
     enum class DeliveryStatus : uint8_t {
-        IDLE = 0, PENDING = 1
+        IDLE = 0,
+        PENDING = 1
     };
     enum class Level : uint8_t {
-        DEASSERT = 0, ASSERT = 1
+        DEASSERT = 0,
+        ASSERT = 1
     };
     enum class TriggerMode : uint8_t {
-        EDGE = 0, LEVEL = 1
+        EDGE = 0,
+        LEVEL = 1
     };
     enum class DestinationShorthand : uint8_t { // If used ICR_DESTINATION_FIELD is ignored
         NO = 0,
@@ -140,16 +148,22 @@ struct REDTBLEntry {
         EXTINT = 0b111
     };
     enum class DestinationMode : uint8_t {
-        PHYSICAL = 0, LOGICAL = 1
+        PHYSICAL = 0,
+        LOGICAL = 1
     };
     enum class DeliveryStatus : uint8_t {
-        IDLE = 0, PENDING = 1
+        IDLE = 0,
+        PENDING = 1
     };
     enum class PinPolarity : uint8_t {
-        HIGH = 0, LOW = 1, BUS = 2
+        HIGH = 0,
+        LOW = 1,
+        BUS = 2
     };
     enum class TriggerMode : uint8_t {
-        EDGE = 0, LEVEL = 1, BUS = 2
+        EDGE = 0,
+        LEVEL = 1,
+        BUS = 2
     };
 
     Kernel::InterruptVector vector;
@@ -168,6 +182,6 @@ struct REDTBLEntry {
     explicit operator uint64_t() const;
 };
 
-}
+} // namespace Device
 
 #endif //HHUOS_APICREGISTERS_H

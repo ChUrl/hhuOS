@@ -274,10 +274,10 @@ const T *Acpi::getTable(const char *signature) {
 
 template<typename T>
 void Acpi::collectMadtStructures(Util::ArrayList<const T *> *structures, ApicStructureType type) {
-    auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
-    auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
+    const auto *madt = reinterpret_cast<const Madt *>(&getTable("APIC"));
+    const auto *madtEndAddress = reinterpret_cast<const uint8_t *>(madt) + madt->header.length;
 
-    auto *pos = reinterpret_cast<const uint8_t *>(&madt->apicStructure);
+    const auto *pos = reinterpret_cast<const uint8_t *>(&madt->apicStructure);
     const ApicStructureHeader *header;
     while (pos < madtEndAddress) {
         header = reinterpret_cast<const ApicStructureHeader *>(pos);
@@ -296,6 +296,6 @@ void Acpi::collectMadtStructures(Util::ArrayList<const T *> *structures, ApicStr
     }
 }
 
-}
+} // namespace Device
 
 #endif

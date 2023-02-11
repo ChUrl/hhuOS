@@ -16,7 +16,6 @@ public:
 
     ~ApicErrorHandler() override = default;
 
-
     /**
      * Overriding function from InterruptHandler.
      */
@@ -31,6 +30,6 @@ private:
     static Kernel::Logger log;
 };
 
-}
+} // namespace Device
 
 #endif //HHUOS_APICERRORHANDLER_H

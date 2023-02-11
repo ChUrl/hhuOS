@@ -42,7 +42,6 @@ enum InterruptVector : uint8_t {
     SPURIOUS = 0xFF
 };
 
-}
-
+} // namespace Kernel
 
 #endif //HHUOS_INTERRUPTVECTOR_H

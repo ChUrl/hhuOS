@@ -68,7 +68,9 @@ bool Pic::isSpurious(InterruptRequest interruptSource) {
     if (interruptSource == InterruptRequest::LPT1) {
         masterCommandPort.writeByte(READ_ISR);
         return (masterCommandPort.readByte() & SPURIOUS_INTERRUPT) == 0;
-    } else if (interruptSource == InterruptRequest::SECONDARY_ATA) {
+    }
+
+    if (interruptSource == InterruptRequest::SECONDARY_ATA) {
         slaveCommandPort.writeByte(READ_ISR);
         if ((slaveCommandPort.readByte() & SPURIOUS_INTERRUPT) == 0) {
             sendEndOfInterrupt(InterruptRequest::CASCADE);
@@ -79,4 +81,4 @@ bool Pic::isSpurious(InterruptRequest interruptSource) {
     return false;
 }
 
-}
+} // namespace Device

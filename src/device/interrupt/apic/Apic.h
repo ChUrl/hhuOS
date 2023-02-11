@@ -2,17 +2,20 @@
 #define HHUOS_APIC_H
 
 #include "ApicAcpiInterface.h"
+#include "ApicErrorHandler.h"
 #include "ApicRegisters.h"
+#include "device/time/ApicTimer.h"
+#include "IoApic.h"
 #include "kernel/log/Logger.h"
 #include "LocalApic.h"
-#include "IoApic.h"
-#include "ApicErrorHandler.h"
-#include "device/time/ApicTimer.h"
 
 namespace Device {
 
 /**
  * @brief This class provides a common interface to the APIC interrupt model.
+ *
+ * It also contains the SMP init code, which is oddly placed, but I didn't move it because I
+ * didn't want to spent more time on it, it's just a proof of concept after all.
  */
 class Apic {
 public:
@@ -39,7 +42,6 @@ public:
      */
     static void initialize();
 
-#if HHUOS_APIC_ENABLE_SMP == 1
     /**
      * @brief Check if the system supports symmetric multiprocessing mode with multiple processors.
      */
@@ -49,12 +51,16 @@ public:
      * @brief Initialize the APs when SMP is supported.
      */
     static void initializeSmp();
-#endif
+
+    /**
+     * @brief Get the total CPU count.
+     */
+    static uint8_t getCpuCount();
 
     /**
      * @brief Get the LocalApic instance that belongs to the current CPU.
      */
-     static LocalApic &getCurrentLocalApic();
+    static LocalApic &getCurrentLocalApic();
 
     /**
      * @brief Check if the BSP's local APIC timer has been initialized.
@@ -109,7 +115,6 @@ public:
     static bool isExternalInterrupt(Kernel::InterruptVector vector);
 
 private:
-#if HHUOS_APIC_ENABLE_SMP == 1
     /**
      * @brief Prepare the memory regions used by the AP's stacks.
      */
@@ -121,28 +126,25 @@ private:
      * @return The page, on which the startup routine is located
      */
     static void copySmpStartupCode();
-#endif
 
     /**
      * @brief Get the IoApic instance that is responsible for handling a specific GSI.
      */
     static IoApic &getIoApic(Kernel::GlobalSystemInterrupt gsi);
 
-#if HHUOS_APIC_ENABLE_DEBUG == 1
     static void dumpDebugInfo();
-#endif
 
 private:
-    static bool initialized; ///< @brief Indicates if Apic::initialize() has been called.
-    static bool timerInitialized; ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
+    static bool initialized;                        ///< @brief Indicates if Apic::initialize() has been called.
+    static bool bspTimerInitialized;                ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
     static Util::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
-    static Util::ArrayList<IoApic *> ioApics; ///< @brief All IoApic instance..
-    static Util::ArrayList<ApicTimer *> timers; ///< @brief All ApicTimer instances.
-    static ApicErrorHandler *errorHandler; ///< @brief The interrupt handler that gets triggered on an internal APIC error.
+    static Util::ArrayList<IoApic *> ioApics;       ///< @brief All IoApic instance..
+    static Util::ArrayList<ApicTimer *> timers;     ///< @brief All ApicTimer instances.
+    static ApicErrorHandler *errorHandler;          ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
     static Kernel::Logger log;
 };
 
-}
+} // namespace Device
 
 #endif //HHUOS_APIC_H

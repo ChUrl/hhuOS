@@ -1,14 +1,14 @@
 #include "LocalApic.h"
+#include "Apic.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
-#include "lib/util/hardware/CpuId.h"
 #include "lib/util/base/Constants.h"
-#include "Apic.h"
+#include "lib/util/hardware/CpuId.h"
 
 namespace Device {
 
 bool LocalApic::bspInitialized = false;
-LocalApicPlatform *LocalApic::localPlatform = nullptr;
+LocalApicPlatform *LocalApic::platform = nullptr;
 const ModelSpecificRegister LocalApic::ia32ApicBaseMsr = ModelSpecificRegister(0x1B);
 const LocalApic::Register LocalApic::lintRegs[7] = {static_cast<Register>(0x2F0),
                                                     static_cast<Register>(0x320),
@@ -22,13 +22,13 @@ const IoPort LocalApic::registerDataPort = IoPort(0x23);
 Kernel::Logger LocalApic::log = Kernel::Logger::get("LocalApic");
 
 LocalApic::LocalApic(LocalApicPlatform *localApicPlatform, const LocalApicInformation &&localApicInformation)
-        : localInfo(localApicInformation) {
-    localPlatform = localApicPlatform;
+  : info(localApicInformation) {
+    platform = localApicPlatform;
 }
 
 bool LocalApic::supportsXApic() {
     auto features = Util::Hardware::CpuId::getCpuFeatures();
-    for (auto feature: features) {
+    for (auto feature : features) {
         if (feature == Util::Hardware::CpuId::CpuFeature::APIC) {
             return true;
         }
@@ -38,7 +38,7 @@ bool LocalApic::supportsXApic() {
 
 bool LocalApic::supportsX2Apic() {
     auto features = Util::Hardware::CpuId::getCpuFeatures();
-    for (auto feature: features) {
+    for (auto feature : features) {
         if (feature == Util::Hardware::CpuId::CpuFeature::X2APIC) {
             return true;
         }
@@ -85,7 +85,7 @@ uint8_t LocalApic::initializeBsp() {
     } else {
         log.info("No x2Apic mode support detected, running in xApic mode");
     }
-    localPlatform->isX2Apic = false;
+    platform->isX2Apic = false;
     initializeXApicMMIO();
 
     // Mask all PIC interrupts that have been enabled previously. This has to be done before bspInitialized
@@ -97,7 +97,7 @@ uint8_t LocalApic::initializeBsp() {
     }
 
     bspInitialized = true; // System is now ready for LocalApic::initializeAp().
-    return getId(); // The BSP's id is required to call LocalApic::initializeAp() on the correct LocalApic instance.
+    return getId();        // The BSP's id is required to call LocalApic::initializeAp() on the correct LocalApic instance.
 }
 
 void LocalApic::initializeAp() {
@@ -111,10 +111,10 @@ void LocalApic::initializeAp() {
     LVTEntry lvtEntry{};
     lvtEntry.vector = static_cast<Kernel::InterruptVector>(0); // NMI doesn't have vector
     lvtEntry.deliveryMode = LVTEntry::DeliveryMode::NMI;
-    lvtEntry.pinPolarity = localInfo.nmiPolarity;
-    lvtEntry.triggerMode = localInfo.nmiTriggerMode;
+    lvtEntry.pinPolarity = info.nmiPolarity;
+    lvtEntry.triggerMode = info.nmiTriggerMode;
     lvtEntry.isMasked = false;
-    writeLVT(localInfo.nmiLint == 0 ? LINT0 : LINT1, lvtEntry);
+    writeLVT(info.nmiLint == 0 ? LINT0 : LINT1, lvtEntry);
 
     // SW Enable APIC by setting the Spurious Interrupt Vector Register with spurious vector number 0xFF
     // and the SW ENABLE flag.
@@ -135,40 +135,47 @@ void LocalApic::initializeAp() {
 
 void LocalApic::disablePicMode() {
     registerSelectorPort.writeByte(0x70); // IMCR address is 0x70
-    registerDataPort.writeByte(0x01); // 0x00 connects PIC to LINT0, 0x01 disconnects
+    registerDataPort.writeByte(0x01);     // 0x00 connects PIC to LINT0, 0x01 disconnects
 }
 
 void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
     ICREntry icrEntry{};
     icrEntry.vector = static_cast<Kernel::InterruptVector>(0), // INIT should have vector number 0
-    icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT,
+      icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT,
     icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL,
     icrEntry.level = level, // ASSERT or DEASSERT
-    icrEntry.triggerMode = ICREntry::TriggerMode::LEVEL,
+      icrEntry.triggerMode = ICREntry::TriggerMode::LEVEL,
     icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO, // Only broadcast to CPU in destination field
-    icrEntry.destination = id;
+      icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
 
     do {
-        asm volatile ("pause" : : : "memory");
+        asm volatile("pause"
+                     :
+                     :
+                     : "memory");
     } while (readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING); // Wait for delivery
 }
 
 void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     ICREntry icrEntry{};
     icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12), // Startup code physical page
-    icrEntry.deliveryMode = ICREntry::DeliveryMode::STARTUP,
-    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL, // Ignored
-    icrEntry.level = ICREntry::Level::DEASSERT, // Ignored
-    icrEntry.triggerMode = ICREntry::TriggerMode::EDGE, // Ignored
-    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO, // Ignored
-    icrEntry.destination = id;
+      icrEntry.deliveryMode = ICREntry::DeliveryMode::STARTUP,
+    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL,       // Ignored
+      icrEntry.level = ICREntry::Level::DEASSERT,                         // Ignored
+      icrEntry.triggerMode = ICREntry::TriggerMode::EDGE,                 // Ignored
+      icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO, // Ignored
+      icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
 
-    for (uint32_t j = 0; j < 100000; ++j); // Ugly wait, because we have no PIT yet
+    for (uint32_t j = 0; j < 100000; ++j)
+        ; // Ugly wait, because we have no PIT yet
 
     do {
-        asm volatile ("pause" : : : "memory");
+        asm volatile("pause"
+                     :
+                     :
+                     : "memory");
     } while (readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING); // Wait for delivery
 }
 
@@ -202,26 +209,25 @@ void LocalApic::sendEndOfInterrupt() {
 }
 
 void LocalApic::ensureRegisterAccess() {
-    if (!localPlatform->isX2Apic && localPlatform->virtAddress == 0) {
+    if (!platform->isX2Apic && platform->virtAddress == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LocalApic MMIO region not initialized!");
     }
 }
 
 void LocalApic::initializeXApicMMIO() {
-    uint32_t physAddress = localPlatform->physAddress;
-    uint32_t pageOffset = physAddress % Util::PAGESIZE;
+    const uint32_t pageOffset = platform->physAddress % Util::PAGESIZE;
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(physAddress, Util::PAGESIZE, true);
+    void *virtAddress = memoryService.mapIO(platform->physAddress, Util::PAGESIZE, true);
 
     // Account for possible misalignment
-    localPlatform->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
+    platform->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
 }
 
 void LocalApic::initializeLVT() {
     // Default values
     LVTEntry lvtEntry{};
-    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED, // TODO: Do I need to care about deliveryMode?
+    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED,
     lvtEntry.pinPolarity = LVTEntry::PinPolarity::HIGH,
     lvtEntry.triggerMode = LVTEntry::TriggerMode::EDGE,
     lvtEntry.isMasked = true;
@@ -243,12 +249,10 @@ void LocalApic::initializeLVT() {
     writeLVT(ERROR, lvtEntry);
 }
 
-#if HHUOS_APIC_ENABLE_DEBUG == 1
-
 void LocalApic::dumpLVT() {
     log.info("Local Vector Table (Local APIC Id: [%d]):", getId());
     for (uint8_t lint = CMCI; lint <= ERROR; ++lint) {
-        LVTEntry lvtEntry = readLVT(static_cast<LocalInterrupt>(lint));
+        const LVTEntry lvtEntry = readLVT(static_cast<LocalInterrupt>(lint));
         log.debug("- Interrupt [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], PinPolarity: [%s], TriggerMode: [%s])",
                   lintNames[lint],
                   static_cast<uint8_t>(lvtEntry.vector),
@@ -258,8 +262,6 @@ void LocalApic::dumpLVT() {
                   lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 }
-
-#endif
 
 BaseMSREntry LocalApic::readBaseMSR() {
     return static_cast<BaseMSREntry>(ia32ApicBaseMsr.readQuadWord()); // Atmoic read
@@ -271,23 +273,23 @@ void LocalApic::writeBaseMSR(const BaseMSREntry &msrEntry) {
 
 uint32_t LocalApic::readDoubleWord(Register reg) {
     ensureRegisterAccess();
-    if (localPlatform->isX2Apic) {
+    if (platform->isX2Apic) {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "X2Apic mode not supported!");
         // ModelSpecificRegister msr = getMSR(reg);
         // return static_cast<uint32_t>(msr.readQuadWord()); // Atomic read
     } else {
-        return *reinterpret_cast<volatile uint32_t *>(localPlatform->virtAddress + reg);
+        return *reinterpret_cast<volatile uint32_t *>(platform->virtAddress + reg);
     }
 }
 
 void LocalApic::writeDoubleWord(Register reg, uint32_t val) {
     ensureRegisterAccess();
-    if (localPlatform->isX2Apic) {
+    if (platform->isX2Apic) {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "X2Apic mode not supported!");
         // ModelSpecificRegister msr = getMSR(reg);
         // msr.writeQuadWord(static_cast<uint64_t>(val)); // Atomic write
     } else {
-        *reinterpret_cast<volatile uint32_t *>(localPlatform->virtAddress + reg) = val;
+        *reinterpret_cast<volatile uint32_t *>(platform->virtAddress + reg) = val;
     }
 }
 
@@ -308,8 +310,8 @@ void LocalApic::writeLVT(LocalInterrupt lint, const LVTEntry &lvtEntry) {
 }
 
 ICREntry LocalApic::readICR() {
-    uint32_t low = readDoubleWord(ICR_LOW);
-    uint64_t high = readDoubleWord(ICR_HIGH);
+    const uint32_t low = readDoubleWord(ICR_LOW);
+    const uint64_t high = readDoubleWord(ICR_HIGH);
     return static_cast<ICREntry>(low | high << 32);
 }
 
@@ -325,4 +327,4 @@ void LocalApic::writeICR(const ICREntry &icrEntry) {
 //     return ModelSpecificRegister(localPlatform->msrAddress + (reg >> 4));
 // }
 
-}
+} // namespace Device

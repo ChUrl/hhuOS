@@ -1,9 +1,9 @@
 #ifndef HHUOS_APICTIMER_H
 #define HHUOS_APICTIMER_H
 
+#include "device/time/TimeProvider.h"
 #include "kernel/interrupt/InterruptHandler.h"
 #include "kernel/log/Logger.h"
-#include "device/time/TimeProvider.h"
 
 namespace Device {
 
@@ -15,6 +15,7 @@ namespace Device {
  */
 class ApicTimer : public Kernel::InterruptHandler, public TimeProvider {
     friend class Apic;
+
 public:
     /**
      * @brief Construct an ApicTimer instance.
@@ -72,7 +73,7 @@ private:
      *
      * Because the APIC timer has no fixed frequency, it is calibrated using the PIT as calibration source.
      */
-    [[nodiscard]] static uint32_t setInterruptRate() ;
+    [[nodiscard]] static uint32_t setInterruptRate();
 
 private:
     const uint8_t cpuId; ///< @brief The id of the CPU that uses this timer.
@@ -80,10 +81,10 @@ private:
 
     static uint32_t timerInt; ///< @brief The interrupt trigger interval in nanoseconds.
     static uint32_t yieldInt; ///< @brief The preemption trigger interval in milliseconds.
-    static uint32_t counter; ///< @brief The counter the BSP's APIC timer was initialized with.
+    static uint32_t counter;  ///< @brief The counter the BSP's APIC timer was initialized with.
     static Kernel::Logger log;
 };
 
-}
+} // namespace Device
 
 #endif //HHUOS_APICTIMER_H

@@ -1,9 +1,9 @@
 #include "ApicTimer.h"
-#include "kernel/system/System.h"
-#include "kernel/service/TimeService.h"
+#include "device/interrupt/apic/LocalApic.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/service/SchedulerService.h"
-#include "device/interrupt/apic/LocalApic.h"
+#include "kernel/service/TimeService.h"
+#include "kernel/system/System.h"
 
 namespace Device {
 
@@ -13,7 +13,7 @@ uint32_t ApicTimer::counter = 0;
 Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
 ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval)
-        : cpuId(LocalApic::getId()) {
+  : cpuId(LocalApic::getId()) {
     LocalApic::ensureBspInitialized();
 
     if (timerInterval == 0) {
@@ -81,17 +81,17 @@ uint32_t ApicTimer::setInterruptRate() {
     // (at least in QEMU). If I took more attention to this, it should probably depend on the interval the PIT
     // (or other calibration source) uses, because the APIC timer calibration time needs to be larger.
     // It should probably be a direct multiple of the calibration source tick interval, like factor 10 or sth.
-    uint8_t calibrationTimeFactor = 10;
+    const uint8_t calibrationTimeFactor = 10;
 
     // The calibration works by waiting the desired interval and measuring how many ticks the timer does.
     // The interval should not be too small, since the measurement becomes inaccurate for small intervals.
     // This is obviously slow, as time is spent waiting, if two very accurate timestamps could be taken, the initial
     // counter could be calculated by the difference, with very little waiting time.
-    LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, 0xFFFFFFFF); // Max initial counter, writing starts timer
+    LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, 0xFFFFFFFF);                                            // Max initial counter, writing starts timer
     timeService.busyWait(Util::Time::Timestamp::ofMilliseconds((timerInt / 1'000'000) * calibrationTimeFactor)); // Interval but in milliseconds
-    uint32_t initialCount = 0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT); // Ticks in interval
+    const uint32_t initialCount = 0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT);              // Ticks in interval
 
     return initialCount / calibrationTimeFactor; // Return the counter to initialize AP timers with the same value
 }
 
-}
+} // namespace Device

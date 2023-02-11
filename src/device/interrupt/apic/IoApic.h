@@ -50,9 +50,9 @@ private:
      * ICH5 datasheet, sec. 9.5
      */
     enum IndirectRegister : uint8_t {
-        ID = 0x00, ///< @brief I/O APIC id.
-        VER = 0x01, ///< @brief I/O APIC version.
-        ARB = 0x02, ///< @brief Arbitration ID.
+        ID = 0x00,    ///< @brief I/O APIC id.
+        VER = 0x01,   ///< @brief I/O APIC version.
+        ARB = 0x02,   ///< @brief Arbitration ID.
         REDTBL = 0x10 ///< @brief Redirection table base address (24x 64 bit entry)
     };
 
@@ -116,9 +116,7 @@ private:
      */
     void initializeREDTBL();
 
-#if HHUOS_APIC_ENABLE_DEBUG == 1
     void dumpREDTBL();
-#endif
 
     /**
      * @brief Read a MMIO register, identified by the offset to the I/O APIC base address.
@@ -158,24 +156,24 @@ private:
 
 private:
     bool initialized = false; ///< @brief Indicates if IoApic::initialize() has been called.
-    IoApicInformation ioInfo;
+    IoApicInformation info;
 
-    static IoApicPlatform *ioPlatform;
+    static IoApicPlatform *platform;
     static Kernel::Logger log;
 };
 
 template<typename T>
 T IoApic::readMMIORegister(Register reg) {
     ensureRegisterAccess();
-    return *reinterpret_cast<volatile T *>(ioInfo.virtAddress + reg);
+    return *reinterpret_cast<volatile T *>(info.virtAddress + reg);
 }
 
 template<typename T>
 void IoApic::writeMMIORegister(Register reg, T val) {
     ensureRegisterAccess();
-    *reinterpret_cast<volatile T *>(ioInfo.virtAddress + reg) = val;
+    *reinterpret_cast<volatile T *>(info.virtAddress + reg) = val;
 }
 
-}
+} // namespace Device
 
 #endif

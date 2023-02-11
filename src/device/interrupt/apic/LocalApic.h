@@ -1,14 +1,15 @@
 #ifndef __LAPIC_include__
 #define __LAPIC_include__
 
-#include "ApicRegisters.h"
 #include "ApicAcpiInterface.h"
-#include "kernel/log/Logger.h"
-#include "device/cpu/ModelSpecificRegister.h"
+#include "ApicRegisters.h"
 #include "device/cpu/IoPort.h"
+#include "device/cpu/ModelSpecificRegister.h"
+#include "kernel/log/Logger.h"
 
-#define HHUOS_APIC_ENABLE_DEBUG 1
-#define HHUOS_APIC_ENABLE_SMP 1
+const constexpr bool HHUOS_APIC_ENABLE = true;
+const constexpr bool HHUOS_APIC_ENABLE_DEBUG = true;
+const constexpr bool HHUOS_APIC_ENABLE_SMP = true;
 
 namespace Device {
 
@@ -21,26 +22,10 @@ namespace Device {
  * Using this class means interacting with the local APIC of the current CPU core.
  */
 class LocalApic {
-    friend class Apic; // Apic exposes this class' functionality to the OS
-    friend class ApicTimer; // ApicTimer is configured by using LApic registers
+    friend class Apic;             // Apic exposes this class' functionality to the OS
+    friend class ApicTimer;        // ApicTimer is configured by using LApic registers
     friend class ApicErrorHandler; // ApicErrorInterruptHandler uses the ERR register
-
-public:
-    /**
-     * @brief Lists the local APIC's local interrupts.
-     *
-     * Every individual local APIC has these, they are completely separate from
-     * the usual (PIC and I/O APIC) hardware interrupt inputs.
-     */
-    enum LocalInterrupt : uint8_t {
-        CMCI = 0, // Might not exist
-        TIMER = 1, ///< @brief The APIC timer local interrupt
-        THERMAL = 2,
-        PERFORMANCE = 3,
-        LINT0 = 4, ///< @brief Local interrupt 0, used in virtual wire mode
-        LINT1 = 5, ///< @brief Local interrupt 1, used as NMI source
-        ERROR = 6 ///< @brief The APIC error interrupt
-    };
+    friend class IoApic;
 
 public:
     /**
@@ -72,32 +57,48 @@ public:
 
 private:
     /**
+     * @brief Lists the local APIC's local interrupts.
+     *
+     * Every individual local APIC has these, they are completely separate from
+     * the usual (PIC and I/O APIC) hardware interrupt inputs.
+     */
+    enum LocalInterrupt : uint8_t {
+        CMCI = 0,  // Might not exist
+        TIMER = 1, ///< @brief The APIC timer local interrupt
+        THERMAL = 2,
+        PERFORMANCE = 3,
+        LINT0 = 4, ///< @brief Local interrupt 0, used in virtual wire mode
+        LINT1 = 5, ///< @brief Local interrupt 1, used as NMI source
+        ERROR = 6  ///< @brief The APIC error interrupt
+    };
+
+    /**
      * @brief Lists the offsets, relative to the APIC base address, for MMIO register access.
      *
      * Described in the IA-32 manual, sec. 3.11.4.1
      */
     enum Register : uint16_t {
-        ID = 0x20, ///< @brief Local APIC id, in SMP systems the id is used as the CPU id
-        VER = 0x30, ///< @brief Local APIC version
-        TPR = 0x80, ///< @brief Task Priority Register
-        APR = 0x90, ///< @brief Arbitration Priority Register
-        PPR = 0xA0, ///< @brief Processor Priority Register
-        EOI = 0xB0, ///< @brief End-of-Interrupt Register
-        RRD = 0xC0, ///< @brief Remote Read Register
-        LDR = 0xD0, ///< @brief Logical Destination Register
-        DFR = 0xE0, ///< @brief Destination Format Register
-        SVR = 0xF0, ///< @brief Spurious Interrupt Vector Register
-        ISR = 0x100, ///< @brief In-Service Register (255 bit)
-        TMR = 0x180, ///< @brief Trigger Mode Register (255 bit)
-        IRR = 0x200, ///< @brief Interrupt Request Register (255 bit)
-        ESR = 0x280, ///< @brief Error Status Register
-        ICR_LOW = 0x300, ///< @brief Interrupt Command Register (lower 32 bit)
+        ID = 0x20,        ///< @brief Local APIC id, in SMP systems the id is used as the CPU id
+        VER = 0x30,       ///< @brief Local APIC version
+        TPR = 0x80,       ///< @brief Task Priority Register
+        APR = 0x90,       ///< @brief Arbitration Priority Register
+        PPR = 0xA0,       ///< @brief Processor Priority Register
+        EOI = 0xB0,       ///< @brief End-of-Interrupt Register
+        RRD = 0xC0,       ///< @brief Remote Read Register
+        LDR = 0xD0,       ///< @brief Logical Destination Register
+        DFR = 0xE0,       ///< @brief Destination Format Register
+        SVR = 0xF0,       ///< @brief Spurious Interrupt Vector Register
+        ISR = 0x100,      ///< @brief In-Service Register (255 bit)
+        TMR = 0x180,      ///< @brief Trigger Mode Register (255 bit)
+        IRR = 0x200,      ///< @brief Interrupt Request Register (255 bit)
+        ESR = 0x280,      ///< @brief Error Status Register
+        ICR_LOW = 0x300,  ///< @brief Interrupt Command Register (lower 32 bit)
         ICR_HIGH = 0x310, ///< @brief Interrupt Command Register (upper 32 bit)
 
         // These are located here, instead of in the ApicTimer class, because this class does the register access
         TIMER_INITIAL = 0x380, ///< @brief Timer Initial Count Register
         TIMER_CURRENT = 0x390, ///< @brief Timer Current Count Register
-        TIMER_DIVIDE = 0x3E0 ///< @brief Timer Divide Configuration Register
+        TIMER_DIVIDE = 0x3E0   ///< @brief Timer Divide Configuration Register
     };
 
 private:
@@ -235,14 +236,10 @@ private:
      */
     static void initializeLVT();
 
-#if HHUOS_APIC_ENABLE_DEBUG == 1
-
     static void dumpLVT();
 
-#endif
-
     // Reading and writing local APIC's registers parses the read/written values to/from
-    // types from ApicRegisterInterface. Only registers of currently running CPU will be affected.
+    // types from ApicRegisterInterface. Only registers of the current CPU will be affected.
 
     /**
      * @brief Read the IA32_APIC_BASE_MSR.
@@ -314,19 +311,19 @@ private:
 
 private:
     bool initialized = false; ///< @brief Indicates if LocalApic::initializeAp() has been called on an instance.
-    const LocalApicInformation localInfo;
+    LocalApicInformation info;
 
     static bool bspInitialized; ///< @brief Indicates if LocalApic::initializeBsp() has been called.
-    static LocalApicPlatform *localPlatform;
+    static LocalApicPlatform *platform;
     static const ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (every core can only address its own MSR)
-    static const Register lintRegs[7]; ///< @brief Local interrupt to register offset translation
-    static const IoPort registerSelectorPort; // Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1
-    static const IoPort registerDataPort; // Same as above
+    static const Register lintRegs[7];                  ///< @brief Local interrupt to register offset translation
+    static const IoPort registerSelectorPort;           // Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1
+    static const IoPort registerDataPort;               // Same as above
     static Kernel::Logger log;
 
     static const constexpr char *lintNames[7] = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
 };
 
-}
+} // namespace Device
 
 #endif
