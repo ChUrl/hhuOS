@@ -1,4 +1,4 @@
-#include "smp.h"
+#include "Smp.h"
 #include "kernel/log/Logger.h"
 
 uint32_t** apStacks = nullptr;

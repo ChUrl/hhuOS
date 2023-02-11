@@ -19,16 +19,15 @@ extern Descriptor boot_ap_idtr;
 extern uint32_t boot_ap_cr0;
 extern uint32_t boot_ap_cr3;
 extern uint32_t boot_ap_cr4;
-extern uint32_t boot_ap_stacks;
-extern uint32_t boot_ap_entry;
+extern volatile uint32_t boot_ap_stacks; // Not written by asm volatile (), so add volatile here
+extern volatile uint32_t boot_ap_entry; // Not written by asm volatile (), so add volatile here
 
 // Export
 extern "C" [[noreturn]] void smpEntry(uint8_t apicid);
 extern uint32_t** apStacks;
 extern volatile uint8_t runningAPs; // This is used as a bitmap, once an AP is running it sets its corresponding bit to 1
 
-
-// If any of these two are changed, smp_startup.asm has to be changed too!
+// If any of these two are changed, smp.asm has to be changed too (the %defines at the top)!
 const constexpr uint32_t apStackSize = 0x1000; ///< @brief Size of the stack allocated for each AP.
 const constexpr uint32_t apStartupAddress = 0x8000; ///< @brief Physical address the AP startup routine is copied to.
 
