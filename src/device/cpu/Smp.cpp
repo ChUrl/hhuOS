@@ -2,7 +2,7 @@
 #include "kernel/log/Logger.h"
 
 uint32_t** apStacks = nullptr;
-volatile uint8_t runningAPs = 0; // This is used as a bitmap, once an AP is running it sets its corresponding bit to 1
+volatile uint64_t runningAPs = 0; // This is used as a bitmap, once an AP is running it sets its corresponding bit to 1
 
 Kernel::Logger log = Kernel::Logger::get("SMP");
 

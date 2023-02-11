@@ -98,7 +98,7 @@ private:
     static void allocateSmpStacks();
 
     /**
-     * @brief Copy the AP startup routine to lower kernel memory.
+     * @brief Copy the AP startup routine to lower physical memory.
      *
      * @return The page, on which the startup routine is located
      */

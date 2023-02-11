@@ -22,4 +22,4 @@ target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/cpu/IoPort.cpp
         ${HHUOS_SRC_DIR}/device/cpu/ModelSpecificRegister.cpp
         ${HHUOS_SRC_DIR}/device/cpu/smp.asm
-        ${HHUOS_SRC_DIR}/device/cpu/smp.cpp)
+        ${HHUOS_SRC_DIR}/device/cpu/Smp.cpp)

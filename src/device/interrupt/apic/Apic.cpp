@@ -88,13 +88,19 @@ void Apic::initialize() {
         localApics.add(new LocalApic(localPlatform, LocalApicInformation(localInfo, nmiInfo)));
     }
 
+    if (localApics.get(0)->localInfo.id != 0) {
+        // ACPI 6.5 specification says that the BSP's Acpi::LocalApic MADT entry is the first one (sec. 5.2.12.1),
+        // but ACPI 1.0 specification (what hhuOS uses) does not mention any order...
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "BSP does not have id 0 or was not mentioned first!");
+    }
+
     // First step of BSP's local APIC initialization
     LocalApic::initializeBsp();
 
-    // Initialize the rest of the BSP's local APIC (BSP should always have id 0)
+    // Initialize the rest of the BSP's local APIC
     getBsp().initializeAp();
 
-    // Initialize all I/O APICs
+    // Create IoApic instances
     auto *ioPlatform = new IoApicPlatform(&acpiInterruptSourceOverrides);
     for (auto *ioInfo: acpiIoApics) {
         // The Nmi is assigned to the correct I/O APIC. This is kind of a mess, because ACPI does not report
@@ -148,8 +154,6 @@ bool Apic::isSmpSupported() {
     return initialized && localApics.size() > 1;
 }
 
-// ! SMP was only an afterthought for me, so the inspiration for this code comes from
-// ! https://github.com/SerenityOS/serenity, it has only been modified for hhuOS
 // This works if local APIC IDs are contiguous, but I think they always are
 void Device::Apic::initializeSmp() {
     if (!isSmpSupported()) {
@@ -158,24 +162,27 @@ void Device::Apic::initializeSmp() {
     }
 
     uint8_t cpuCount = localApics.size();
-    if (cpuCount > 8) {
-        // This limit is pretty arbitrary, but the runningAPs bitmap currently only has 8 bits (in smp_startup.h)
+    if (cpuCount > 64) {
+        // This limit is pretty arbitrary, but the runningAPs bitmap currently only has 64 bits (in Smp.h).
+        // Technically xApic supports 8-bit CPU ids, x2Apic even more (32-bit CPU ids).
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION,
                                         "CPUs with more than 8 cores are not supported!");
     }
 
-    // Check local APIC id contiguity, just for testing
-    uint8_t idBitmap = 0;
-    for (uint32_t i = 0; i < cpuCount; ++i) {
+    // This is only here to verify some assumptions I made, based on the manuals (ACPI and IA-32), OSdev
+    // and some implementations (xv6, SerenityOS).
+    // This hardware specific stuff is however hard to verify, and I couldn't find a definitive answer
+    // to these assumptions, so let's choose the dumb way and just abort the whole OS if they are wrong.
+    uint64_t idBitmap = 0;
+    for (uint32_t i = 0; i < localApics.size(); ++i) {
         LocalApic *localApic = localApics.get(i);
-        idBitmap |= (1 << localApic->localInfo.id); // Should yield 0b00000011 for 2 CPUs
+        idBitmap |= (1 << localApic->localInfo.id);
     }
-    uint8_t idBitmapMask = 0b11111111 >> (8 - cpuCount); // Yields 0b00000011 for 2 CPUs (0b11111111 >> 6)
+    uint64_t idBitmapMask = static_cast<uint64_t>(-1) >> (64 - localApics.size());
     if (idBitmap != idBitmapMask) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC ids are not contiguous!");
     }
 
-    // Prepare AP boot environment
     allocateSmpStacks(); // Allocates AP stack memory
     copySmpStartupCode(); // Copies the AP startup routine to apStartupAddress
 
@@ -188,30 +195,34 @@ void Device::Apic::initializeSmp() {
             continue;
         }
 
-        // Procedure taken from OsDev (visited on 10/02/23):
         // Send INIT IPI
         LocalApic::clearErrors();
         LocalApic::sendIpiInit(localApic->localInfo.id, ICREntry::Level::ASSERT);
-        LocalApic::sendIpiInit(localApic->localInfo.id, ICREntry::Level::DEASSERT); // This is only for very old CPUs
+        // The deassert is required for CPUs with a discrete APIC, these do not support the STARTUP IPI,
+        // and this implementation only supports xApic anyway, so this is disabled.
+        // LocalApic::sendIpiInit(localApic->localInfo.id, ICREntry::Level::DEASSERT);
 
-        for (uint32_t j = 0; j < 1000000; ++j) {} // Ugly wait, because we have no PIT yet
+        // Ugly wait, because we have no PIT yet.
+        // These timings are basically random, I would be surprised if this works anywhere else than in QEMU.
+        for (uint32_t j = 0; j < 100000; ++j);
 
-        // Send STARTUP IPI (twice)
+        // Send STARTUP IPI twice, it is not clear if the second one is required or not.
         LocalApic::clearErrors();
         LocalApic::sendIpiStartup(localApic->localInfo.id, apStartupAddress);
         LocalApic::clearErrors();
         LocalApic::sendIpiStartup(localApic->localInfo.id, apStartupAddress);
 
         // Wait until the AP is running, so we can continue to the next one.
-        // NOTE: If the AP initialization fails (and the system doesn't crash), this will also lock the main core.
+        // Because we initialize the APs one at a time, runningAPs is not synchronized.
+        // If the AP initialization fails (and the system doesn't crash), this will lock the current core...
         while (!(runningAPs & (1 << localApic->localInfo.id)));
     }
 
-    // TODO: Free the startup code page now that all APs are running
-    //       The stackpointer array can also be freed, the stacks need to be kept
-    // auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    // memoryService.freeKernelMemory(reinterpret_cast<void *>(apStacks));
-    // memoryService.freeKernelMemory(reinterpret_cast<void *>(apStartupAddress));
+    // Free the startup routine page and the stackpointer array, now that all APs are running
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+    memoryService.freeKernelMemory(reinterpret_cast<void *>(apStacks));
+    memoryService.freeKernelMemory(reinterpret_cast<void *>(apStartupAddress));
+    apStacks = nullptr;
 }
 
 void Device::Apic::allocateSmpStacks() {
@@ -242,20 +253,20 @@ void Device::Apic::allocateSmpStacks() {
 void Device::Apic::copySmpStartupCode() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
-    if (boot_ap_size > Kernel::Paging::PAGESIZE) {
+    if (boot_ap_size > Util::PAGESIZE) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Startup code does not fit into one page!");
     }
 
-    // Allocate physical memory for copying the startup code
-    // void *startupCodeDestination = memoryService.allocateLowerMemory(Kernel::Paging::PAGESIZE);
+    // Allocate physical memory for copying the startup routine
     void *startupCodeMemory = memoryService.mapIO(apStartupAddress, Util::PAGESIZE);
 
     // Identity map the allocated physical memory to the kernel address space
+    // (Seems to be required to switch to protected mode with enabled paging)
     memoryService.unmap(reinterpret_cast<uint32_t>(startupCodeMemory));
     memoryService.mapPhysicalAddress(apStartupAddress, apStartupAddress,
                                      Kernel::Paging::PRESENT | Kernel::Paging::READ_WRITE);
 
-    // Sanity check
+    // Sanity check because am dumb
     if (reinterpret_cast<uint32_t>(memoryService.getPhysicalAddress(reinterpret_cast<void *>(apStartupAddress))) != apStartupAddress) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Failed to identity map startup code memory!");
     }
@@ -264,7 +275,8 @@ void Device::Apic::copySmpStartupCode() {
     Util::Address<uint32_t> startupCode = Util::Address<uint32_t>(reinterpret_cast<uint32_t>(&boot_ap));
     Util::Address<uint32_t> destination = Util::Address<uint32_t>(apStartupAddress);
 
-    // Prepare the empty variables in the startup routine
+    // Prepare the empty variables in the startup routine at its original location
+    // https://github.com/torvalds/linux/blob/master/arch/x86/include/asm/desc.h#L218 (visited on 10/02/23)
     asm volatile ("sgdt %0" : "=m" (boot_ap_gdtr));
     asm volatile ("sidt %0" : "=m" (boot_ap_idtr));
     asm volatile ("mov %%cr0, %%eax;" : "=a" (boot_ap_cr0));
@@ -273,7 +285,7 @@ void Device::Apic::copySmpStartupCode() {
     boot_ap_stacks = reinterpret_cast<uint32_t>(apStacks);
     boot_ap_entry = reinterpret_cast<uint32_t>(&smpEntry);
 
-    // Copy the startup code from smp_startup.asm to the page
+    // Copy the startup routine and prepared variables to the identity mapped page
     LocalApic::log.debug("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)",
                          reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
@@ -340,15 +352,8 @@ bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
 }
 
 LocalApic &Apic::getBsp() {
-    for (uint32_t i = 0; i < localApics.size(); ++i) {
-        LocalApic *localApic = localApics.get(i);
-        if (localApic->localInfo.id == 0) {
-            // The BSP should always have id 0
-            return *localApic;
-        }
-    }
-
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "BSP instance not found!");
+    // This is based on the assumption that the BSP is mentioned first in the MADT and has id 0
+    return *localApics.get(0);
 }
 
 IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
