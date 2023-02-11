@@ -157,9 +157,9 @@ bool Apic::isSmpSupported() {
     return getBsp().initialized && localApics.size() > 1;
 }
 
-// TODO: This works if local APIC IDs are contiguous
-// NOTE: SMP was only an afterthought for me, so the inspiration for this code comes from
-// NOTE: https://github.com/acceptable-security/brackos, it has only been modified for hhuOS
+// ! SMP was only an afterthought for me, so the inspiration for this code comes from
+// ! https://github.com/SerenityOS/serenity, it has only been modified for hhuOS
+// This works if local APIC IDs are contiguous, but I think they always are
 void Device::Apic::initializeSmp() {
     if (!isSmpSupported()) {
         log.warn("SMP not supported, skipping initialization!");
