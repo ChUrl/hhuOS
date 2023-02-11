@@ -6,8 +6,6 @@
 #include "device/power/acpi/Acpi.h"
 #include "ApicRegisters.h"
 
-struct IoApicIrqOverride;
-
 namespace Device {
 
 /**

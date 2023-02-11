@@ -107,6 +107,11 @@
               command = "./run.sh --bios \"true\" --file \"hhuOS.iso\"";
             }
             {
+              name = "run-kvm";
+              help = "Run hhuOS in quemu using grub";
+              command = "./run.sh --bios \"true\" --file \"hhuOS.iso\" --machine \"pc-kvm\"";
+            }
+            {
               name = "run-gdb";
               help = "Run hhuOS in quemu and wait for gdb connection";
               command = "./run.sh --bios \"true\" --file \"hhuOS.iso\" --debug 1234";

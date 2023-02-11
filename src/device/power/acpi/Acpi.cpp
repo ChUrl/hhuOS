@@ -19,9 +19,6 @@
 
 #include "kernel/paging/MemoryLayout.h"
 #include "asm_interface.h"
-#include "lib/util/base/Exception.h"
-#include "lib/util/base/Address.h"
-#include "lib/util/base/String.h"
 
 namespace Device {
 
