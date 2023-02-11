@@ -10,7 +10,6 @@ namespace Device {
 
 bool Apic::initialized = false;
 bool Apic::timerInitialized = false;
-uint8_t Apic::bspId = 0;
 Util::ArrayList<LocalApic *> Apic::localApics;
 Util::ArrayList<IoApic *> Apic::ioApics;
 Util::ArrayList<ApicTimer *> Apic::timers;
@@ -64,7 +63,7 @@ void Apic::initialize() {
         return;
     }
 
-    // Initialize all local APICs
+    // Create LocalApic instances
     auto *localPlatform = new LocalApicPlatform(madt->localApicAddress);
     for (const auto *localInfo: acpiProcessorLocalApics) {
         // Find the NMI belonging to the current localInfo
@@ -89,19 +88,11 @@ void Apic::initialize() {
         localApics.add(new LocalApic(localPlatform, LocalApicInformation(localInfo, nmiInfo)));
     }
 
-    // Initialize the local APIC of the BSP
-    // Currently, we can't know the id of the BSP, but we know that it is the running processor.
-    // Because the running processor can only acccess its own local APIC's registers, we can reach the
-    // BSP local APIC by calling this static function, without an instance.
-    bspId = LocalApic::initializeBsp();
+    // First step of BSP's local APIC initialization
+    LocalApic::initializeBsp();
 
-    // Now that we know which local APIC is the BSP, we can initialize the rest of its local APIC
-    for (auto *localApic: localApics) {
-        if (localApic->localInfo.id == bspId) {
-            localApic->initializeAp();
-            break;
-        }
-    }
+    // Initialize the rest of the BSP's local APIC (BSP should always have id 0)
+    getBsp().initializeAp();
 
     // Initialize all I/O APICs
     auto *ioPlatform = new IoApicPlatform(&acpiInterruptSourceOverrides);
@@ -351,7 +342,8 @@ bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
 LocalApic &Apic::getBsp() {
     for (uint32_t i = 0; i < localApics.size(); ++i) {
         LocalApic *localApic = localApics.get(i);
-        if (localApic->localInfo.id == bspId) {
+        if (localApic->localInfo.id == 0) {
+            // The BSP should always have id 0
             return *localApic;
         }
     }

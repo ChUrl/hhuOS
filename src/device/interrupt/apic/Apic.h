@@ -121,15 +121,10 @@ private:
 private:
     static bool initialized; ///< @brief Indicates if Apic::initialize() has been called.
     static bool timerInitialized; ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
-    static uint8_t bspId; ///< @brief The local APIC id/CPU id of the BSP.
     static Util::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
     static Util::ArrayList<IoApic *> ioApics; ///< @brief All IoApic instance..
     static Util::ArrayList<ApicTimer *> timers; ///< @brief All ApicTimer instances.
     static ApicErrorHandler *errorHandler; ///< @brief The interrupt handler that gets triggered on an internal APIC error.
-
-    // If any of these two are changed, smp_startup.asm has to be changed too!
-    static const constexpr uint32_t apStackSize = 0x1000; ///< @brief Size of the stack allocated for each AP.
-    static const constexpr uint32_t apStartupAddress = 0x8000; ///< @brief Physical address the AP startup routine is copied to.
 
     static Kernel::Logger log;
 };

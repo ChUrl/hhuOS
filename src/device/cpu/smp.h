@@ -27,4 +27,9 @@ extern "C" [[noreturn]] void smpEntry(uint8_t apicid);
 extern uint32_t** apStacks;
 extern volatile uint8_t runningAPs; // This is used as a bitmap, once an AP is running it sets its corresponding bit to 1
 
+
+// If any of these two are changed, smp_startup.asm has to be changed too!
+const constexpr uint32_t apStackSize = 0x1000; ///< @brief Size of the stack allocated for each AP.
+const constexpr uint32_t apStartupAddress = 0x8000; ///< @brief Physical address the AP startup routine is copied to.
+
 #endif
