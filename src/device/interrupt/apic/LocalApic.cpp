@@ -7,8 +7,8 @@
 
 namespace Device {
 
-LocalApicPlatform *LocalApic::localPlatform = nullptr;
 bool LocalApic::bspInitialized = false;
+LocalApicPlatform *LocalApic::localPlatform = nullptr;
 const ModelSpecificRegister LocalApic::ia32ApicBaseMsr = ModelSpecificRegister(0x1B);
 const LocalApic::Register LocalApic::lintRegs[7] = {static_cast<Register>(0x2F0),
                                                     static_cast<Register>(0x320),
@@ -24,10 +24,6 @@ Kernel::Logger LocalApic::log = Kernel::Logger::get("LocalApic");
 LocalApic::LocalApic(LocalApicPlatform *localApicPlatform, const LocalApicInformation &&localApicInformation)
         : localInfo(localApicInformation) {
     localPlatform = localApicPlatform;
-}
-
-uint8_t LocalApic::getId() {
-    return readDoubleWord(ID) >> 24;
 }
 
 bool LocalApic::supportsXApic() {
@@ -48,6 +44,10 @@ bool LocalApic::supportsX2Apic() {
         }
     }
     return false;
+}
+
+uint8_t LocalApic::getId() {
+    return readDoubleWord(ID) >> 24;
 }
 
 uint8_t LocalApic::getVersion() {
@@ -121,7 +121,7 @@ void LocalApic::initializeAp() {
     SVREntry svrEntry{};
     svrEntry.vector = Kernel::InterruptVector::SPURIOUS;
     svrEntry.isSWEnabled = true;
-    svrEntry.hasEOIBroadcastSuppression = true; // TODO
+    svrEntry.hasEOIBroadcastSuppression = true; // I/O APIC EOIs are handled directly in IoApic::sendEndOfInterrupt()
     writeSVR(svrEntry);
 
     // Clear outstanding stuff
@@ -165,7 +165,7 @@ void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
 
-    for (uint32_t j = 0; j < 1000000; ++j) {} // Ugly wait, because we have no PIT yet
+    for (uint32_t j = 0; j < 100000; ++j); // Ugly wait, because we have no PIT yet
 
     do {
         asm volatile ("pause" : : : "memory");

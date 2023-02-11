@@ -39,7 +39,7 @@ void IoApic::initialize() {
         redtblEntry.pinPolarity = ioInfo.nmiPolarity;
         redtblEntry.triggerMode = ioInfo.nmiTriggerMode;
         redtblEntry.isMasked = false;
-        redtblEntry.destination = LocalApic::getId();
+        redtblEntry.destination = 0; // Send to the BSP
         writeREDTBL(ioInfo.nmiGsi, redtblEntry);
     }
 
@@ -113,7 +113,7 @@ void IoApic::initializeREDTBL() {
     redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::FIXED;
     redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL;
     redtblEntry.isMasked = true;
-    redtblEntry.destination = LocalApic::getId(); // ! All interrupts are sent to the BSP, which is inefficient
+    redtblEntry.destination = 0; // ! All interrupts are sent to the BSP, which is inefficient
 
     for (uint32_t interruptInput = ioInfo.gsiBase; interruptInput <= ioInfo.gsiMax; ++interruptInput) {
         auto gsi = static_cast<Kernel::GlobalSystemInterrupt>(interruptInput); // GSIs match interrupt inputs on IO APIC

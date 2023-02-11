@@ -57,15 +57,6 @@ public:
 
     ~LocalApic() = default;
 
-    /**
-     * @brief Get the id of the local APIC belonging to the current CPU.
-     *
-     * Can be used to determine what CPU is currently executing the calling code in SMP systems.
-     * To get the id of a LocalApic instance, access the "id" field of the contained
-     * LocalApicInformation structure.
-     */
-    [[nodiscard]] static uint8_t getId();
-
 private:
     /**
      * @brief Lists the offsets, relative to the APIC base address, for MMIO register access.
@@ -112,6 +103,15 @@ private:
      * Determined using CPUID.
      */
     static bool supportsX2Apic();
+
+    /**
+     * @brief Get the id of the local APIC belonging to the current CPU.
+     *
+     * Can be used to determine what CPU is currently executing the calling code in SMP systems.
+     * To get the id of a LocalApic instance, access the "id" field of the contained
+     * LocalApicInformation structure.
+     */
+    [[nodiscard]] static uint8_t getId();
 
     /**
      * @brief Determine the local APIC version
@@ -316,8 +316,8 @@ private:
     bool initialized = false; ///< @brief Indicates if LocalApic::initializeAp() has been called on an instance.
     const LocalApicInformation localInfo;
 
-    static LocalApicPlatform *localPlatform;
     static bool bspInitialized; ///< @brief Indicates if LocalApic::initializeBsp() has been called.
+    static LocalApicPlatform *localPlatform;
     static const ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (every core can only address its own MSR)
     static const Register lintRegs[7]; ///< @brief Local interrupt to register offset translation
     static const IoPort registerSelectorPort; // Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1
