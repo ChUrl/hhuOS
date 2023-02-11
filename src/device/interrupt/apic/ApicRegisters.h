@@ -6,7 +6,7 @@
 namespace Device {
 
 /**
- * Information obtainable from the local APIC's model specific register.
+ * @brief Information obtainable from the local APIC's model specific register.
  */
 struct BaseMSREntry {
     bool isBSP;
@@ -22,8 +22,7 @@ struct BaseMSREntry {
 };
 
 /**
- * Information obtainable from the spurious interrupt vector register of the
- * current CPU's local APIC.
+ * @brief Information obtainable from the spurious interrupt vector register of the current CPU's local APIC.
  */
 struct SVREntry {
     Kernel::InterruptVector vector;
@@ -39,7 +38,8 @@ struct SVREntry {
 };
 
 /**
- * Information obtainable from the local vector table of the current CPU's local APIC.
+ * @brief Information obtainable from the local vector table of the current CPU's local APIC.
+ *
  * Affects handling of local interrupts.
  */
 struct LVTEntry {
@@ -83,7 +83,8 @@ struct LVTEntry {
 };
 
 /**
- * Information obtainable from the interrupt command register of the current CPU's local APIC.
+ * @brief Information obtainable from the interrupt command register of the current CPU's local APIC.
+ *
  * Affects what interprocessor interrupt is issued.
  */
 struct ICREntry {
@@ -135,7 +136,8 @@ struct ICREntry {
 };
 
 /**
- * Information obtainable from the redirection table of an IO APIC.
+ * @brief Information obtainable from the redirection table of an IO APIC.
+ *
  * Affects handling of external interrupts.
  */
 struct REDTBLEntry {

@@ -25,7 +25,6 @@ enum InterruptVector : uint8_t {
     FPU = 45,
     PRIMARY_ATA = 46,
     SECONDARY_ATA = 47,
-
     // Possibly some other interrupts supported by IO APICs
 
     SYSTEM_CALL = 0x86,

@@ -310,18 +310,17 @@ private:
     // static ModelSpecificRegister getMSR(Register reg); // Used for x2Apic mode
 
 private:
-    bool initialized = false; ///< @brief Indicates if LocalApic::initializeAp() has been called on an instance.
-    LocalApicInformation info;
-
-    static bool bspInitialized; ///< @brief Indicates if LocalApic::initializeBsp() has been called.
-    static LocalApicPlatform *platform;
-    static const ModelSpecificRegister ia32ApicBaseMsr; // Core unique MSR (every core can only address its own MSR)
+    static bool bspInitialized;                         ///< @brief Indicates if LocalApic::initializeBsp() has been called.
+    bool initialized = false;                           ///< @brief Indicates if LocalApic::initializeAp() has been called on an instance.
+    LocalApicInformation info;                          ///< @brief Information about a single local APIC.
+    static LocalApicPlatform *platform;                 ///< @brief Information about all local APICs.
+    static const ModelSpecificRegister ia32ApicBaseMsr; ///< @brief Core unique MSR (every core can only address its own MSR).
     static const Register lintRegs[7];                  ///< @brief Local interrupt to register offset translation
-    static const IoPort registerSelectorPort;           // Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1
-    static const IoPort registerDataPort;               // Same as above
-    static Kernel::Logger log;
+    static const IoPort registerSelectorPort;           ///< @brief Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1.
+    static const IoPort registerDataPort;               ///< @brief Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1.
 
     static const constexpr char *lintNames[7] = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
+    static Kernel::Logger log;
 };
 
 } // namespace Device

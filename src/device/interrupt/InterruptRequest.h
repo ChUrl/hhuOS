@@ -9,7 +9,7 @@ namespace Device {
  * @brief This allows addressing an interrupt line by device name.
  *
  * InterruptRequests map 1:1 to PIC interrupt inputs, and to system InterruptVectors translated by 32.
- * They do not translate 1:1 to the IO APIC's GlobalSystemInterrupts.
+ * They do not translate 1:1 to GlobalSystemInterrupts.
  */
 enum InterruptRequest : uint8_t {
     // PIC compatible devices
@@ -26,7 +26,6 @@ enum InterruptRequest : uint8_t {
     FPU = 0x0D,
     PRIMARY_ATA = 0x0E,
     SECONDARY_ATA = 0x0F,
-
     // Other devices
 };
 

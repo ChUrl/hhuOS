@@ -10,7 +10,7 @@ namespace Kernel {
  *
  * They cannot be named statically, as this depends on the system configuration.
  * GlobalSystemInterrupts map 1:1 to IO APIC interrupt inputs.
- * They do not translate 1:1 to InterruptSources or system interrupt vectors.
+ * They do not translate 1:1 to InterruptRequests or InterruptVectors.
  */
 enum GlobalSystemInterrupt : uint32_t {};
 

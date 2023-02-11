@@ -76,12 +76,12 @@ private:
     [[nodiscard]] static uint32_t setInterruptRate();
 
 private:
-    const uint8_t cpuId; ///< @brief The id of the CPU that uses this timer.
-    Util::Time::Timestamp time{};
-
+    const uint8_t cpuId;      ///< @brief The id of the CPU that uses this timer.
     static uint32_t timerInt; ///< @brief The interrupt trigger interval in nanoseconds.
     static uint32_t yieldInt; ///< @brief The preemption trigger interval in milliseconds.
     static uint32_t counter;  ///< @brief The counter the BSP's APIC timer was initialized with.
+
+    Util::Time::Timestamp time{};
     static Kernel::Logger log;
 };
 
