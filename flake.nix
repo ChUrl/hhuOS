@@ -28,8 +28,8 @@
         });
 
         # clang14 with multilib for clang-tools
-        clang14_multi = pkgs.wrapCCWith {
-          cc = pkgs.clang_14.cc;
+        clang15_multi = pkgs.wrapCCWith {
+          cc = pkgs.clang_15.cc;
           libc = pkgs.glibc_multi;
           bintools = bintools_multi;
         };
@@ -53,7 +53,8 @@
           packages = with pkgs; [
             gcc12_multi
             bintools_multi
-            clang14_multi
+            clang15_multi
+            clang-tools_15 # clang-format
             hhuOS_python
 
             # Native buildinputs
