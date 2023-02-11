@@ -3,19 +3,14 @@
 
 #include <cstdint>
 
-// TODO: Is Device the correct namespace for a register?
-// TODO: MSR stuff should be moved to some arch dependent location in hhuOS (x86/i386)
-// TODO: This is arch dependent
-
 namespace Device {
 
 class ModelSpecificRegister {
 public:
     /**
      * Constructor initializes the address.
-     * TODO: Should I check if CPUID MSR is available here? Because apparently it's not needed for some MSRs...
      */
-    explicit ModelSpecificRegister(uint32_t msr) : MSR_ADDRESS(msr) {};
+    explicit ModelSpecificRegister(uint32_t msr);
 
     /**
      * Copy Constructor.

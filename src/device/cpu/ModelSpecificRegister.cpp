@@ -2,7 +2,7 @@
 
 namespace Device {
 
-// NOTE: https://wiki.osdev.org/Model_Specific_Registers#Accessing_Model_Specific_Registers
+ModelSpecificRegister::ModelSpecificRegister(uint32_t msr) : MSR_ADDRESS(msr) {}
 
 uint64_t ModelSpecificRegister::readQuadWord() const {
     uint32_t low, high;
@@ -14,9 +14,8 @@ uint64_t ModelSpecificRegister::readQuadWord() const {
 }
 
 void ModelSpecificRegister::writeQuadWord(uint64_t val) const {
-    uint32_t low, high;
-    low = val & 0xFFFFFFFF;
-    high = val >> 32;
+    const uint32_t low = val & 0xFFFFFFFF;
+    const uint32_t high = val >> 32;
 
     // wrmsr writes values from eax/edx to register specified in ecx, it has no operands
     asm volatile ("wrmsr" : : "a" (low), "d" (high), "c" (MSR_ADDRESS));
