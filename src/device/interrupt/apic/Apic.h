@@ -83,24 +83,24 @@ public:
     static void initializeErrorHandling();
 
     /**
-     * @brief Unmask an external interrupt.
+     * @brief Unmask an external interrupt for the current CPU.
      */
     static void allow(InterruptRequest interruptRequest);
 
     /**
-     * @brief Mask an external interrupt.
+     * @brief Mask an external interrupt for the current CPU.
      */
     static void forbid(InterruptRequest interruptRequest);
 
     /**
-     * @brief Check if an external interrupt is masked or unmasked.
+     * @brief Check if an external interrupt is masked or unmasked for the current CPU.
      *
      * @return True, if the interrupt is masked.
      */
     static bool status(InterruptRequest interruptRequest);
 
     /**
-     * @brief Signal the completion of an interrupt, local or external.
+     * @brief Signal the completion of an interrupt to the current CPU, local or external.
      */
     static void sendEndOfInterrupt(Kernel::InterruptVector vector);
 

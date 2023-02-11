@@ -150,7 +150,7 @@ void System::initializeSystem() {
 
     if constexpr (HHUOS_APIC_ENABLE_SMP) {
         // Requires an initialized BSP APIC timer
-        if (Device::Apic::isInitialized() && Device::Apic::isSmpSupported()) {
+        if (Device::Apic::isSmpSupported()) {
             log.info("Detected SMP support -> Initializing AP(s)");
             Device::Apic::initializeSmp();
         }
