@@ -368,7 +368,7 @@ void Device::Apic::copySmpStartupCode() {
     boot_ap_entry = reinterpret_cast<uint32_t>(&smpEntry);
 
     // Copy the startup routine and prepared variables to the identity mapped page
-    log.debug("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)", reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
+    // log.info("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)", reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
 }
 

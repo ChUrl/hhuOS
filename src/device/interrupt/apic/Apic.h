@@ -10,7 +10,7 @@
 #include "LocalApic.h"
 
 // Enable of disable the huge APIC debug dump
-const constexpr bool HHUOS_APIC_ENABLE_DEBUG = true;
+const constexpr bool HHUOS_APIC_ENABLE_DEBUG = false;
 
 namespace Device {
 
