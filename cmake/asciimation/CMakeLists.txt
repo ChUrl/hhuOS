@@ -27,16 +27,16 @@ if ($ENV{HHUOS_REDISTRIBUTABLE_BUILD})
             "${CMAKE_BINARY_DIR}/asciimation/")
 else()
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/asciimation/star_wars.txt"
-            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/"
+            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/"
             COMMAND wget https://www.asciimation.co.nz/asciimation/SwPlay.jar
             COMMAND unzip -u SwPlay.jar -d star_wars
-            COMMAND /run/current-system/sw/bin/echo 14,67 | /run/current-system/sw/bin/cat - star_wars/data/sw1.txt >> "${CMAKE_BINARY_DIR}/asciimation/star_wars.txt")
+            COMMAND /bin/echo 14,67 | /bin/cat - star_wars/data/sw1.txt >> "${CMAKE_BINARY_DIR}/asciimation/star_wars.txt")
 
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/asciimation/jar_jar.txt"
-            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/"
+            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/"
             COMMAND wget https://www.asciimation.co.nz/asciimation/jjplay.jar
             COMMAND unzip -u jjplay.jar -d jar_jar
-            COMMAND /run/current-system/sw/bin/echo 23,81 | /run/current-system/sw/bin/cat - jar_jar/data/jj1.txt >> "${CMAKE_BINARY_DIR}/asciimation/jar_jar.txt")
+            COMMAND /bin/echo 23,81 | /bin/cat - jar_jar/data/jj1.txt >> "${CMAKE_BINARY_DIR}/asciimation/jar_jar.txt")
 
     add_custom_target(${PROJECT_NAME} DEPENDS
             "${CMAKE_BINARY_DIR}/asciimation/star_wars.txt"

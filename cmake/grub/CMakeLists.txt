@@ -19,17 +19,10 @@ cmake_minimum_required(VERSION 3.14)
 project(grub)
 message(STATUS "Project " ${PROJECT_NAME})
 
-# Determine the nix store path of the dev environment to locate grub lib directory
-execute_process(COMMAND which grub-mkrescue OUTPUT_VARIABLE GRUB_MKRESCUE_PATH)
-string(REPLACE "\n" "" GRUB_MKRESCUE_PATH ${GRUB_MKRESCUE_PATH})
-string(REPLACE "bin/grub-mkrescue" "lib" GRUB_LIB_PATH ${GRUB_MKRESCUE_PATH})
-string(APPEND GRUB_LIB_PATH "/grub")
-message(STATUS "Grub lib path: ${GRUB_LIB_PATH}")
-
 add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hhuOS.iso"
-        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.bin"
-        COMMAND /run/current-system/sw/bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.initrd"
-        COMMAND grub-mkrescue "${GRUB_LIB_PATH}/i386-pc" "${GRUB_LIB_PATH}/i386-efi" -o "${HHUOS_ROOT_DIR}/hhuOS.iso" "${HHUOS_ROOT_DIR}/loader/grub/"
+        COMMAND /bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.bin"
+        COMMAND /bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.initrd"
+        COMMAND grub-mkrescue "/usr/lib/grub/i386-pc" "/usr/lib/grub/i386-efi" -o "${HHUOS_ROOT_DIR}/hhuOS.iso" "${HHUOS_ROOT_DIR}/loader/grub/"
         DEPENDS system initrd floppy0 hdd0)
 
 add_custom_target(${PROJECT_NAME} DEPENDS system initrd floppy0 hdd0 "${HHUOS_ROOT_DIR}/hhuOS.iso")
