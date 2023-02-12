@@ -31,6 +31,8 @@ public:
 
     ~IoApic() = default;
 
+    void dumpREDTBL();
+
 private:
     /**
      * @brief MMIO accessible registers.
@@ -104,8 +106,10 @@ private:
 
     /**
      * @brief Allocate the memory region used to access this I/O APIC's registers.
+     *
+     * This memory is never freed, since the APIC can't be disabled in this implementation.
      */
-    void initializeMMIORegion();
+    void initializeMMIO();
 
     /**
      * @brief Initialize a this I/O APIC's interrupt redirection table.
@@ -115,8 +119,6 @@ private:
      * unless trigger mode or pin polarity are overridden. Sets vector numbers to corresponding InterruptVector.
      */
     void initializeREDTBL();
-
-    void dumpREDTBL();
 
     /**
      * @brief Read a MMIO register, identified by the offset to the I/O APIC base address.
@@ -155,8 +157,6 @@ private:
     void writeREDTBL(Kernel::GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl);
 
 private:
-    bool initialized = false; ///< @brief Indicates if IoApic::initialize() has been called.
-
     IoApicInformation info;          ///< @brief Information about a single I/O APIC.
     static IoApicPlatform *platform; ///< @brief Information about all I/O APICs.
 

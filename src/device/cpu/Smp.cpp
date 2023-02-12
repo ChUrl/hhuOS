@@ -13,9 +13,13 @@ Kernel::Logger log = Kernel::Logger::get("SMP");
     log.info("CPU [%d] is now online!", apicid);
 
     // Initialize this AP's APIC
-    Device::Apic::getCurrentLocalApic().initializeAp();
-    Device::Apic::initializeErrorHandling();
+    Device::Apic::getCurrentLocalApic().initialize();
+    Device::Apic::enableErrorHandling();
     Device::Apic::initializeTimer();
+
+    if constexpr (HHUOS_APIC_ENABLE_DEBUG) {
+        Device::LocalApic::dumpLVT();
+    }
 
     // Bore the AP to death
     Device::ApicTimer &timer = Device::Apic::getCurrentTimer();

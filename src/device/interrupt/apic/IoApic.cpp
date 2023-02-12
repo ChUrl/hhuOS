@@ -7,6 +7,7 @@
 namespace Device {
 
 IoApicPlatform *IoApic::platform = nullptr;
+
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 
 IoApic::IoApic(IoApicPlatform *ioApicPlatform, IoApicInformation &&ioApicInformation)
@@ -15,7 +16,7 @@ IoApic::IoApic(IoApicPlatform *ioApicPlatform, IoApicInformation &&ioApicInforma
 }
 
 void IoApic::initialize() {
-    initializeMMIORegion();
+    initializeMMIO();
 
     // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
     platform->version = readIndirectRegister(VER);
@@ -42,8 +43,6 @@ void IoApic::initialize() {
         redtblEntry.destination = LocalApic::getId(); // Send to the BSP
         writeREDTBL(info.nmiGsi, redtblEntry);
     }
-
-    initialized = true;
 }
 
 void IoApic::allow(Kernel::GlobalSystemInterrupt gsi) {
@@ -97,7 +96,7 @@ void IoApic::ensureRegisterAccess() const {
     }
 }
 
-void IoApic::initializeMMIORegion() {
+void IoApic::initializeMMIO() {
     const uint32_t pageOffset = info.physAddress % Util::PAGESIZE;
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
@@ -112,7 +111,7 @@ void IoApic::initializeREDTBL() {
     redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::FIXED;
     redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL;
     redtblEntry.isMasked = true;
-    redtblEntry.destination = LocalApic::getId(); // ! All interrupts are sent to the BSP, which is inefficient
+    redtblEntry.destination = LocalApic::getId(); // ! All interrupts are sent to the BSP, which can be inefficient
 
     for (uint32_t interruptInput = info.gsiBase; interruptInput <= info.gsiMax; ++interruptInput) {
         auto gsi = static_cast<Kernel::GlobalSystemInterrupt>(interruptInput); // GSIs match interrupt inputs on IO APIC
@@ -145,16 +144,15 @@ void IoApic::dumpREDTBL() {
     log.info("Redirection Table (I/O APIC Id: [%d]):", info.id);
     for (uint32_t gsi = info.gsiBase; gsi < info.gsiMax; ++gsi) {
         const REDTBLEntry redtblEntry = readREDTBL(static_cast<Kernel::GlobalSystemInterrupt>(gsi));
-        log.info(
-          "- Interrupt [%d]: (Vector: [0x%x], Masked: [%d], Destination: [%d], DeliveryMode: [0b%b], DestinationMode: [%s], PinPolarity: [%s], TriggerMode: [%s])",
-          gsi,
-          static_cast<uint8_t>(redtblEntry.vector),
-          static_cast<uint8_t>(redtblEntry.isMasked),
-          redtblEntry.destination,
-          static_cast<uint8_t>(redtblEntry.deliveryMode),
-          redtblEntry.destinationMode == REDTBLEntry::DestinationMode::PHYSICAL ? "PHYSICAL" : "LOGICAL",
-          redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-          redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+        log.info("- Interrupt [%d]: (Vector: [0x%x], Masked: [%d], Destination: [%d], DeliveryMode: [0b%b], DestinationMode: [%s], PinPolarity: [%s], TriggerMode: [%s])",
+                 gsi,
+                 static_cast<uint8_t>(redtblEntry.vector),
+                 static_cast<uint8_t>(redtblEntry.isMasked),
+                 redtblEntry.destination,
+                 static_cast<uint8_t>(redtblEntry.deliveryMode),
+                 redtblEntry.destinationMode == REDTBLEntry::DestinationMode::PHYSICAL ? "PHYSICAL" : "LOGICAL",
+                 redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                 redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 }
 

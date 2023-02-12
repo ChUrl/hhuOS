@@ -7,11 +7,21 @@
 
 namespace Device {
 
-bool LocalApic::bspInitialized = false;
 LocalApicPlatform *LocalApic::platform = nullptr;
+
 const ModelSpecificRegister LocalApic::ia32ApicBaseMsr = ModelSpecificRegister(0x1B);
 const IoPort LocalApic::registerSelectorPort = IoPort(0x22);
 const IoPort LocalApic::registerDataPort = IoPort(0x23);
+
+const Util::Array<const char *> LocalApic::lintNames = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
+const Util::Array<LocalApic::Register> LocalApic::lintRegs = {static_cast<Register>(0x2F0),
+                                                              static_cast<Register>(0x320),
+                                                              static_cast<Register>(0x330),
+                                                              static_cast<Register>(0x340),
+                                                              static_cast<Register>(0x350),
+                                                              static_cast<Register>(0x360),
+                                                              static_cast<Register>(0x370)};
+
 Kernel::Logger LocalApic::log = Kernel::Logger::get("LocalApic");
 
 LocalApic::LocalApic(LocalApicPlatform *localApicPlatform, const LocalApicInformation &&localApicInformation)
@@ -47,22 +57,7 @@ uint8_t LocalApic::getVersion() {
     return readDoubleWord(VER);
 }
 
-void LocalApic::ensureBspInitialized() {
-    if (!bspInitialized) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "BSP not initialized!");
-    }
-}
-
-uint8_t LocalApic::initializeBsp() {
-    if (bspInitialized) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "BSP already initialized, skipping initialization!");
-    }
-
-    if (!readBaseMSR().isBSP) {
-        // IA32_APIC_BASE_MSR is unique (every core has its own)
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "May only be called by the BSP!");
-    }
-
+void LocalApic::enableXApicMode() {
     disablePicMode(); // Physically connect the APIC to the BSP, just in case
 
     // Set operating mode:
@@ -70,30 +65,27 @@ uint8_t LocalApic::initializeBsp() {
     // the same address space, memory allocation only has to be done once and the IA32_APIC_BASE_MSR does not
     // have to be written. To enable x2Apic mode, every AP would have to set the x2Apic-enable flag in its
     // IA32_APIC_BASE_MSR, in that case this code should be relocated to LocalApic::initializeAp().
-    if (supportsX2Apic()) {
+    if (LocalApic::supportsX2Apic()) {
         // QEMU doesn't support emulation of x2Apic via TCG (QEMU Tiny Code Generator)
         // KVM would be possible, but then GDB can't be attached, so compatibility mode will always be chosen
         log.info("X2Apic support detected but not implemented, running in xApic compatibility mode");
     } else {
         log.info("No x2Apic mode support detected, running in xApic mode");
     }
-    platform->isX2Apic = false;
-    initializeXApicMMIO();
+    LocalApic::initializeXApicMMIO();
 
-    // Mask all PIC interrupts that have been enabled previously. This has to be done before bspInitialized
-    // is set to true, to reach the PIC through the InterruptService. After the APIC has been initialized, the
+    // Mask all PIC interrupts that have been enabled previously. After the APIC has been initialized, the
     // InterruptService only reaches the I/O APIC's REDTBL registers.
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     for (uint8_t i = 0; i < 16; ++i) {
         interruptService.forbidHardwareInterrupt(static_cast<InterruptRequest>(i));
     }
-
-    bspInitialized = true; // System is now ready for LocalApic::initializeAp().
-    return getId();        // The BSP's id is required to call LocalApic::initializeAp() on the correct LocalApic instance.
 }
 
-void LocalApic::initializeAp() {
-    ensureBspInitialized();
+void LocalApic::initialize() const {
+    if (info.id != getId()) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "AP can only initialize itself!");
+    }
 
     // Mask all local interrupt sources
     initializeLVT();
@@ -122,7 +114,6 @@ void LocalApic::initializeAp() {
 
     // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
     writeDoubleWord(TPR, 0);
-    initialized = true;
 }
 
 void LocalApic::disablePicMode() {
@@ -130,15 +121,31 @@ void LocalApic::disablePicMode() {
     registerDataPort.writeByte(0x01);     // 0x00 connects PIC to LINT0, 0x01 disconnects
 }
 
+void LocalApic::initializeXApicMMIO() {
+    const uint32_t pageOffset = platform->physAddress % Util::PAGESIZE;
+
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+    void *virtAddress = memoryService.mapIO(platform->physAddress, Util::PAGESIZE, true);
+
+    // Account for possible misalignment
+    platform->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
+}
+
+void LocalApic::ensureRegisterAccess() {
+    if (!platform->isX2Apic && platform->virtAddress == 0) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LocalApic MMIO region not initialized!");
+    }
+}
+
 void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
     ICREntry icrEntry{};
-    icrEntry.vector = static_cast<Kernel::InterruptVector>(0), // INIT should have vector number 0
-      icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT,
-    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL,
-    icrEntry.level = level, // ASSERT or DEASSERT
-      icrEntry.triggerMode = ICREntry::TriggerMode::LEVEL,
-    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO, // Only broadcast to CPU in destination field
-      icrEntry.destination = id;
+    icrEntry.vector = static_cast<Kernel::InterruptVector>(0); // INIT should have vector number 0
+    icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT;
+    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL;
+    icrEntry.level = level; // ASSERT or DEASSERT
+    icrEntry.triggerMode = ICREntry::TriggerMode::LEVEL;
+    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO; // Only broadcast to CPU in destination field
+    icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
 
     do {
@@ -151,17 +158,16 @@ void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
 
 void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     ICREntry icrEntry{};
-    icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12), // Startup code physical page
-      icrEntry.deliveryMode = ICREntry::DeliveryMode::STARTUP,
-    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL,       // Ignored
-      icrEntry.level = ICREntry::Level::DEASSERT,                         // Ignored
-      icrEntry.triggerMode = ICREntry::TriggerMode::EDGE,                 // Ignored
-      icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO, // Ignored
-      icrEntry.destination = id;
+    icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12); // Startup code physical page
+    icrEntry.deliveryMode = ICREntry::DeliveryMode::STARTUP;
+    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL;     // Ignored
+    icrEntry.level = ICREntry::Level::DEASSERT;                         // Ignored
+    icrEntry.triggerMode = ICREntry::TriggerMode::EDGE;                 // Ignored
+    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO; // Ignored
+    icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
 
-    for (uint32_t j = 0; j < 100000; ++j)
-        ; // Ugly wait, because we have no PIT yet
+    for (uint32_t j = 0; j < 100000; ++j) {} // Ugly wait, because we have no PIT yet
 
     do {
         asm volatile("pause"
@@ -198,22 +204,6 @@ void LocalApic::sendEndOfInterrupt() {
     // This works for multiple cores because the core that handles the interrupt calls this function
     // and thus reaches the correct local APIC
     writeDoubleWord(EOI, 0);
-}
-
-void LocalApic::ensureRegisterAccess() {
-    if (!platform->isX2Apic && platform->virtAddress == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "LocalApic MMIO region not initialized!");
-    }
-}
-
-void LocalApic::initializeXApicMMIO() {
-    const uint32_t pageOffset = platform->physAddress % Util::PAGESIZE;
-
-    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(platform->physAddress, Util::PAGESIZE, true);
-
-    // Account for possible misalignment
-    platform->virtAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
 }
 
 void LocalApic::initializeLVT() {

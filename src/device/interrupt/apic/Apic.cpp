@@ -26,84 +26,18 @@ bool Apic::isInitialized() {
 }
 
 void Apic::initialize() {
-    if (isInitialized()) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC already initialized!");
+    if (!LocalApic::readBaseMSR().isBSP) {
+        // IA32_APIC_BASE_MSR is unique (every core has its own)
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "May only be called by the BSP!");
     }
 
-    // Get our required information from ACPI
-    const auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
-    Util::ArrayList<const Acpi::ProcessorLocalApic *> acpiProcessorLocalApics;
-    Util::ArrayList<const Acpi::LocalApicNmi *> acpiLocalApicNmis;
-    Util::ArrayList<const Acpi::IoApic *> acpiIoApics;
-    Util::ArrayList<const Acpi::NmiSource *> acpiNmiSources;
-    Util::ArrayList<const Acpi::InterruptSourceOverride *> acpiInterruptSourceOverrides;
-    Acpi::collectMadtStructures(&acpiProcessorLocalApics, Acpi::PROCESSOR_LOCAL_APIC);
-    Acpi::collectMadtStructures(&acpiLocalApicNmis, Acpi::LOCAL_APIC_NMI);
-    Acpi::collectMadtStructures(&acpiIoApics, Acpi::IO_APIC);
-    Acpi::collectMadtStructures(&acpiNmiSources, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
-    Acpi::collectMadtStructures(&acpiInterruptSourceOverrides, Acpi::INTERRUPT_SOURCE_OVERRIDE);
-
-    if (acpiProcessorLocalApics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any local APIC(s)!");
-    }
-    if (acpiIoApics.size() == 0) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any I/O APIC(s)!");
-    }
-
-    // Create LocalApic instances
-    auto *localPlatform = new LocalApicPlatform(madt->localApicAddress);
-    for (const auto *localInfo : acpiProcessorLocalApics) {
-        // Find the NMI belonging to the current localInfo
-        const Acpi::LocalApicNmi *nmiInfo = nullptr;
-        for (const auto *localNmi : acpiLocalApicNmis) {
-            // 0xFF means all APs
-            if ((localNmi->acpiProcessorId == localInfo->acpiProcessorId) | (localNmi->acpiProcessorId == 0xFF)) {
-                nmiInfo = localNmi;
-                break;
-            }
-        }
-
-        if (nmiInfo == nullptr) {
-            log.warn("Couldn't find NMI for local APIC, skipping initialization!");
-            for (auto *localApic : localApics) {
-                delete localApic;
-            }
-            localApics.clear();
-            return;
-        }
-
-        localApics.add(new LocalApic(localPlatform, LocalApicInformation(localInfo, nmiInfo)));
-    }
+    // Read information from ACPI's MADT and create our LocalApic/IoApic instances
+    populateLocalApics();
+    populateIoApics();
 
     // Initialize our local APIC, all others are only initialized when SMP is started up
-    LocalApic::initializeBsp();           // First step of BSP's local APIC initialization
-    getCurrentLocalApic().initializeAp(); // Initialize the rest of the BSP's local APIC
-
-    // Create IoApic instances
-    auto *ioPlatform = new IoApicPlatform(&acpiInterruptSourceOverrides);
-    for (const auto *ioInfo : acpiIoApics) {
-        // The Nmi is assigned to the correct I/O APIC. This is a mess, because ACPI does not report
-        // the maximum GSI an I/O APIC supports.
-
-        // Find the maximum GSI of ioInfo by finding the next larger GSI base
-        const Acpi::IoApic *nextIoInfo = acpiIoApics.get(0);
-        for (const auto *nIoInfo : acpiIoApics) {
-            if (nIoInfo->globalSystemInterruptBase > ioInfo->globalSystemInterruptBase && nIoInfo->globalSystemInterruptBase <= nextIoInfo->globalSystemInterruptBase) {
-                nextIoInfo = nIoInfo;
-            }
-        }
-
-        // Select the NMI that belongs to ioInfo (if it exists)
-        const Acpi::NmiSource *nmiInfo = nullptr;
-        for (const auto *ioNmi : acpiNmiSources) {
-            if (ioNmi->globalSystemInterrupt >= ioInfo->globalSystemInterruptBase && (ioNmi->globalSystemInterrupt < nextIoInfo->globalSystemInterruptBase || ioInfo->globalSystemInterruptBase == nextIoInfo->globalSystemInterruptBase)) {
-                nmiInfo = ioNmi;
-                break;
-            }
-        }
-
-        ioApics.add(new IoApic(ioPlatform, IoApicInformation(ioInfo, nmiInfo)));
-    }
+    LocalApic::enableXApicMode();
+    getCurrentLocalApic().initialize();
 
     // Multiple I/O APICs are possible, but in the usual Intel consumer chipsets there is only one
     if (ioApics.size() > 1) {
@@ -116,8 +50,8 @@ void Apic::initialize() {
     }
 
     // We only require one error handler, as every AP can only access its own local APIC's error register
-    errorHandler.plugin();     // Does not allow the interrupt!
-    initializeErrorHandling(); // Allows the interrupt for this AP
+    errorHandler.plugin(); // Does not allow the interrupt!
+    enableErrorHandling(); // Allows the interrupt for this AP
 
     if constexpr (HHUOS_APIC_ENABLE_DEBUG) {
         dumpDebugInfo();
@@ -127,7 +61,7 @@ void Apic::initialize() {
 }
 
 bool Apic::isSmpSupported() {
-    return initialized && localApics.size() > 1;
+    return getCpuCount() > 1;
 }
 
 // This works if local APIC IDs are contiguous, but I think they always are
@@ -195,6 +129,180 @@ void Device::Apic::initializeSmp() {
     apStacks = nullptr;
 }
 
+uint8_t Apic::getCpuCount() {
+    if (!initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Uninitialized CPU count!");
+    }
+
+    return localApics.size();
+}
+
+LocalApic &Apic::getCurrentLocalApic() {
+    for (uint32_t i = 0; i < localApics.size(); ++i) {
+        LocalApic *localApic = localApics.get(i);
+        if (localApic->info.id == LocalApic::getId()) {
+            return *localApic;
+        }
+    }
+
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find local APIC for current CPU!");
+}
+
+bool Apic::isBspTimerInitialized() {
+    return bspTimerInitialized;
+}
+
+void Apic::initializeTimer() {
+    for (uint32_t i = 0; i < timers.size(); ++i) {
+        ApicTimer *timer = timers.get(i);
+        if (timer->cpuId == LocalApic::getId()) {
+            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC timer for this CPU has already been initialized!");
+        }
+    }
+
+    // We use multiple instances because each timer has its own timestamp
+    auto *apicTimer = new Device::ApicTimer();
+    apicTimer->plugin();
+    timers.add(apicTimer);
+    bspTimerInitialized = true; // Only used to skip the PIT preemption trigger when APIC timer is online
+}
+
+ApicTimer &Apic::getCurrentTimer() {
+    for (uint32_t i = 0; i < timers.size(); ++i) {
+        ApicTimer *timer = timers.get(i);
+        if (timer->cpuId == LocalApic::getId()) {
+            return *timer;
+        }
+    }
+
+    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find timer for current CPU!");
+}
+
+void Apic::enableErrorHandling() {
+    // This part needs to be done for each AP
+    LocalApic::allow(LocalApic::ERROR);
+}
+
+void Apic::allow(InterruptRequest interruptRequest) {
+    const Kernel::GlobalSystemInterrupt gsi = IoApic::platform->getIoApicIrqOverrideTarget(interruptRequest);
+    IoApic &ioApic = getIoApic(gsi); // Select responsible I/O APIC
+    ioApic.allow(gsi);
+}
+
+void Apic::forbid(InterruptRequest interruptRequest) {
+    const Kernel::GlobalSystemInterrupt gsi = IoApic::platform->getIoApicIrqOverrideTarget(interruptRequest);
+    IoApic &ioApic = getIoApic(gsi);
+    ioApic.forbid(gsi);
+}
+
+bool Apic::status(InterruptRequest interruptRequest) {
+    const Kernel::GlobalSystemInterrupt gsi = IoApic::platform->getIoApicIrqOverrideTarget(interruptRequest);
+    IoApic &ioApic = getIoApic(gsi);
+    return ioApic.status(gsi);
+}
+
+void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
+    if (isLocalInterrupt(vector) && vector != Kernel::InterruptVector::LINT1) {
+        // Excludes LINT1 (NMI)
+        LocalApic::sendEndOfInterrupt();
+    } else if (isExternalInterrupt(vector)) {
+        auto interruptRequest = static_cast<InterruptRequest>(vector - 32); // Hardware interrupt pin
+        const Kernel::GlobalSystemInterrupt gsi = IoApic::platform->getIoApicIrqOverrideTarget(interruptRequest);
+        IoApic &ioApic = getIoApic(gsi);
+
+        LocalApic::sendEndOfInterrupt();        // External interrupts get forwarded by the local APIC, so local EOI required
+        ioApic.sendEndOfInterrupt(vector, gsi); // This is only required for level-triggered interrupts
+    }
+}
+
+bool Apic::isLocalInterrupt(Kernel::InterruptVector vector) {
+    return vector >= Kernel::InterruptVector::CMCI && vector <= Kernel::InterruptVector::ERROR;
+}
+
+bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
+    // Remapping can be ignored here, as all GSIs are contiguous anyway
+    return static_cast<Kernel::GlobalSystemInterrupt>(vector - 32) <= IoApic::platform->globalMaxGsi;
+}
+
+void Apic::populateLocalApics() {
+    // Get our required information from ACPI
+    const auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
+    Util::ArrayList<const Acpi::ProcessorLocalApic *> acpiProcessorLocalApics;
+    Util::ArrayList<const Acpi::LocalApicNmi *> acpiLocalApicNmis;
+    Acpi::collectMadtStructures(&acpiProcessorLocalApics, Acpi::PROCESSOR_LOCAL_APIC);
+    Acpi::collectMadtStructures(&acpiLocalApicNmis, Acpi::LOCAL_APIC_NMI);
+
+    if (acpiProcessorLocalApics.size() == 0) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any local APIC(s)!");
+    }
+
+    // Create LocalApic instances
+    auto *localPlatform = new LocalApicPlatform(madt->localApicAddress);
+    for (const auto *localInfo : acpiProcessorLocalApics) {
+        // Find the NMI belonging to the current localInfo
+        const Acpi::LocalApicNmi *nmiInfo = nullptr;
+        for (const auto *localNmi : acpiLocalApicNmis) {
+            // 0xFF means all APs
+            if ((localNmi->acpiProcessorId == localInfo->acpiProcessorId) | (localNmi->acpiProcessorId == 0xFF)) {
+                nmiInfo = localNmi;
+                break;
+            }
+        }
+
+        if (nmiInfo == nullptr) {
+            log.warn("Couldn't find NMI for local APIC, skipping initialization!");
+            for (auto *localApic : localApics) {
+                delete localApic;
+            }
+            localApics.clear();
+            return;
+        }
+
+        localApics.add(new LocalApic(localPlatform, LocalApicInformation(localInfo, nmiInfo)));
+    }
+}
+
+void Apic::populateIoApics() {
+    // Get our required information from ACPI
+    const auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
+    Util::ArrayList<const Acpi::IoApic *> acpiIoApics;
+    Util::ArrayList<const Acpi::NmiSource *> acpiNmiSources;
+    Util::ArrayList<const Acpi::InterruptSourceOverride *> acpiInterruptSourceOverrides;
+    Acpi::collectMadtStructures(&acpiIoApics, Acpi::IO_APIC);
+    Acpi::collectMadtStructures(&acpiNmiSources, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
+    Acpi::collectMadtStructures(&acpiInterruptSourceOverrides, Acpi::INTERRUPT_SOURCE_OVERRIDE);
+
+    if (acpiIoApics.size() == 0) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any I/O APIC(s)!");
+    }
+
+    // Create IoApic instances
+    auto *ioPlatform = new IoApicPlatform(&acpiInterruptSourceOverrides);
+    for (const auto *ioInfo : acpiIoApics) {
+        // The Nmi is assigned to the correct I/O APIC. This is a mess, because ACPI does not report
+        // the maximum GSI an I/O APIC supports.
+
+        // Find the maximum GSI of ioInfo by finding the next larger GSI base
+        const Acpi::IoApic *nextIoInfo = acpiIoApics.get(0);
+        for (const auto *nIoInfo : acpiIoApics) {
+            if (nIoInfo->globalSystemInterruptBase > ioInfo->globalSystemInterruptBase && nIoInfo->globalSystemInterruptBase <= nextIoInfo->globalSystemInterruptBase) {
+                nextIoInfo = nIoInfo;
+            }
+        }
+
+        // Select the NMI that belongs to ioInfo (if it exists)
+        const Acpi::NmiSource *nmiInfo = nullptr;
+        for (const auto *ioNmi : acpiNmiSources) {
+            if (ioNmi->globalSystemInterrupt >= ioInfo->globalSystemInterruptBase && (ioNmi->globalSystemInterrupt < nextIoInfo->globalSystemInterruptBase || ioInfo->globalSystemInterruptBase == nextIoInfo->globalSystemInterruptBase)) {
+                nmiInfo = ioNmi;
+                break;
+            }
+        }
+
+        ioApics.add(new IoApic(ioPlatform, IoApicInformation(ioInfo, nmiInfo)));
+    }
+}
+
 void Device::Apic::allocateSmpStacks() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
@@ -260,101 +368,6 @@ void Device::Apic::copySmpStartupCode() {
     // Copy the startup routine and prepared variables to the identity mapped page
     log.debug("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)", reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
-}
-
-uint8_t Apic::getCpuCount() {
-    if (!isInitialized()) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Uninitialized CPU count!");
-    }
-
-    return localApics.size();
-}
-
-LocalApic &Apic::getCurrentLocalApic() {
-    for (uint32_t i = 0; i < localApics.size(); ++i) {
-        LocalApic *localApic = localApics.get(i);
-        if (localApic->info.id == LocalApic::getId()) {
-            return *localApic;
-        }
-    }
-
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find local APIC for current CPU!");
-}
-
-bool Apic::isBspTimerInitialized() {
-    return bspTimerInitialized;
-}
-
-void Apic::initializeTimer() {
-    for (uint32_t i = 0; i < timers.size(); ++i) {
-        ApicTimer *timer = timers.get(i);
-        if (timer->cpuId == LocalApic::getId()) {
-            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC timer for this CPU has already been initialized!");
-        }
-    }
-
-    // We use multiple instances because each timer has its own timestamp
-    auto *apicTimer = new Device::ApicTimer();
-    apicTimer->plugin();
-    timers.add(apicTimer);
-    bspTimerInitialized = true; // Only used to skip the PIT preemption trigger when APIC timer is online
-}
-
-ApicTimer &Apic::getCurrentTimer() {
-    for (uint32_t i = 0; i < timers.size(); ++i) {
-        ApicTimer *timer = timers.get(i);
-        if (timer->cpuId == LocalApic::getId()) {
-            return *timer;
-        }
-    }
-
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find timer for current CPU!");
-}
-
-void Apic::initializeErrorHandling() {
-    // This part needs to be done for each AP
-    LocalApic::allow(LocalApic::ERROR);
-}
-
-void Apic::allow(InterruptRequest interruptRequest) {
-    const Kernel::GlobalSystemInterrupt gsi = IoApic::platform->getIoApicIrqOverrideTarget(interruptRequest);
-    IoApic &ioApic = getIoApic(gsi); // Select responsible I/O APIC
-    ioApic.allow(gsi);
-}
-
-void Apic::forbid(InterruptRequest interruptRequest) {
-    const Kernel::GlobalSystemInterrupt gsi = IoApic::platform->getIoApicIrqOverrideTarget(interruptRequest);
-    IoApic &ioApic = getIoApic(gsi);
-    ioApic.forbid(gsi);
-}
-
-bool Apic::status(InterruptRequest interruptRequest) {
-    const Kernel::GlobalSystemInterrupt gsi = IoApic::platform->getIoApicIrqOverrideTarget(interruptRequest);
-    IoApic &ioApic = getIoApic(gsi);
-    return ioApic.status(gsi);
-}
-
-void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
-    if (isLocalInterrupt(vector) && vector != Kernel::InterruptVector::LINT1) {
-        // Excludes LINT1 (NMI)
-        LocalApic::sendEndOfInterrupt();
-    } else if (isExternalInterrupt(vector)) {
-        auto interruptRequest = static_cast<InterruptRequest>(vector - 32); // Hardware interrupt pin
-        const Kernel::GlobalSystemInterrupt gsi = IoApic::platform->getIoApicIrqOverrideTarget(interruptRequest);
-        IoApic &ioApic = getIoApic(gsi);
-
-        LocalApic::sendEndOfInterrupt();        // External interrupts get forwarded by the local APIC, so local EOI required
-        ioApic.sendEndOfInterrupt(vector, gsi); // This is only required for level-triggered interrupts
-    }
-}
-
-bool Apic::isLocalInterrupt(Kernel::InterruptVector vector) {
-    return vector >= Kernel::InterruptVector::CMCI && vector <= Kernel::InterruptVector::ERROR;
-}
-
-bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
-    // Remapping can be ignored here, as all GSIs are contiguous anyway
-    return static_cast<Kernel::GlobalSystemInterrupt>(vector - 32) <= IoApic::platform->globalMaxGsi;
 }
 
 IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {

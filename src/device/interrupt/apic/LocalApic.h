@@ -7,10 +7,6 @@
 #include "device/cpu/ModelSpecificRegister.h"
 #include "kernel/log/Logger.h"
 
-const constexpr bool HHUOS_APIC_ENABLE = true;
-const constexpr bool HHUOS_APIC_ENABLE_DEBUG = true;
-const constexpr bool HHUOS_APIC_ENABLE_SMP = true;
-
 namespace Device {
 
 /**
@@ -46,14 +42,16 @@ public:
      * @brief Initialize LVT, SVR and TPR of the executing core's local APIC.
      *
      * The local APIC initialization consists of multiple steps:
-     * 1. The BSP calls LocalApic::initializeBsp(), to set up the system for local APIC initialization.
-     * 2. The BSP calls LocalApic::initializeAp(), to complete the BSP's local APIC initialization.
+     * 1. The BSP calls LocalApic::enableXApicMode(), to set up the system for local APIC initialization.
+     * 2. The BSP calls LocalApic::initialize(), to complete the BSP's local APIC initialization.
      * 3. The APs are booted up.
-     * 4. Every AP calls LocalApic::initializeAp() individually.
+     * 4. Every AP calls LocalApic::initialize() individually.
      *
-     * This function must not be called before LocalApic::initializeBsp().
+     * This function must not be called before LocalApic::enableXApicMode().
      */
-    void initializeAp(); // Gets called by the AP itself
+    void initialize() const;
+
+    static void dumpLVT();
 
 private:
     /**
@@ -102,8 +100,6 @@ private:
     };
 
 private:
-    // LocalApic intentionally only exposes a very small public interface, the Apic class should be used.
-
     /**
      * @brief Check if the local APIC supports xApic mode (xApic uses MMIO-based register access)
      *
@@ -133,24 +129,11 @@ private:
     static uint8_t getVersion();
 
     /**
-     * @brief Ensure that the BSP has been initialized.
-     *
-     * Throws an exception if LocalApic::initializeBsp() has not been called.
-     */
-    static void ensureBspInitialized();
-
-    /**
      * @brief Prepare the BSP for local APIC initialization.
      *
-     * The local APIC initialization consists of multiple steps:
-     * 1. The BSP calls LocalApic::initializeBsp(), to set up the system for local APIC initialization.
-     * 2. The BSP calls LocalApic::initializeAp(), to complete the BSP's local APIC initialization.
-     * 3. The APs are booted up.
-     * 4. Every AP calls LocalApic::initializeAp() individually.
-     *
-     * @return The BSP's local APIC id
+     * Only has to be called once, not once per AP.
      */
-    static uint8_t initializeBsp();
+    static void enableXApicMode();
 
     /**
      * @brief Set the IMCR to disconnect the PIC from the CPU.
@@ -158,6 +141,18 @@ private:
      * The IMCR is only available on some hardware, not in QEMU.
      */
     static void disablePicMode();
+
+    /**
+     * @brief Allocate the memory region used to access the local APIC's registers in xApic mode.
+     *
+     * This memory is never freed, since the APIC can't be disabled in this implementation.
+     */
+    static void initializeXApicMMIO();
+
+    /**
+     * @brief Ensure that the local APIC's MMIO region has been initialized when in xApic mode.
+     */
+    static void ensureRegisterAccess();
 
     /**
      * @brief Send an INIT IPI to an AP.
@@ -218,16 +213,6 @@ private:
     static void sendEndOfInterrupt();
 
     /**
-     * @brief Ensure that the local APIC's MMIO region has been initialized when in xApic mode.
-     */
-    static void ensureRegisterAccess();
-
-    /**
-     * @brief Allocate the memory region used to access the local APIC's registers in xApic mode.
-     */
-    static void initializeXApicMMIO();
-
-    /**
      * @brief Initialize the local APIC's local vector table.
      *
      * Marks every local interrupt in the local vector table as edge-triggered,
@@ -235,8 +220,6 @@ private:
      * Vector numbers are set to InterruptVector equivalents.
      */
     static void initializeLVT();
-
-    static void dumpLVT();
 
     // Reading and writing local APIC's registers parses the read/written values to/from
     // types from ApicRegisterInterface. Only registers of the current CPU will be affected.
@@ -310,9 +293,6 @@ private:
     // static ModelSpecificRegister getMSR(Register reg); // Used for x2Apic mode
 
 private:
-    static bool bspInitialized; ///< @brief Indicates if LocalApic::initializeBsp() has been called.
-    bool initialized = false;   ///< @brief Indicates if LocalApic::initializeAp() has been called on an instance.
-
     LocalApicInformation info;          ///< @brief Information about a single local APIC.
     static LocalApicPlatform *platform; ///< @brief Information about all local APICs.
 
@@ -320,14 +300,8 @@ private:
     static const IoPort registerSelectorPort;           ///< @brief Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1.
     static const IoPort registerDataPort;               ///< @brief Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1.
 
-    static const constexpr char *lintNames[7] = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
-    static const constexpr Register lintRegs[7] = {static_cast<Register>(0x2F0),
-                                                   static_cast<Register>(0x320),
-                                                   static_cast<Register>(0x330),
-                                                   static_cast<Register>(0x340),
-                                                   static_cast<Register>(0x350),
-                                                   static_cast<Register>(0x360),
-                                                   static_cast<Register>(0x370)}; ///< @brief Local interrupt to register offset translation
+    static const Util::Array<const char *> lintNames;
+    static const Util::Array<Register> lintRegs; ///< @brief Local interrupt to register offset translation
 
     static Kernel::Logger log;
 };

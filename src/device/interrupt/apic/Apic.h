@@ -9,6 +9,9 @@
 #include "kernel/log/Logger.h"
 #include "LocalApic.h"
 
+// Enable of disable the huge APIC debug dump
+const constexpr bool HHUOS_APIC_ENABLE_DEBUG = true;
+
 namespace Device {
 
 /**
@@ -80,7 +83,7 @@ public:
     /**
      * @brief Create an ErrorHandler instance (if it hasn't been created yet) and allow the local ERROR interrupt.
      */
-    static void initializeErrorHandling();
+    static void enableErrorHandling();
 
     /**
      * @brief Unmask an external interrupt for the current CPU.
@@ -116,6 +119,16 @@ public:
 
 private:
     /**
+     * @brief Read information from ACPI's MADT and create an instance for each local APIC found.
+     */
+    static void populateLocalApics();
+
+    /**
+     * @brief Read information from ACPI's MADT and create an instance for each I/O APIC found.
+     */
+    static void populateIoApics();
+
+    /**
      * @brief Prepare the memory regions used by the AP's stacks.
      */
     static void allocateSmpStacks();
@@ -138,8 +151,11 @@ private:
     static bool initialized;         ///< @brief Indicates if Apic::initialize() has been called.
     static bool bspTimerInitialized; ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
 
+    // Memory allocated for instances contained in these lists is never freed,
+    // this implementation doesn't support disabling the APIC at all.
+    // Once the switch from PIC to APIC is done, it can't be switched back.
     static Util::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
-    static Util::ArrayList<IoApic *> ioApics;       ///< @brief All IoApic instance..
+    static Util::ArrayList<IoApic *> ioApics;       ///< @brief All IoApic instances.
     static Util::ArrayList<ApicTimer *> timers;     ///< @brief All ApicTimer instances.
     static ApicErrorHandler errorHandler;           ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
