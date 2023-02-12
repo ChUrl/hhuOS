@@ -73,7 +73,7 @@ private:
      *
      * Because the APIC timer has no fixed frequency, it is calibrated using the PIT as calibration source.
      */
-    [[nodiscard]] static uint32_t setInterruptRate();
+    [[nodiscard]] static uint32_t calibrateInitialCounter();
 
 private:
     uint8_t cpuId;            ///< @brief The id of the CPU that uses this timer.

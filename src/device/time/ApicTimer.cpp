@@ -43,7 +43,7 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval)
 
     // Only do the calibration once, APs get initialized with the same value as the BSP
     if (counter == 0) {
-        counter = setInterruptRate();
+        counter = calibrateInitialCounter();
     }
 
     log.info("Setting APIC timer interval for CPU [%d] to [%uns] (Initial count: [%u])", cpuId, timerInt, counter);
@@ -74,7 +74,7 @@ Util::Time::Timestamp ApicTimer::getTime() {
     return time;
 }
 
-uint32_t ApicTimer::setInterruptRate() {
+uint32_t ApicTimer::calibrateInitialCounter() {
     auto &timeService = Kernel::System::getService<Kernel::TimeService>();
 
     // If the timerInterval is 10ms, we wait longer, because calibrating with too few PIT ticks is imprecise
