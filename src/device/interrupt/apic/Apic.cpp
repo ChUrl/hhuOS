@@ -68,26 +68,11 @@ bool Apic::isSmpSupported() {
 void Device::Apic::initializeSmp() {
     if (getCpuCount() > 64) {
         // This limit is pretty arbitrary, but the runningAPs bitmap currently only has 64 bits (in Smp.h).
-        // Technically xApic supports 8-bit CPU ids, x2Apic even more (32-bit CPU ids).
+        // Technically xApic supports 8-bit CPU ids though, x2Apic even more (32-bit CPU ids).
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "CPUs with more than 64 cores are not supported!");
     }
 
-    // Verify that the ids are contiguous. We don't take assumptions about the order of appearance though.
-    // This is only here to verify some assumptions I made, based on the manuals (ACPI and IA-32), OSdev
-    // and some implementations (xv6, SerenityOS).
-    // This hardware specific stuff is however hard to verify, and I couldn't find a definitive answer
-    // to these assumptions, so let's choose the dumb way and just abort the whole OS if they are wrong.
-    uint64_t idBitmap = 0;
-    for (uint32_t i = 0; i < localApics.size(); ++i) {
-        LocalApic *localApic = localApics.get(i);
-        idBitmap |= (1 << localApic->info.id);
-    }
-    const uint64_t idBitmapMask = static_cast<uint64_t>(-1) >> (64 - localApics.size());
-    if (idBitmap != idBitmapMask) {
-        // We require contiguous ids, because the AP stackpointer array uses the id as index
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC ids are not contiguous!");
-    }
-
+    ensureContiguousCpuIds();
     allocateSmpStacks();
     copySmpStartupCode();
 
@@ -264,7 +249,6 @@ void Apic::populateLocalApics() {
 
 void Apic::populateIoApics() {
     // Get our required information from ACPI
-    const auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
     Util::ArrayList<const Acpi::IoApic *> acpiIoApics;
     Util::ArrayList<const Acpi::NmiSource *> acpiNmiSources;
     Util::ArrayList<const Acpi::InterruptSourceOverride *> acpiInterruptSourceOverrides;
@@ -300,6 +284,24 @@ void Apic::populateIoApics() {
         }
 
         ioApics.add(new IoApic(ioPlatform, IoApicInformation(ioInfo, nmiInfo)));
+    }
+}
+
+void Apic::ensureContiguousCpuIds() {
+    // Verify that the ids are contiguous. We don't take assumptions about the order of appearance though.
+    // This is only here to verify some assumptions I made, based on the manuals (ACPI and IA-32), OSdev
+    // and some implementations (xv6, SerenityOS).
+    // This hardware specific stuff is however hard to verify, and I couldn't find a definitive answer
+    // to these assumptions, so let's choose the dumb way and just abort the whole OS if they are wrong.
+    uint64_t idBitmap = 0;
+    for (uint32_t i = 0; i < localApics.size(); ++i) {
+        LocalApic *localApic = localApics.get(i);
+        idBitmap |= (1 << localApic->info.id);
+    }
+    const uint64_t idBitmapMask = static_cast<uint64_t>(-1) >> (64 - localApics.size());
+    if (idBitmap != idBitmapMask) {
+        // We require contiguous ids, because the AP stackpointer array uses the id as index
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC ids are not contiguous!");
     }
 }
 

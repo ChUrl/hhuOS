@@ -129,6 +129,11 @@ private:
     static void populateIoApics();
 
     /**
+     * @brief Make sure that the local APIC ids are contiguous.
+     */
+    static void ensureContiguousCpuIds();
+
+    /**
      * @brief Prepare the memory regions used by the AP's stacks.
      */
     static void allocateSmpStacks();
