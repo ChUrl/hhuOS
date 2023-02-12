@@ -263,8 +263,6 @@ private:
     static const Rsdp *rsdp;
     static const SdtHeader **tables;
     static uint32_t numTables;
-
-    static const constexpr uint8_t SIGNATURE_LENGTH = 8;
 };
 
 template<typename T>

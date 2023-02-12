@@ -19,58 +19,58 @@
 
 namespace Device {
 
-void Pic::allow(InterruptRequest interruptSource) {
-    auto &port = getDataPort(interruptSource);
-    uint8_t mask = getMask(interruptSource);
+void Pic::allow(InterruptRequest interrupt) {
+    auto &port = getDataPort(interrupt);
+    uint8_t mask = getMask(interrupt);
 
     port.writeByte(port.readByte() & ~mask);
 }
 
-void Pic::forbid(InterruptRequest interruptSource) {
-    auto &port = getDataPort(interruptSource);
-    uint8_t mask = getMask(interruptSource);
+void Pic::forbid(InterruptRequest interrupt) {
+    auto &port = getDataPort(interrupt);
+    uint8_t mask = getMask(interrupt);
 
     port.writeByte(port.readByte() | mask);
 }
 
-bool Pic::status(InterruptRequest interruptSource) {
-    const IoPort &port = getDataPort(interruptSource);
-    uint8_t mask = getMask(interruptSource);
+bool Pic::status(InterruptRequest interrupt) {
+    const IoPort &port = getDataPort(interrupt);
+    uint8_t mask = getMask(interrupt);
 
     return port.readByte() & mask;
 }
 
-void Pic::sendEndOfInterrupt(InterruptRequest interruptSource) {
-    if (interruptSource >= InterruptRequest::RTC) {
+void Pic::sendEndOfInterrupt(InterruptRequest interrupt) {
+    if (interrupt >= InterruptRequest::RTC) {
         slaveCommandPort.writeByte(EOI);
     }
 
     masterCommandPort.writeByte(EOI);
 }
 
-const IoPort &Pic::getDataPort(InterruptRequest interruptSource) {
-    if (interruptSource >= InterruptRequest::RTC) {
+const IoPort &Pic::getDataPort(InterruptRequest interrupt) {
+    if (interrupt >= InterruptRequest::RTC) {
         return slaveDataPort;
     }
 
     return masterDataPort;
 }
 
-uint8_t Pic::getMask(InterruptRequest interruptSource) {
-    if (interruptSource >= InterruptRequest::RTC) {
-        return (uint8_t) (1 << ((uint8_t) interruptSource - 8));
+uint8_t Pic::getMask(InterruptRequest interrupt) {
+    if (interrupt >= InterruptRequest::RTC) {
+        return (uint8_t) (1 << ((uint8_t)interrupt - 8));
     }
 
-    return (uint8_t) (1 << (uint8_t) interruptSource);
+    return (uint8_t) (1 << (uint8_t)interrupt);
 }
 
-bool Pic::isSpurious(InterruptRequest interruptSource) {
-    if (interruptSource == InterruptRequest::LPT1) {
+bool Pic::isSpurious(InterruptRequest interrupt) {
+    if (interrupt == InterruptRequest::LPT1) {
         masterCommandPort.writeByte(READ_ISR);
         return (masterCommandPort.readByte() & SPURIOUS_INTERRUPT) == 0;
     }
 
-    if (interruptSource == InterruptRequest::SECONDARY_ATA) {
+    if (interrupt == InterruptRequest::SECONDARY_ATA) {
         slaveCommandPort.writeByte(READ_ISR);
         if ((slaveCommandPort.readByte() & SPURIOUS_INTERRUPT) == 0) {
             sendEndOfInterrupt(InterruptRequest::CASCADE);

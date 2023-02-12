@@ -59,13 +59,13 @@ public:
 
     void dispatchInterrupt(const InterruptFrame &frame);
 
-    void allowHardwareInterrupt(Device::InterruptRequest interruptRequest);
+    void allowHardwareInterrupt(Device::InterruptRequest interrupt);
 
-    void forbidHardwareInterrupt(Device::InterruptRequest interruptRequest);
+    void forbidHardwareInterrupt(Device::InterruptRequest interrupt);
 
-    void sendEndOfInterrupt(InterruptVector interruptVector);
+    void sendEndOfInterrupt(InterruptVector interrupt);
 
-    bool checkSpuriousInterrupt(InterruptVector interruptVector);
+    bool checkSpuriousInterrupt(InterruptVector interrupt);
 
     static const constexpr uint8_t SERVICE_ID = 1;
 

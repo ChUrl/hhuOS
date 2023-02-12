@@ -30,40 +30,40 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
     dispatcher.dispatch(frame);
 }
 
-void InterruptService::allowHardwareInterrupt(Device::InterruptRequest interruptRequest) {
+void InterruptService::allowHardwareInterrupt(Device::InterruptRequest interrupt) {
     if (Device::Apic::isInitialized()) {
-        Device::Apic::allow(interruptRequest);
+        Device::Apic::allow(interrupt);
     } else {
-        pic.allow(interruptRequest);
+        pic.allow(interrupt);
     }
 }
 
-void InterruptService::forbidHardwareInterrupt(Device::InterruptRequest interruptRequest) {
+void InterruptService::forbidHardwareInterrupt(Device::InterruptRequest interrupt) {
     if (Device::Apic::isInitialized()) {
-        Device::Apic::forbid(interruptRequest);
+        Device::Apic::forbid(interrupt);
     } else {
-        pic.forbid(interruptRequest);
+        pic.forbid(interrupt);
     }
 }
 
-void InterruptService::sendEndOfInterrupt(InterruptVector interruptVector) {
+void InterruptService::sendEndOfInterrupt(InterruptVector interrupt) {
     if (Device::Apic::isInitialized()) {
-        Device::Apic::sendEndOfInterrupt(interruptVector);
-    } else if (interruptVector - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
-        pic.sendEndOfInterrupt(static_cast<Device::InterruptRequest>(interruptVector - 32));
+        Device::Apic::sendEndOfInterrupt(interrupt);
+    } else if (interrupt - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
+        pic.sendEndOfInterrupt(static_cast<Device::InterruptRequest>(interrupt - 32));
     }
 }
 
-bool InterruptService::checkSpuriousInterrupt(InterruptVector interruptVector) {
+bool InterruptService::checkSpuriousInterrupt(InterruptVector interrupt) {
     if (Device::Apic::isInitialized()) {
-        return interruptVector == InterruptVector::SPURIOUS;
+        return interrupt == InterruptVector::SPURIOUS;
     }
 
-    if (interruptVector != InterruptVector::LPT1 && interruptVector != InterruptVector::SECONDARY_ATA) {
+    if (interrupt != InterruptVector::LPT1 && interrupt != InterruptVector::SECONDARY_ATA) {
         return false;
     }
 
-    return pic.isSpurious(static_cast<Device::InterruptRequest>(interruptVector - 32));
+    return pic.isSpurious(static_cast<Device::InterruptRequest>(interrupt - 32));
 }
 
 }

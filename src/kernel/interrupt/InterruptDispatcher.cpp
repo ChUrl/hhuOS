@@ -36,7 +36,7 @@
 
 namespace Kernel {
 
-InterruptDispatcher::InterruptDispatcher() : handler(new Util::List<InterruptHandler*>*[256]{}) {}
+InterruptDispatcher::InterruptDispatcher() : handler(new Util::List<InterruptHandler *> *[256]{}) {}
 
 void InterruptDispatcher::dispatch(const InterruptFrame &frame) {
     auto &interruptService = System::getService<InterruptService>();

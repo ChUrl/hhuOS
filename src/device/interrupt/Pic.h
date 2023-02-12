@@ -59,58 +59,58 @@ public:
      * Unmask an interrupt number in the corresponding PIC. If this is done,
      * all interrupts with this number will be passed to the CPU.
      *
-     * @param interruptSource The number of the interrupt to activated
+     * @param interrupt The number of the interrupt to activated
      */
-    void allow(InterruptRequest interruptSource);
+    void allow(InterruptRequest interrupt);
 
     /**
      * Forbid an interrupt. If this is done, the interrupt is masked out
      * and every interrupt with this number that is thrown will be
      * suppressed and not arrive the CPU.
      *
-     * @param interruptSource The number of the interrupt to deactivate
+     * @param interrupt The number of the interrupt to deactivate
      */
-    void forbid(InterruptRequest interruptSource);
+    void forbid(InterruptRequest interrupt);
 
     /**
      * Get the state of this interrupt - whether it is masked out or not.
      *
-     * @param interruptSource The number of the interrupt
+     * @param interrupt The number of the interrupt
      * @return true, if the interrupt is disabled
      */
-    bool status(InterruptRequest interruptSource);
+    bool status(InterruptRequest interrupt);
 
     /**
      * Send an end of interrupt signal to the corresponding PIC.
      *
-     * @param interruptSource The number of the interrupt for which to send an EOI
+     * @param interrupt The number of the interrupt for which to send an EOI
      */
-    void sendEndOfInterrupt(InterruptRequest interruptSource);
+    void sendEndOfInterrupt(InterruptRequest interrupt);
 
     /**
      * Check if a spurious interrupt has occurred.
      *
      * @return true, if a spurious interrupt has occurred
      */
-    bool isSpurious(InterruptRequest interruptSource);
+    bool isSpurious(InterruptRequest interrupt);
 
 private:
 
     /**
      * Get the PIC's data port for the specified interrupt.
      *
-     * @param interruptSource The interrupt
+     * @param interrupt The interrupt
      * @return The corresponding PIC's data port
      */
-    const IoPort& getDataPort(InterruptRequest interruptSource);
+    const IoPort& getDataPort(InterruptRequest interrupt);
 
     /**
      * Get the mask for the specified interrupt.
      *
-     * @param interruptSource The interrupt
+     * @param interrupt The interrupt
      * @return The interrupt's mask
      */
-    static uint8_t getMask(InterruptRequest interruptSource);
+    static uint8_t getMask(InterruptRequest interrupt);
 
 private:
 

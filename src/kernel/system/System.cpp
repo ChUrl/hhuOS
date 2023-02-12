@@ -20,6 +20,7 @@
 #include "device/cpu/Cpu.h"
 #include "device/time/Rtc.h"
 #include "device/time/Pit.h"
+#include "device/interrupt/apic/Apic.h"
 #include "kernel/paging/MemoryLayout.h"
 #include "kernel/service/TimeService.h"
 #include "kernel/memory/PagingAreaManagerRefillRunnable.h"
@@ -33,7 +34,6 @@
 #include "device/power/acpi/Acpi.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
 #include "kernel/interrupt/InterruptHandler.h"
-#include "device/interrupt/apic/Apic.h"
 #include "kernel/log/Logger.h"
 #include "kernel/memory/PageFrameAllocator.h"
 #include "kernel/memory/PagingAreaManager.h"
@@ -50,7 +50,6 @@
 #include "lib/util/collection/Array.h"
 #include "lib/util/base/FreeListMemoryManager.h"
 #include "lib/util/base/HeapMemoryManager.h"
-#include "lib/util/async/Thread.h"
 
 namespace Kernel {
 class Service;
@@ -168,7 +167,6 @@ void System::initializeSystem() {
 
     // Protect kernel code
     kernelAddressSpace->getPageDirectory().unsetPageFlags(___WRITE_PROTECTED_START__, ___WRITE_PROTECTED_END__, Paging::READ_WRITE);
-
 }
 
 void *System::allocateEarlyMemory(uint32_t size) {
