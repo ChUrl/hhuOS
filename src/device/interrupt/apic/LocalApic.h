@@ -310,16 +310,25 @@ private:
     // static ModelSpecificRegister getMSR(Register reg); // Used for x2Apic mode
 
 private:
-    static bool bspInitialized;                         ///< @brief Indicates if LocalApic::initializeBsp() has been called.
-    bool initialized = false;                           ///< @brief Indicates if LocalApic::initializeAp() has been called on an instance.
-    LocalApicInformation info;                          ///< @brief Information about a single local APIC.
-    static LocalApicPlatform *platform;                 ///< @brief Information about all local APICs.
+    static bool bspInitialized; ///< @brief Indicates if LocalApic::initializeBsp() has been called.
+    bool initialized = false;   ///< @brief Indicates if LocalApic::initializeAp() has been called on an instance.
+
+    LocalApicInformation info;          ///< @brief Information about a single local APIC.
+    static LocalApicPlatform *platform; ///< @brief Information about all local APICs.
+
     static const ModelSpecificRegister ia32ApicBaseMsr; ///< @brief Core unique MSR (every core can only address its own MSR).
-    static const Register lintRegs[7];                  ///< @brief Local interrupt to register offset translation
     static const IoPort registerSelectorPort;           ///< @brief Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1.
     static const IoPort registerDataPort;               ///< @brief Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1.
 
     static const constexpr char *lintNames[7] = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
+    static const constexpr Register lintRegs[7] = {static_cast<Register>(0x2F0),
+                                                   static_cast<Register>(0x320),
+                                                   static_cast<Register>(0x330),
+                                                   static_cast<Register>(0x340),
+                                                   static_cast<Register>(0x350),
+                                                   static_cast<Register>(0x360),
+                                                   static_cast<Register>(0x370)}; ///< @brief Local interrupt to register offset translation
+
     static Kernel::Logger log;
 };
 

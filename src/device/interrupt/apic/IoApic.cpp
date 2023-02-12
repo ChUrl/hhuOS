@@ -22,7 +22,7 @@ void IoApic::initialize() {
     platform->directEoiSupported = platform->version >= 0x20;
 
     // With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
-    // With ICH5 (and other ICHs?) it is always 24 (also ICH5 only has 1 IO APIC, as other  consumer hardware)
+    // With ICH5 and other ICHs it is always 24 (ICH5 only has 1 IO APIC, as other consumer hardware)
     info.gsiMax = static_cast<Kernel::GlobalSystemInterrupt>(info.gsiBase + (readIndirectRegister(VER) >> 16));
     if (info.gsiMax > platform->globalMaxGsi) {
         platform->globalMaxGsi = info.gsiMax;
@@ -87,7 +87,7 @@ void IoApic::sendEndOfInterrupt(Kernel::InterruptVector vector, Kernel::GlobalSy
 
 void IoApic::ensureValidGsi(Kernel::GlobalSystemInterrupt gsi) const {
     if (gsi < info.gsiBase || gsi > info.gsiMax) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI not handled by this IO APIC!");
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI not handled by this I/O APIC!");
     }
 }
 
@@ -145,7 +145,7 @@ void IoApic::dumpREDTBL() {
     log.info("Redirection Table (I/O APIC Id: [%d]):", info.id);
     for (uint32_t gsi = info.gsiBase; gsi < info.gsiMax; ++gsi) {
         const REDTBLEntry redtblEntry = readREDTBL(static_cast<Kernel::GlobalSystemInterrupt>(gsi));
-        log.debug(
+        log.info(
           "- Interrupt [%d]: (Vector: [0x%x], Masked: [%d], Destination: [%d], DeliveryMode: [0b%b], DestinationMode: [%s], PinPolarity: [%s], TriggerMode: [%s])",
           gsi,
           static_cast<uint8_t>(redtblEntry.vector),

@@ -13,7 +13,7 @@ bool Apic::bspTimerInitialized = false;
 Util::ArrayList<LocalApic *> Apic::localApics;
 Util::ArrayList<IoApic *> Apic::ioApics;
 Util::ArrayList<ApicTimer *> Apic::timers;
-ApicErrorHandler *Apic::errorHandler = nullptr;
+ApicErrorHandler Apic::errorHandler = ApicErrorHandler();
 Kernel::Logger Apic::log = Kernel::Logger::get("Apic");
 
 bool Apic::isSupported() {
@@ -115,7 +115,9 @@ void Apic::initialize() {
         ioApic->initialize();
     }
 
-    initializeErrorHandling();
+    // We only require one error handler, as every AP can only access its own local APIC's error register
+    errorHandler.plugin();     // Does not allow the interrupt!
+    initializeErrorHandling(); // Allows the interrupt for this AP
 
     if constexpr (HHUOS_APIC_ENABLE_DEBUG) {
         dumpDebugInfo();
@@ -133,8 +135,7 @@ void Device::Apic::initializeSmp() {
     if (getCpuCount() > 64) {
         // This limit is pretty arbitrary, but the runningAPs bitmap currently only has 64 bits (in Smp.h).
         // Technically xApic supports 8-bit CPU ids, x2Apic even more (32-bit CPU ids).
-        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION,
-                                        "CPUs with more than 8 cores are not supported!");
+        Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "CPUs with more than 64 cores are not supported!");
     }
 
     // Verify that the ids are contiguous. We don't take assumptions about the order of appearance though.
@@ -257,8 +258,7 @@ void Device::Apic::copySmpStartupCode() {
     boot_ap_entry = reinterpret_cast<uint32_t>(&smpEntry);
 
     // Copy the startup routine and prepared variables to the identity mapped page
-    LocalApic::log.debug("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)",
-                         reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
+    log.debug("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)", reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
 }
 
@@ -289,8 +289,7 @@ void Apic::initializeTimer() {
     for (uint32_t i = 0; i < timers.size(); ++i) {
         ApicTimer *timer = timers.get(i);
         if (timer->cpuId == LocalApic::getId()) {
-            log.warn("APIC timer for CPU [%d] has already been initialized, skipping initialization!", timer->cpuId);
-            return;
+            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC timer for this CPU has already been initialized!");
         }
     }
 
@@ -313,12 +312,6 @@ ApicTimer &Apic::getCurrentTimer() {
 }
 
 void Apic::initializeErrorHandling() {
-    // We only require one instance, as every AP can only access its own local APIC's error register
-    if (errorHandler == nullptr) {
-        errorHandler = new ApicErrorHandler();
-        errorHandler->plugin(); // Does not allow the interrupt!
-    }
-
     // This part needs to be done for each AP
     LocalApic::allow(LocalApic::ERROR);
 }

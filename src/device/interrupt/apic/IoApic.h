@@ -155,7 +155,8 @@ private:
     void writeREDTBL(Kernel::GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl);
 
 private:
-    bool initialized = false;        ///< @brief Indicates if IoApic::initialize() has been called.
+    bool initialized = false; ///< @brief Indicates if IoApic::initialize() has been called.
+
     IoApicInformation info;          ///< @brief Information about a single I/O APIC.
     static IoApicPlatform *platform; ///< @brief Information about all I/O APICs.
 

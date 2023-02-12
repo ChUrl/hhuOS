@@ -57,7 +57,9 @@ void InterruptService::sendEndOfInterrupt(InterruptVector interruptVector) {
 bool InterruptService::checkSpuriousInterrupt(InterruptVector interruptVector) {
     if (Device::Apic::isInitialized()) {
         return interruptVector == InterruptVector::SPURIOUS;
-    } else if (interruptVector != InterruptVector::LPT1 && interruptVector != InterruptVector::SECONDARY_ATA) {
+    }
+
+    if (interruptVector != InterruptVector::LPT1 && interruptVector != InterruptVector::SECONDARY_ATA) {
         return false;
     }
 

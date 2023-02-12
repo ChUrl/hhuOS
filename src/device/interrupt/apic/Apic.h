@@ -135,12 +135,13 @@ private:
     static void dumpDebugInfo();
 
 private:
-    static bool initialized;                        ///< @brief Indicates if Apic::initialize() has been called.
-    static bool bspTimerInitialized;                ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
+    static bool initialized;         ///< @brief Indicates if Apic::initialize() has been called.
+    static bool bspTimerInitialized; ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
+
     static Util::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
     static Util::ArrayList<IoApic *> ioApics;       ///< @brief All IoApic instance..
     static Util::ArrayList<ApicTimer *> timers;     ///< @brief All ApicTimer instances.
-    static ApicErrorHandler *errorHandler;          ///< @brief The interrupt handler that gets triggered on an internal APIC error.
+    static ApicErrorHandler errorHandler;           ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
     static Kernel::Logger log;
 };

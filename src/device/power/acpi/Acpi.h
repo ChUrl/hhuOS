@@ -284,8 +284,7 @@ void Acpi::collectMadtStructures(Util::ArrayList<const T *> *structures, ApicStr
 
         if (header->length == 0) {
             // If this happens there is a bug in this function o_O
-            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE,
-                                            "Acpi::collectMadtStructures(): Header length must not be 0!");
+            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Header length must not be 0!");
         }
 
         if (header->type == type) {

@@ -10,13 +10,6 @@ namespace Device {
 bool LocalApic::bspInitialized = false;
 LocalApicPlatform *LocalApic::platform = nullptr;
 const ModelSpecificRegister LocalApic::ia32ApicBaseMsr = ModelSpecificRegister(0x1B);
-const LocalApic::Register LocalApic::lintRegs[7] = {static_cast<Register>(0x2F0),
-                                                    static_cast<Register>(0x320),
-                                                    static_cast<Register>(0x330),
-                                                    static_cast<Register>(0x340),
-                                                    static_cast<Register>(0x350),
-                                                    static_cast<Register>(0x360),
-                                                    static_cast<Register>(0x370)};
 const IoPort LocalApic::registerSelectorPort = IoPort(0x22);
 const IoPort LocalApic::registerDataPort = IoPort(0x23);
 Kernel::Logger LocalApic::log = Kernel::Logger::get("LocalApic");
@@ -62,8 +55,7 @@ void LocalApic::ensureBspInitialized() {
 
 uint8_t LocalApic::initializeBsp() {
     if (bspInitialized) {
-        log.error("BSP already initialized, skipping initialization!");
-        return getId();
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "BSP already initialized, skipping initialization!");
     }
 
     if (!readBaseMSR().isBSP) {
@@ -253,13 +245,13 @@ void LocalApic::dumpLVT() {
     log.info("Local Vector Table (Local APIC Id: [%d]):", getId());
     for (uint8_t lint = CMCI; lint <= ERROR; ++lint) {
         const LVTEntry lvtEntry = readLVT(static_cast<LocalInterrupt>(lint));
-        log.debug("- Interrupt [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], PinPolarity: [%s], TriggerMode: [%s])",
-                  lintNames[lint],
-                  static_cast<uint8_t>(lvtEntry.vector),
-                  static_cast<uint8_t>(lvtEntry.isMasked),
-                  static_cast<uint8_t>(lvtEntry.deliveryMode),
-                  lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                  lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+        log.info("- Interrupt [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], PinPolarity: [%s], TriggerMode: [%s])",
+                 lintNames[lint],
+                 static_cast<uint8_t>(lvtEntry.vector),
+                 static_cast<uint8_t>(lvtEntry.isMasked),
+                 static_cast<uint8_t>(lvtEntry.deliveryMode),
+                 lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                 lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 }
 
