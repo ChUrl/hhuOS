@@ -25,12 +25,30 @@ class LocalApic {
 
 public:
     /**
+     * @brief Lists the local APIC's local interrupts.
+     *
+     * Every individual local APIC has these, they are completely separate from
+     * the usual (PIC and I/O APIC) hardware interrupt inputs.
+     */
+    enum LocalInterrupt : uint8_t {
+        CMCI = 0,  // Might not exist
+        TIMER = 1, ///< @brief The APIC timer local interrupt
+        THERMAL = 2,
+        PERFORMANCE = 3,
+        LINT0 = 4, ///< @brief Local interrupt 0, used in virtual wire mode
+        LINT1 = 5, ///< @brief Local interrupt 1, used as NMI source
+        ERROR = 6  ///< @brief The APIC error interrupt
+    };
+
+public:
+    /**
      * @brief Constructs a LocalApic instance.
      *
      * @param localApicPlatform General information about the local APICs, parsed from ACPI
      * @param localApicInformation Information about the specific local APIC, parsed from ACPI
      */
-    LocalApic(LocalApicPlatform *localApicPlatform, const LocalApicInformation &&localApicInformation);
+    LocalApic(uint8_t cpuId, uint32_t baseAddress,
+              LocalInterrupt nmiLint, LVTEntry::PinPolarity nmiPolarity, LVTEntry::TriggerMode nmiTrigger);
 
     LocalApic(const LocalApic &copy) = delete;
 
@@ -54,22 +72,6 @@ public:
     static void dumpLVT();
 
 private:
-    /**
-     * @brief Lists the local APIC's local interrupts.
-     *
-     * Every individual local APIC has these, they are completely separate from
-     * the usual (PIC and I/O APIC) hardware interrupt inputs.
-     */
-    enum LocalInterrupt : uint8_t {
-        CMCI = 0,  // Might not exist
-        TIMER = 1, ///< @brief The APIC timer local interrupt
-        THERMAL = 2,
-        PERFORMANCE = 3,
-        LINT0 = 4, ///< @brief Local interrupt 0, used in virtual wire mode
-        LINT1 = 5, ///< @brief Local interrupt 1, used as NMI source
-        ERROR = 6  ///< @brief The APIC error interrupt
-    };
-
     /**
      * @brief Lists the offsets, relative to the APIC base address, for MMIO register access.
      *
@@ -118,8 +120,7 @@ private:
      * @brief Get the id of the local APIC belonging to the current CPU.
      *
      * Can be used to determine what CPU is currently executing the calling code in SMP systems.
-     * To get the id of a LocalApic instance, access the "id" field of the contained
-     * LocalApicInformation structure.
+     * To get the id of a LocalApic instance, use the "cpuId" field.
      */
     [[nodiscard]] static uint8_t getId();
 
@@ -141,18 +142,6 @@ private:
      * The IMCR is only available on some hardware, not in QEMU.
      */
     static void disablePicMode();
-
-    /**
-     * @brief Allocate the memory region used to access the local APIC's registers in xApic mode.
-     *
-     * This memory is never freed, since the APIC can't be disabled in this implementation.
-     */
-    static void initializeXApicMMIO();
-
-    /**
-     * @brief Ensure that the local APIC's MMIO region has been initialized when in xApic mode.
-     */
-    static void ensureRegisterAccess();
 
     /**
      * @brief Send an INIT IPI to an AP.
@@ -290,18 +279,17 @@ private:
      */
     static void writeICR(const ICREntry &icrEntry); // Issue IPIs
 
-    // static ModelSpecificRegister getMSR(Register reg); // Used for x2Apic mode
-
 private:
-    LocalApicInformation info;          ///< @brief Information about a single local APIC.
-    static LocalApicPlatform *platform; ///< @brief Information about all local APICs.
+    uint8_t cpuId;               ///< @brief The CPU core this instance belongs to, LocalApic::getId() only returns the current AP's id!
+    static uint32_t baseAddress; ///< @brief The physical address where the local APIC MMIO region is located.
+    static uint32_t mmioAddress; ///< @brief The virtual address used to access registers in xApic mode.
+
+    LocalInterrupt nmiLint;            ///< @brief The local interrupt pin that acts as NMI source.
+    LVTEntry::PinPolarity nmiPolarity; ///< @brief The NMI source's pin polarity.
+    LVTEntry::TriggerMode nmiTrigger;  ///< @brief The NMI source's trigger mode.
 
     static const ModelSpecificRegister ia32ApicBaseMsr; ///< @brief Core unique MSR (every core can only address its own MSR).
-    static const IoPort registerSelectorPort;           ///< @brief Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1.
-    static const IoPort registerDataPort;               ///< @brief Used for the IMCR, MultiProcessor specification, sec. 3.6.2.1.
-
-    static const Util::Array<const char *> lintNames;
-    static const Util::Array<Register> lintRegs; ///< @brief Local interrupt to register offset translation
+    static const Util::Array<Register> lintRegs;        ///< @brief Local interrupt to register offset lookup.
 
     static Kernel::Logger log;
 };

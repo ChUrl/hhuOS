@@ -9,35 +9,6 @@
 namespace Device {
 
 /**
- * @brief Information about a single local APIC.
- */
-struct LocalApicInformation {
-    uint8_t id;      ///< @brief The local APIC id, in SMP systems this is also the processor id
-    bool enabled;    ///< @brief If false, this processor can't be used by the OS
-    uint8_t nmiLint; ///< @brief Local APIC pin number used as NMI source, usually 0x01
-    LVTEntry::PinPolarity nmiPolarity;
-    LVTEntry::TriggerMode nmiTriggerMode;
-
-    LocalApicInformation(const Acpi::ProcessorLocalApic *processorLocalApic, const Acpi::LocalApicNmi *localApicNmi);
-
-    ~LocalApicInformation() = default;
-};
-
-/**
- * @brief Information about all local APICs.
- */
-struct LocalApicPlatform {
-    bool isX2Apic = false;       ///< @brief The APIC architecture used (xApic or x2Apic)
-    uint32_t physAddress;        ///< @brief The physical MMIO address used for register access in xApic mode
-    uint32_t virtAddress = 0;    ///< @brief The virtual MMIO address used for register access in xApic mode
-    uint32_t msrAddress = 0x800; ///< @brief The MSR base address used for register access in x2Apic mode
-
-    explicit LocalApicPlatform(uint32_t physAddress);
-
-    ~LocalApicPlatform() = default;
-};
-
-/**
  * @brief Information about a single IO APIC.
  */
 struct IoApicInformation {

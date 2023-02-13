@@ -4,15 +4,6 @@ namespace Device {
 
 // This is so ugly, do I change it?
 
-LocalApicInformation::LocalApicInformation(const Acpi::ProcessorLocalApic *processorLocalApic, const Acpi::LocalApicNmi *localApicNmi)
-  : id(processorLocalApic->apicId),
-    enabled(processorLocalApic->flags & 0x1),
-    nmiLint(localApicNmi->localApicLint),
-    nmiPolarity(localApicNmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTEntry::PinPolarity::HIGH : LVTEntry::PinPolarity::LOW),
-    nmiTriggerMode(localApicNmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTEntry::TriggerMode::EDGE : LVTEntry::TriggerMode::LEVEL) {}
-
-LocalApicPlatform::LocalApicPlatform(uint32_t physAddres) : physAddress(physAddres) {}
-
 IoApicInformation::IoApicInformation(const Acpi::IoApic *ioApic, const Acpi::NmiSource *nmiSource)
   : id(ioApic->ioApicId),
     physAddress(ioApic->ioApicAddress),

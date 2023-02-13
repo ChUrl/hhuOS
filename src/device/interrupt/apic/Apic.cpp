@@ -80,13 +80,13 @@ void Device::Apic::initializeSmp() {
     // https://wiki.osdev.org/Symmetric_Multiprocessing#Initialisation_of_an_old_SMP_system
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
         LocalApic *localApic = localApics.get(i);
-        if (localApic->info.id == LocalApic::getId() || !localApic->info.enabled) {
+        if (localApic->cpuId == LocalApic::getId()) {
             // Skip this AP if it's the BSP or ACPI reports it as disabled
             continue;
         }
 
         LocalApic::clearErrors();
-        LocalApic::sendIpiInit(localApic->info.id, ICREntry::Level::ASSERT);
+        LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT);
         // The deassert is required for CPUs with a discrete APIC, these do not support the STARTUP IPI,
         // and this implementation only supports xApic anyway, so this is disabled.
         // LocalApic::sendIpiInit(localApic->localInfo.id, ICREntry::Level::DEASSERT);
@@ -96,15 +96,15 @@ void Device::Apic::initializeSmp() {
         for (uint32_t j = 0; j < 100000; ++j) {}
 
         LocalApic::clearErrors();
-        LocalApic::sendIpiStartup(localApic->info.id, apStartupAddress);
+        LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
         // It is not clear if the second one is required or not, so just send one.
         LocalApic::clearErrors();
-        LocalApic::sendIpiStartup(localApic->info.id, apStartupAddress);
+        LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
 
         // Wait until the AP is running, so we can continue to the next one.
         // Because we initialize the APs one at a time, runningAPs is not synchronized.
         // If the AP initialization fails (and the system doesn't crash), this will lock the BSP...
-        while (!(runningAPs & (1 << localApic->info.id))) {}
+        while (!(runningAPs & (1 << localApic->cpuId))) {}
     }
 
     // Free the startup routine page and the stackpointer array, now that all APs are running
@@ -125,7 +125,7 @@ uint8_t Apic::getCpuCount() {
 LocalApic &Apic::getCurrentLocalApic() {
     for (uint32_t i = 0; i < localApics.size(); ++i) {
         LocalApic *localApic = localApics.get(i);
-        if (localApic->info.id == LocalApic::getId()) {
+        if (localApic->cpuId == LocalApic::getId()) {
             return *localApic;
         }
     }
@@ -222,9 +222,14 @@ void Apic::populateLocalApics() {
     }
 
     // Create LocalApic instances
-    auto *localPlatform = new LocalApicPlatform(madt->localApicAddress);
     for (const auto *localInfo : acpiProcessorLocalApics) {
-        // Find the NMI belonging to the current localInfo
+        if (!(localInfo->flags & 0x1)) {
+            // When ACPI reports this local APIC as disabled, it may not be used by the OS.
+            // ACPI 1.0 specification, sec. 5.2.8.1
+            continue;
+        }
+
+        // Find the NMI belonging to the current localInfo, every local APIC should have exactly one
         const Acpi::LocalApicNmi *nmiInfo = nullptr;
         for (const auto *localNmi : acpiLocalApicNmis) {
             // 0xFF means all APs
@@ -233,17 +238,14 @@ void Apic::populateLocalApics() {
                 break;
             }
         }
-
         if (nmiInfo == nullptr) {
-            log.warn("Couldn't find NMI for local APIC, skipping initialization!");
-            for (auto *localApic : localApics) {
-                delete localApic;
-            }
-            localApics.clear();
-            return;
+            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find NMI for local APIC, skipping initialization!");
         }
 
-        localApics.add(new LocalApic(localPlatform, LocalApicInformation(localInfo, nmiInfo)));
+        localApics.add(new LocalApic(localInfo->apicId, madt->localApicAddress,
+                                     nmiInfo->localApicLint == 0 ? LocalApic::LINT0 : LocalApic::LINT1,
+                                     nmiInfo->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTEntry::PinPolarity::HIGH : LVTEntry::PinPolarity::LOW,
+                                     nmiInfo->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTEntry::TriggerMode::EDGE : LVTEntry::TriggerMode::LEVEL));
     }
 }
 
@@ -296,7 +298,7 @@ void Apic::ensureContiguousCpuIds() {
     uint64_t idBitmap = 0;
     for (uint32_t i = 0; i < localApics.size(); ++i) {
         LocalApic *localApic = localApics.get(i);
-        idBitmap |= (1 << localApic->info.id);
+        idBitmap |= (1 << localApic->cpuId);
     }
     const uint64_t idBitmapMask = static_cast<uint64_t>(-1) >> (64 - localApics.size());
     if (idBitmap != idBitmapMask) {
@@ -384,24 +386,21 @@ IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
 }
 
 void Apic::dumpDebugInfo() {
-    log.info("Local APIC supported modes: [%s%s] (Current mode: [%s])",
+    log.info("Local APIC supported modes: [%s%s] (Current mode: [xApic])",
              LocalApic::supportsXApic() ? "xApic" : "None",
-             LocalApic::supportsX2Apic() ? ", x2Apic" : "",
-             LocalApic::platform->isX2Apic ? "x2Apic" : "xApic");
+             LocalApic::supportsX2Apic() ? ", x2Apic" : "");
     log.info("Local APIC version: [0x%x]", LocalApic::getVersion());
     log.info("Local APIC xApic MMIO: ([0x%x] (phys) -> [0x%x] (virt))",
-             LocalApic::platform->physAddress,
-             LocalApic::platform->virtAddress);
-    log.info("Local APIC x2Apic MSR base: [0x%x]", LocalApic::platform->msrAddress);
+             LocalApic::baseAddress,
+             LocalApic::mmioAddress);
     log.info("Local APICs:");
     for (uint32_t i = 0; i < localApics.size(); ++i) {
         LocalApic *localApic = localApics.get(i);
-        log.info("- Id: [0x%x], Enabled: [%d], NMI: (LINT: [%d], Polarity: [%s], TriggerMode: [%s])",
-                 localApic->info.id,
-                 static_cast<int>(localApic->info.enabled),
-                 localApic->info.nmiLint,
-                 localApic->info.nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                 localApic->info.nmiTriggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+        log.info("- Id: [0x%x], NMI: (LINT: [%d], Polarity: [%s], TriggerMode: [%s])",
+                 localApic->cpuId,
+                 localApic->nmiLint,
+                 localApic->nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                 localApic->nmiTrigger == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
     LocalApic::dumpLVT();
 

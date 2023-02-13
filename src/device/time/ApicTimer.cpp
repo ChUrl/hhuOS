@@ -12,8 +12,7 @@ uint32_t ApicTimer::yieldInt = 0;
 uint32_t ApicTimer::counter = 0;
 Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
-ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval)
-  : cpuId(LocalApic::getId()) {
+ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : cpuId(LocalApic::getId()) {
     if (timerInterval == 0) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "APIC timer interval can't be 0!");
     }
