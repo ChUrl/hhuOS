@@ -10,6 +10,7 @@ Kernel::Logger ApicErrorHandler::log = Kernel::Logger::get("Apic Error Handler")
 void ApicErrorHandler::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptVector::ERROR, *this);
+    LocalApic::clearErrors(); // Arm the Error interrupt
 }
 
 void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {
@@ -47,7 +48,7 @@ void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {
 
     log.error("Local APIC on core [%d] encountered error!", LocalApic::getId());
 
-    // Clear errors
+    // Clear errors, also arm the interrupt again
     LocalApic::clearErrors();
 }
 
