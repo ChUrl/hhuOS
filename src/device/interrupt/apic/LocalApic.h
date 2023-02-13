@@ -1,7 +1,6 @@
 #ifndef __LAPIC_include__
 #define __LAPIC_include__
 
-#include "ApicAcpiInterface.h"
 #include "ApicRegisters.h"
 #include "device/cpu/IoPort.h"
 #include "device/cpu/ModelSpecificRegister.h"
@@ -41,35 +40,9 @@ public:
     };
 
 public:
-    /**
-     * @brief Constructs a LocalApic instance.
-     *
-     * @param localApicPlatform General information about the local APICs, parsed from ACPI
-     * @param localApicInformation Information about the specific local APIC, parsed from ACPI
-     */
-    LocalApic(uint8_t cpuId, uint32_t baseAddress,
-              LocalInterrupt nmiLint, LVTEntry::PinPolarity nmiPolarity, LVTEntry::TriggerMode nmiTrigger);
-
     LocalApic(const LocalApic &copy) = delete;
 
     LocalApic &operator=(const LocalApic &copy) = delete;
-
-    ~LocalApic() = default;
-
-    /**
-     * @brief Initialize LVT, SVR and TPR of the executing core's local APIC.
-     *
-     * The local APIC initialization consists of multiple steps:
-     * 1. The BSP calls LocalApic::enableXApicMode(), to set up the system for local APIC initialization.
-     * 2. The BSP calls LocalApic::initialize(), to complete the BSP's local APIC initialization.
-     * 3. The APs are booted up.
-     * 4. Every AP calls LocalApic::initialize() individually.
-     *
-     * This function must not be called before LocalApic::enableXApicMode().
-     */
-    void initialize() const;
-
-    static void dumpLVT();
 
 private:
     /**
@@ -103,6 +76,17 @@ private:
 
 private:
     /**
+     * @brief Constructs a LocalApic instance.
+     *
+     * @param localApicPlatform General information about the local APICs, parsed from ACPI
+     * @param localApicInformation Information about the specific local APIC, parsed from ACPI
+     */
+    LocalApic(uint8_t cpuId, uint32_t baseAddress,
+              LocalInterrupt nmiLint, LVTEntry::PinPolarity nmiPolarity, LVTEntry::TriggerMode nmiTrigger);
+
+    ~LocalApic() = default;
+
+    /**
      * @brief Check if the local APIC supports xApic mode (xApic uses MMIO-based register access)
      *
      * Determined using CPUID.
@@ -130,18 +114,24 @@ private:
     static uint8_t getVersion();
 
     /**
+     * @brief Initialize LVT, SVR and TPR of the executing core's local APIC.
+     *
+     * The local APIC initialization consists of multiple steps:
+     * 1. The BSP calls LocalApic::enableXApicMode(), to set up the system for local APIC initialization.
+     * 2. The BSP calls LocalApic::initialize(), to complete the BSP's local APIC initialization.
+     * 3. The APs are booted up.
+     * 4. Every AP calls LocalApic::initialize() individually.
+     *
+     * This function must not be called before LocalApic::enableXApicMode().
+     */
+    void initialize() const;
+
+    /**
      * @brief Prepare the BSP for local APIC initialization.
      *
      * Only has to be called once, not once per AP.
      */
     static void enableXApicMode();
-
-    /**
-     * @brief Set the IMCR to disconnect the PIC from the CPU.
-     *
-     * The IMCR is only available on some hardware, not in QEMU.
-     */
-    static void disablePicMode();
 
     /**
      * @brief Send an INIT IPI to an AP.
@@ -209,6 +199,8 @@ private:
      * Vector numbers are set to InterruptVector equivalents.
      */
     static void initializeLVT();
+
+    static void dumpLVT();
 
     // Reading and writing local APIC's registers parses the read/written values to/from
     // types from ApicRegisterInterface. Only registers of the current CPU will be affected.

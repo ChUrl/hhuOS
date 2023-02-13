@@ -9,9 +9,7 @@ namespace Device {
 
 uint32_t LocalApic::baseAddress = 0;
 uint32_t LocalApic::mmioAddress = 0;
-
 const ModelSpecificRegister LocalApic::ia32ApicBaseMsr = ModelSpecificRegister(0x1B);
-
 const Util::Array<LocalApic::Register> LocalApic::lintRegs = {static_cast<Register>(0x2F0),
                                                               static_cast<Register>(0x320),
                                                               static_cast<Register>(0x330),
@@ -56,36 +54,6 @@ uint8_t LocalApic::getVersion() {
     return readDoubleWord(VER) & 0xFF;
 }
 
-void LocalApic::enableXApicMode() {
-    // Mask all PIC interrupts that have been enabled previously. After the APIC has been initialized, the
-    // InterruptService only reaches the I/O APIC's REDTBL registers.
-    // At this point, no PIC interrupts should be unmasked, plugging in interrupt handlers should
-    // be done after the APIC is initialized!
-    // Otherwise, these would be "plugged out" here.
-    auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
-    for (uint8_t i = 0; i < 16; ++i) {
-        interruptService.forbidHardwareInterrupt(static_cast<InterruptRequest>(i));
-    }
-
-    disablePicMode(); // Physically connect the APIC to the BSP, just in case the IMCR actually exists
-
-    // The memory allocated here is never freed, because this implementation does not support
-    // disabling the APIC after enabling it.
-    // If this is supposed to be freed, the last LocalApic instance has to do it.
-    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(baseAddress, Util::PAGESIZE);
-
-    // Account for possible misalignment, as mapIO returns a page-aligned pointer
-    const uint32_t pageOffset = baseAddress % Util::PAGESIZE;
-    mmioAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
-
-    // This implementation only supports xApic mode. Because the local APIC starts with xApic mode and every AP uses
-    // the same address space, memory allocation only has to be done once and the IA32_APIC_BASE_MSR does not
-    // have to be written. To enable x2Apic mode, every AP would have to set the x2Apic-enable flag in its
-    // IA32_APIC_BASE_MSR, without requiring the MMIO region.
-    log.info("Running in xApic mode.");
-}
-
 void LocalApic::initialize() const {
     if (cpuId != getId()) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "AP can only initialize itself!");
@@ -121,9 +89,36 @@ void LocalApic::initialize() const {
     writeDoubleWord(TPR, 0);
 }
 
-void LocalApic::disablePicMode() {
+void LocalApic::enableXApicMode() {
+    // Mask all PIC interrupts that have been enabled previously. After the APIC has been initialized, the
+    // InterruptService only reaches the I/O APIC's REDTBL registers.
+    // At this point, no PIC interrupts should be unmasked, plugging in interrupt handlers should
+    // be done after the APIC is initialized!
+    // Otherwise, these would be "plugged out" here.
+    auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
+    for (uint8_t i = 0; i < 16; ++i) {
+        interruptService.forbidHardwareInterrupt(static_cast<InterruptRequest>(i));
+    }
+
+    // Physically connect the APIC to the BSP, just in case the IMCR actually exists
     IoPort(0x22).writeByte(0x70); // Select IMCR at 0x70
     IoPort(0x23).writeByte(0x01); // Write IMCR, 0x00 connects PIC to LINT0, 0x01 disconnects
+
+    // The memory allocated here is never freed, because this implementation does not support
+    // disabling the APIC after enabling it.
+    // If this is supposed to be freed, the last LocalApic instance has to do it.
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+    void *virtAddress = memoryService.mapIO(baseAddress, Util::PAGESIZE);
+
+    // Account for possible misalignment, as mapIO returns a page-aligned pointer
+    const uint32_t pageOffset = baseAddress % Util::PAGESIZE;
+    mmioAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
+
+    // This implementation only supports xApic mode. Because the local APIC starts with xApic mode and every AP uses
+    // the same address space, memory allocation only has to be done once and the IA32_APIC_BASE_MSR does not
+    // have to be written. To enable x2Apic mode, every AP would have to set the x2Apic-enable flag in its
+    // IA32_APIC_BASE_MSR, without requiring the MMIO region.
+    log.info("Running in xApic mode.");
 }
 
 void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
@@ -226,7 +221,7 @@ void LocalApic::dumpLVT() {
     log.info("Local Vector Table (Local APIC Id: [%d]):", getId());
     for (uint8_t lint = CMCI; lint <= ERROR; ++lint) {
         const LVTEntry lvtEntry = readLVT(static_cast<LocalInterrupt>(lint));
-        log.info("- Interrupt [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], PinPolarity: [%s], TriggerMode: [%s])",
+        log.info("- Local Interrupt [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], PinPolarity: [%s], TriggerMode: [%s])",
                  lintNames[lint],
                  static_cast<uint8_t>(lvtEntry.vector),
                  static_cast<uint8_t>(lvtEntry.isMasked),
@@ -237,7 +232,7 @@ void LocalApic::dumpLVT() {
 }
 
 BaseMSREntry LocalApic::readBaseMSR() {
-    return static_cast<BaseMSREntry>(ia32ApicBaseMsr.readQuadWord()); // Atmoic read
+    return static_cast<BaseMSREntry>(ia32ApicBaseMsr.readQuadWord()); // Atomic read
 }
 
 void LocalApic::writeBaseMSR(const BaseMSREntry &msrEntry) {

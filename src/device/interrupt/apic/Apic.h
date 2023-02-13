@@ -1,7 +1,6 @@
 #ifndef HHUOS_APIC_H
 #define HHUOS_APIC_H
 
-#include "ApicAcpiInterface.h"
 #include "ApicErrorHandler.h"
 #include "ApicRegisters.h"
 #include "device/time/ApicTimer.h"
@@ -10,7 +9,7 @@
 #include "LocalApic.h"
 
 // Enable of disable the huge APIC debug dump
-const constexpr bool HHUOS_APIC_ENABLE_DEBUG = false;
+const constexpr bool HHUOS_APIC_ENABLE_DEBUG = true;
 
 namespace Device {
 
@@ -29,6 +28,8 @@ public:
     Apic &operator=(const Apic &move) = delete;
 
     ~Apic() = delete; // Static class
+
+    // Initialization stuff
 
     /**
      * @brief Check if the system supports the APIC interrupt architecture.
@@ -56,24 +57,24 @@ public:
     static void initializeSmp();
 
     /**
+     * @brief Initialize the local APIC of the current CPU, called by the APs.
+     */
+    static void initializeCurrentLocalApic();
+
+    /**
      * @brief Get the total CPU count.
      */
     static uint8_t getCpuCount();
 
     /**
-     * @brief Get the LocalApic instance that belongs to the current CPU.
-     */
-    static LocalApic &getCurrentLocalApic();
-
-    /**
      * @brief Check if the BSP's local APIC timer has been initialized.
      */
-    static bool isBspTimerInitialized();
+    static bool isCurrentTimerInitialized();
 
     /**
      * @brief Initialize the current processor's local APIC timer.
      */
-    static void initializeTimer();
+    static void initializeCurrentTimer();
 
     /**
      * @brief Get the ApicTimer instance that belongs to the current CPU.
@@ -83,7 +84,9 @@ public:
     /**
      * @brief Create an ErrorHandler instance (if it hasn't been created yet) and allow the local ERROR interrupt.
      */
-    static void enableErrorHandling();
+    static void enableCurrentErrorHandler();
+
+    // Interrupt controller stuff
 
     /**
      * @brief Unmask an external interrupt for the current CPU.
@@ -146,6 +149,11 @@ private:
     static void copySmpStartupCode();
 
     /**
+     * @brief Get the LocalApic instance that belongs to the current CPU.
+     */
+    static LocalApic &getCurrentLocalApic();
+
+    /**
      * @brief Get the IoApic instance that is responsible for handling a specific GSI.
      */
     static IoApic &getIoApic(Kernel::GlobalSystemInterrupt gsi);
@@ -154,7 +162,6 @@ private:
 
 private:
     static bool initialized;         ///< @brief Indicates if Apic::initialize() has been called.
-    static bool bspTimerInitialized; ///< @brief Indicates if Apic::initializeTimer() has been called at least once.
 
     // Memory allocated for instances contained in these lists is never freed,
     // this implementation doesn't support disabling the APIC at all.

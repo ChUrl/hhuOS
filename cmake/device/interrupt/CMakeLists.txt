@@ -22,5 +22,4 @@ target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/interrupt/apic/LocalApic.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/apic/IoApic.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/apic/ApicRegisters.cpp
-        ${HHUOS_SRC_DIR}/device/interrupt/apic/ApicAcpiInterface.cpp
         ${HHUOS_SRC_DIR}/device/interrupt/apic/ApicErrorHandler.cpp)

@@ -1,6 +1,8 @@
 #ifndef __IOAPIC_include__
 #define __IOAPIC_include__
 
+#include "device/interrupt/InterruptRequest.h"
+#include "kernel/interrupt/GlobalSystemInterrupt.h"
 #include "LocalApic.h"
 
 namespace Device {
@@ -17,23 +19,18 @@ class IoApic {
     friend class Apic; // Apic exposes this class' functionality to the OS
 
 public:
-    /**
-     * @brief Constructs an IoApic instance.
-     *
-     * @param ioApicPlatform General information about the I/O APICs, parsed from ACPI
-     * @param ioApicInformation Information about the specific I/O APIC, parsed from ACPI
-     */
-    IoApic(IoApicPlatform *ioApicPlatform, IoApicInformation &&ioApicInformation);
-
     IoApic(const IoApic &copy) = delete;
 
     IoApic &operator=(const IoApic &copy) = delete;
 
-    ~IoApic() = default;
-
-    void dumpREDTBL();
-
 private:
+    struct IrqOverride {
+        InterruptRequest source;
+        Kernel::GlobalSystemInterrupt target;
+        REDTBLEntry::PinPolarity polarity;
+        REDTBLEntry::TriggerMode trigger;
+    };
+
     /**
      * @brief MMIO accessible registers.
      *
@@ -59,6 +56,21 @@ private:
     };
 
 private:
+    /**
+     * @brief Constructs an IoApic instance.
+     *
+     * @param ioApicPlatform General information about the I/O APICs, parsed from ACPI
+     * @param ioApicInformation Information about the specific I/O APIC, parsed from ACPI
+     */
+    IoApic(uint8_t ioId, uint32_t baseAddress, Kernel::GlobalSystemInterrupt gsiBase);
+
+    ~IoApic() = default;
+
+    /**
+     * @brief Determine the I/O APIC version
+     */
+    uint8_t getVersion();
+
     /**
      * @brief Initialize the I/O APIC.
      */
@@ -100,18 +112,6 @@ private:
     void ensureValidGsi(Kernel::GlobalSystemInterrupt gsi) const;
 
     /**
-     * @brief Ensure that this I/O APIC's MMIO region has been initialized.
-     */
-    void ensureRegisterAccess() const;
-
-    /**
-     * @brief Allocate the memory region used to access this I/O APIC's registers.
-     *
-     * This memory is never freed, since the APIC can't be disabled in this implementation.
-     */
-    void initializeMMIO();
-
-    /**
      * @brief Initialize a this I/O APIC's interrupt redirection table.
      *
      * Marks entries for all supported interrupt inputs of the IO APIC as edge-triggered, active high,
@@ -119,6 +119,33 @@ private:
      * unless trigger mode or pin polarity are overridden. Sets vector numbers to corresponding InterruptVector.
      */
     void initializeREDTBL();
+
+    void dumpREDTBL();
+
+    /**
+     * @brief Configure an NMI for this I/O APIC, if one exists.
+     */
+    void addNonMaskableInterrupt(Kernel::GlobalSystemInterrupt nmiGsi, REDTBLEntry::PinPolarity nmiPolarity,
+                                 REDTBLEntry::TriggerMode nmiTrigger);
+
+    /**
+     * @brief Register a new IRQ override.
+     *
+     * @param source The PC/AT compatible IRQ
+     * @param target The GSI that this system uses instead of the PC/AT compatible IRQ
+     */
+    static void addIrqOverride(InterruptRequest source, Kernel::GlobalSystemInterrupt target,
+                               REDTBLEntry::PinPolarity polarity, REDTBLEntry::TriggerMode trigger);
+
+    /**
+     * @brief Retrieve an IRQ override by supplying the target GSI.
+     */
+    static IrqOverride *getOverride(Kernel::GlobalSystemInterrupt target);
+
+    /**
+     * @brief Retrieve an IRQ override by supplying the source IRQ.
+     */
+    static IrqOverride *getOverride(InterruptRequest source);
 
     /**
      * @brief Read a MMIO register, identified by the offset to the I/O APIC base address.
@@ -157,22 +184,33 @@ private:
     void writeREDTBL(Kernel::GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl);
 
 private:
-    IoApicInformation info;          ///< @brief Information about a single I/O APIC.
-    static IoApicPlatform *platform; ///< @brief Information about all I/O APICs.
+    uint8_t ioId;
+    uint32_t baseAddress;
+    uint32_t mmioAddress = 0;
+    static bool supportsDirectedEOI;
+
+    Kernel::GlobalSystemInterrupt gsiBase;
+    Kernel::GlobalSystemInterrupt gsiMax = static_cast<Kernel::GlobalSystemInterrupt>(0);
+    static Kernel::GlobalSystemInterrupt systemGsiMax;
+
+    bool hasNmi = false;
+    Kernel::GlobalSystemInterrupt nmiGsi = static_cast<Kernel::GlobalSystemInterrupt>(0);
+    REDTBLEntry::PinPolarity nmiPolarity = REDTBLEntry::PinPolarity::HIGH;
+    REDTBLEntry::TriggerMode nmiTrigger = REDTBLEntry::TriggerMode::EDGE;
+
+    static Util::ArrayList<IrqOverride *> irqOverrides;
 
     static Kernel::Logger log;
 };
 
 template<typename T>
 T IoApic::readMMIORegister(Register reg) {
-    ensureRegisterAccess();
-    return *reinterpret_cast<volatile T *>(info.virtAddress + reg);
+    return *reinterpret_cast<volatile T *>(mmioAddress + reg);
 }
 
 template<typename T>
 void IoApic::writeMMIORegister(Register reg, T val) {
-    ensureRegisterAccess();
-    *reinterpret_cast<volatile T *>(info.virtAddress + reg) = val;
+    *reinterpret_cast<volatile T *>(mmioAddress + reg) = val;
 }
 
 } // namespace Device

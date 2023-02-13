@@ -13,13 +13,9 @@ Kernel::Logger log = Kernel::Logger::get("SMP");
     runningAPs |= (1 << apicid); // Mark that this AP is running
 
     // Initialize this AP's APIC
-    Device::Apic::getCurrentLocalApic().initialize();
-    Device::Apic::enableErrorHandling();
-    Device::Apic::initializeTimer();
-
-    if constexpr (HHUOS_APIC_ENABLE_DEBUG) {
-        Device::LocalApic::dumpLVT();
-    }
+    Device::Apic::initializeCurrentLocalApic();
+    Device::Apic::enableCurrentErrorHandler();
+    Device::Apic::initializeCurrentTimer();
 
     // Bore the AP to death
     Device::ApicTimer &timer = Device::Apic::getCurrentTimer();
