@@ -19,11 +19,10 @@ void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {
 
     // Single write before read (read/write register, IA-32 Architecture Manual Chapter 10.5.3)
     LocalApic::writeDoubleWord(LocalApic::ESR, 0);
+    const uint32_t errors = LocalApic::readDoubleWord(LocalApic::ESR);
 
     // If any of these is present is architecture dependent, so instead a unified error message is logged.
     /*
-    uint32_t errors = readDoubleWord(ESR);
-
     // Errors for all CPUs
     bool illegalVectorReceived = errors & (1 << 6);
     bool illegalVectorSent = errors & (1 << 5);
@@ -46,7 +45,7 @@ void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {
     if (sendChecksumError) { log.error("ERROR: Send checksum error!"); }
     */
 
-    log.error("Local APIC on core [%d] encountered error!", LocalApic::getId());
+    log.error("Local APIC on core [%d] encountered error: [0x%x]!", LocalApic::getId(), errors);
 
     // Clear errors, also arm the interrupt again
     LocalApic::clearErrors();
