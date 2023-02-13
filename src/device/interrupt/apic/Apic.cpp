@@ -10,6 +10,7 @@
 namespace Device {
 
 bool Apic::initialized = false;
+bool Apic::smpInitialized = false;
 Util::ArrayList<LocalApic *> Apic::localApics;
 Util::ArrayList<IoApic *> Apic::ioApics;
 Util::ArrayList<ApicTimer *> Apic::timers;
@@ -26,6 +27,10 @@ bool Apic::isInitialized() {
 }
 
 void Apic::initialize() {
+    if (initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
+    }
+
     if (!LocalApic::readBaseMSR().isBSP) {
         // IA32_APIC_BASE_MSR is unique (every core has its own)
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "May only be called by the BSP!");
@@ -66,6 +71,10 @@ bool Apic::isSmpSupported() {
 
 // This works if local APIC IDs are contiguous, but I think they always are
 void Device::Apic::initializeSmp() {
+    if (smpInitialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
+    }
+
     if (getCpuCount() > 64) {
         // This limit is pretty arbitrary, but the runningAPs bitmap currently only has 64 bits (in Smp.h).
         // Technically xApic supports 8-bit CPU ids though, x2Apic even more (32-bit CPU ids).
@@ -112,6 +121,8 @@ void Device::Apic::initializeSmp() {
     memoryService.freeKernelMemory(reinterpret_cast<void *>(apStacks));
     memoryService.freeKernelMemory(reinterpret_cast<void *>(apStartupAddress));
     apStacks = nullptr;
+
+    smpInitialized = true;
 }
 
 void Apic::initializeCurrentLocalApic() {
@@ -149,11 +160,8 @@ bool Apic::isCurrentTimerInitialized() {
 }
 
 void Apic::initializeCurrentTimer() {
-    for (uint32_t i = 0; i < timers.size(); ++i) {
-        ApicTimer *timer = timers.get(i);
-        if (timer->cpuId == LocalApic::getId()) {
-            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC timer for this CPU has already been initialized!");
-        }
+    if (isCurrentTimerInitialized()) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC timer for this CPU has already been initialized!");
     }
 
     // We use multiple instances because each timer has its own timestamp
@@ -179,6 +187,10 @@ void Apic::enableCurrentErrorHandler() {
 }
 
 void Apic::allow(InterruptRequest interruptRequest) {
+    if (!initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
+    }
+
     const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
     const Kernel::GlobalSystemInterrupt gsi = override == nullptr
                                               ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
@@ -188,6 +200,10 @@ void Apic::allow(InterruptRequest interruptRequest) {
 }
 
 void Apic::forbid(InterruptRequest interruptRequest) {
+    if (!initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
+    }
+
     const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
     const Kernel::GlobalSystemInterrupt gsi = override == nullptr
                                               ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
@@ -197,6 +213,10 @@ void Apic::forbid(InterruptRequest interruptRequest) {
 }
 
 bool Apic::status(InterruptRequest interruptRequest) {
+    if (!initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
+    }
+
     const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
     const Kernel::GlobalSystemInterrupt gsi = override == nullptr
                                               ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
@@ -206,6 +226,10 @@ bool Apic::status(InterruptRequest interruptRequest) {
 }
 
 void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
+    if (!initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
+    }
+
     if (isLocalInterrupt(vector) && vector != Kernel::InterruptVector::LINT1) {
         // Excludes LINT1 (NMI)
         LocalApic::sendEndOfInterrupt();

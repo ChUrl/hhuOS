@@ -162,6 +162,7 @@ private:
 
 private:
     static bool initialized;         ///< @brief Indicates if Apic::initialize() has been called.
+    static bool smpInitialized;
 
     // Memory allocated for instances contained in these lists is never freed,
     // this implementation doesn't support disabling the APIC at all.

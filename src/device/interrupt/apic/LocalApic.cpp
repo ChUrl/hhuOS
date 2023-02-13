@@ -54,7 +54,11 @@ uint8_t LocalApic::getVersion() {
     return readDoubleWord(VER) & 0xFF;
 }
 
-void LocalApic::initialize() const {
+void LocalApic::initialize() {
+    if (initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
+    }
+
     if (cpuId != getId()) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "AP can only initialize itself!");
     }
@@ -87,6 +91,8 @@ void LocalApic::initialize() const {
     // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
     // This should be 0 after power-up, but it doesn't hurt to set it again
     writeDoubleWord(TPR, 0);
+
+    initialized = true;
 }
 
 void LocalApic::enableXApicMode() {

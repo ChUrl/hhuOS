@@ -124,7 +124,7 @@ private:
      *
      * This function must not be called before LocalApic::enableXApicMode().
      */
-    void initialize() const;
+    void initialize();
 
     /**
      * @brief Prepare the BSP for local APIC initialization.
@@ -272,6 +272,7 @@ private:
     static void writeICR(const ICREntry &icrEntry); // Issue IPIs
 
 private:
+    bool initialized = false;
     uint8_t cpuId;               ///< @brief The CPU core this instance belongs to, LocalApic::getId() only returns the current AP's id!
     static uint32_t baseAddress; ///< @brief The physical address where the local APIC MMIO region is located.
     static uint32_t mmioAddress; ///< @brief The virtual address used to access registers in xApic mode.
