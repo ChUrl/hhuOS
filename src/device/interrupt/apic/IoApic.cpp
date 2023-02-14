@@ -50,28 +50,19 @@ void IoApic::initialize() {
 }
 
 void IoApic::allow(Kernel::GlobalSystemInterrupt gsi) {
-    ensureValidGsi(gsi);
     REDTBLEntry redtblEntry = readREDTBL(gsi);
     redtblEntry.isMasked = false;
     writeREDTBL(gsi, redtblEntry);
 }
 
 void IoApic::forbid(Kernel::GlobalSystemInterrupt gsi) {
-    ensureValidGsi(gsi);
     REDTBLEntry redtblEntry = readREDTBL(gsi);
     redtblEntry.isMasked = true;
     writeREDTBL(gsi, redtblEntry);
 }
 
 bool IoApic::status(Kernel::GlobalSystemInterrupt gsi) {
-    ensureValidGsi(gsi);
     return readREDTBL(gsi).isMasked;
-}
-
-void IoApic::ensureValidGsi(Kernel::GlobalSystemInterrupt gsi) const {
-    if (gsi < gsiBase || gsi > gsiMax) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI not handled by this I/O APIC!");
-    }
 }
 
 void IoApic::initializeREDTBL() {
@@ -169,7 +160,6 @@ void IoApic::writeIndirectRegister(IndirectRegister reg, uint32_t val) {
 }
 
 REDTBLEntry IoApic::readREDTBL(Kernel::GlobalSystemInterrupt gsi) {
-    ensureValidGsi(gsi);
     auto interruptInput = static_cast<uint8_t>(gsi - gsiBase);
 
     // The first register is the low DW, the second register is the high DW
@@ -179,7 +169,6 @@ REDTBLEntry IoApic::readREDTBL(Kernel::GlobalSystemInterrupt gsi) {
 }
 
 void IoApic::writeREDTBL(Kernel::GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl) {
-    ensureValidGsi(gsi);
     auto interruptInput = static_cast<uint8_t>(gsi - gsiBase);
 
     // The first register is the low DW, the second register is the high DW

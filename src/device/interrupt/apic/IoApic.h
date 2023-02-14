@@ -99,11 +99,6 @@ private:
     bool status(Kernel::GlobalSystemInterrupt gsi);
 
     /**
-     * @brief Ensure that a GSI belongs to this I/O APIC.
-     */
-    void ensureValidGsi(Kernel::GlobalSystemInterrupt gsi) const;
-
-    /**
      * @brief Initialize a this I/O APIC's interrupt redirection table.
      *
      * Marks entries for all supported interrupt inputs of the IO APIC as edge-triggered, active high,
