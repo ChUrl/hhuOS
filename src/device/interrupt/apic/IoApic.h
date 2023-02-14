@@ -186,6 +186,9 @@ private:
 
     static Util::ArrayList<IrqOverride *> irqOverrides;
 
+    static Util::Async::Spinlock registerLock;
+    static Util::Async::Spinlock redtblLock;
+
     static Kernel::Logger log;
 };
 

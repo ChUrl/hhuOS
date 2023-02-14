@@ -17,6 +17,7 @@ const Util::Array<LocalApic::Register> LocalApic::lintRegs = {static_cast<Regist
                                                               static_cast<Register>(0x350),
                                                               static_cast<Register>(0x360),
                                                               static_cast<Register>(0x370)};
+Util::Async::Spinlock LocalApic::icrLock;
 
 Kernel::Logger LocalApic::log = Kernel::Logger::get("LocalApic");
 
@@ -262,15 +263,19 @@ void LocalApic::writeLVT(LocalInterrupt lint, const LVTEntry &lvtEntry) {
 }
 
 ICREntry LocalApic::readICR() {
+    icrLock.acquire(); // This needs to be synchronized in case multiple APs issue IPIs
     const uint32_t low = readDoubleWord(ICR_LOW);
     const uint64_t high = readDoubleWord(ICR_HIGH);
+    icrLock.release();
     return static_cast<ICREntry>(low | high << 32);
 }
 
 void LocalApic::writeICR(const ICREntry &icrEntry) {
     auto val = static_cast<uint64_t>(icrEntry);
+    icrLock.acquire(); // This needs to be synchronized in case multiple APs issue IPIs
     writeDoubleWord(ICR_HIGH, val >> 32);
     writeDoubleWord(ICR_LOW, val & 0xFFFFFFFF); // Writing the low DW sends the IPI
+    icrLock.release();
 }
 
 } // namespace Device

@@ -284,6 +284,8 @@ private:
     static const ModelSpecificRegister ia32ApicBaseMsr; ///< @brief Core unique MSR (every core can only address its own MSR).
     static const Util::Array<Register> lintRegs;        ///< @brief Local interrupt to register offset lookup.
 
+    static Util::Async::Spinlock icrLock;
+
     static Kernel::Logger log;
 };
 

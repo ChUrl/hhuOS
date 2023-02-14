@@ -8,6 +8,8 @@ namespace Device {
 
 Kernel::GlobalSystemInterrupt IoApic::systemGsiMax = static_cast<Kernel::GlobalSystemInterrupt>(0);
 Util::ArrayList<IoApic::IrqOverride *> IoApic::irqOverrides;
+Util::Async::Spinlock IoApic::registerLock;
+Util::Async::Spinlock IoApic::redtblLock;
 
 Kernel::Logger IoApic::log = Kernel::Logger::get("IoApic");
 
@@ -149,22 +151,28 @@ IoApic::IrqOverride *IoApic::getOverride(InterruptRequest source) {
 }
 
 uint32_t IoApic::readIndirectRegister(IndirectRegister reg) {
+    registerLock.acquire(); // This needs to be synchronized in case multiple APs access a MMIO register
     writeMMIORegister<uint8_t>(IND, reg);
     auto val = readMMIORegister<uint32_t>(DAT);
+    registerLock.release();
     return val;
 }
 
 void IoApic::writeIndirectRegister(IndirectRegister reg, uint32_t val) {
+    registerLock.acquire(); // This needs to be synchronized in case multiple APs access a MMIO register
     writeMMIORegister<uint8_t>(IND, reg);
     writeMMIORegister<uint32_t>(DAT, val);
+    registerLock.release();
 }
 
 REDTBLEntry IoApic::readREDTBL(Kernel::GlobalSystemInterrupt gsi) {
     auto interruptInput = static_cast<uint8_t>(gsi - gsiBase);
 
     // The first register is the low DW, the second register is the high DW
+    redtblLock.acquire(); // This needs to be synchronized in case multiple APs access the REDTBL
     const uint32_t low = readIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput));
     const uint64_t high = readIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1));
+    redtblLock.release();
     return static_cast<REDTBLEntry>(low | high << 32);
 }
 
@@ -173,8 +181,10 @@ void IoApic::writeREDTBL(Kernel::GlobalSystemInterrupt gsi, const REDTBLEntry &r
 
     // The first register is the low DW, the second register is the high DW
     auto val = static_cast<uint64_t>(redtbl);
+    redtblLock.acquire(); // This needs to be synchronized in case multiple APs access the REDTBL
     writeIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput), val & 0xFFFFFFFF);
     writeIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1), val >> 32);
+    redtblLock.release();
 }
 
 } // namespace Device
