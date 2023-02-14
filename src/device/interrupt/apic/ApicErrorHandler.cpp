@@ -45,7 +45,7 @@ void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {
     if (sendChecksumError) { log.error("ERROR: Send checksum error!"); }
     */
 
-    log.error("Local APIC on core [%d] encountered error: [0x%x]!", LocalApic::getId(), errors);
+    log.error("Local APIC on core [%d] encountered error: [0b%b]!", LocalApic::getId(), errors);
 
     // Clear errors, also arm the interrupt again
     LocalApic::clearErrors();
