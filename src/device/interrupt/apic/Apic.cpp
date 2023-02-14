@@ -1,4 +1,5 @@
 #include "Apic.h"
+#include "device/cpu/Cpu.h"
 #include "device/cpu/Smp.h"
 #include "device/power/acpi/Acpi.h"
 #include "kernel/paging/Paging.h"
@@ -85,8 +86,10 @@ void Device::Apic::initializeSmp() {
     allocateSmpStacks();
     copySmpStartupCode();
 
-    // Call the startup code on each AP
-    // https://wiki.osdev.org/Symmetric_Multiprocessing#Initialisation_of_an_old_SMP_system
+    // This does not prevent SIPIs
+    Cpu::disableInterrupts();
+
+    // Call the startup code on each AP using the SIPI
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
         LocalApic *localApic = localApics.get(i);
         if (localApic->cpuId == LocalApic::getId()) {
@@ -95,7 +98,8 @@ void Device::Apic::initializeSmp() {
         }
 
         // The INIT IPI is required for CPUs with a discrete APIC, these do not support the STARTUP IPI,
-        // and this implementation only supports xApic anyway, so this is disabled.
+        // and this implementation only supports xApic anyway, so this is not implemented.
+        // https://wiki.osdev.org/Symmetric_Multiprocessing#Initialisation_of_an_old_SMP_system
         // For these CPUs, the startup routines address has to be written to the BIOS memory segment, and the
         // system has to be configured for warm-reset to start executing there.
         // LocalApic::clearErrors();
@@ -105,16 +109,15 @@ void Device::Apic::initializeSmp() {
 
         LocalApic::clearErrors();
         LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
-        // It is not clear if the second one is required or not, so just send one.
-        // OSdev mentions that it could also be for good measure in case the first one goes missing.
-        LocalApic::clearErrors();
-        LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
 
         // Wait until the AP is running, so we can continue to the next one.
         // Because we initialize the APs one at a time, runningAPs is not synchronized.
-        // If the AP initialization fails (and the system doesn't crash), this will lock the BSP...
+        // If the AP initialization fails (and the system doesn't crash), this will lock the BSP.
+        // The same will happen if the SIPI does not reach its target.
         while (!(runningAPs & (1 << localApic->cpuId))) {}
     }
+
+    Cpu::enableInterrupts();
 
     // Free the startup routine page and the stackpointer array, now that all APs are running
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();

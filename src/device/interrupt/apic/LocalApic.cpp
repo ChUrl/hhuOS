@@ -124,20 +124,17 @@ void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     ICREntry icrEntry{};
     icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12); // Startup code physical page
     icrEntry.deliveryMode = ICREntry::DeliveryMode::STARTUP;
-    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL;     // Ignored
-    icrEntry.level = ICREntry::Level::DEASSERT;                         // Ignored
-    icrEntry.triggerMode = ICREntry::TriggerMode::EDGE;                 // Ignored
-    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO; // Ignored
+    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL;
+    icrEntry.level = ICREntry::Level::ASSERT;
+    icrEntry.triggerMode = ICREntry::TriggerMode::EDGE;
+    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO;
     icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
 
-    for (uint32_t j = 0; j < 100000; ++j) {} // Ugly wait, because we have no PIT yet
+    for (uint32_t i = 0; i < 100000; ++i) {} // Wait without the PIT (interrupts are disabled)
 
     do {
-        asm volatile("pause"
-                     :
-                     :
-                     : "memory");
+        asm volatile("pause" : : : "memory");
     } while (readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING); // Wait for delivery
 }
 
