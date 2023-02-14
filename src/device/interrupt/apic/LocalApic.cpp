@@ -131,6 +131,8 @@ void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
 
+    // TODO: Move waiting and polling to Apic.cpp
+    // TODO: Wait with PIT
     for (uint32_t i = 0; i < 100000; ++i) {} // Wait without the PIT (interrupts are disabled)
 
     do {
@@ -170,9 +172,9 @@ void LocalApic::sendEndOfInterrupt() {
 void LocalApic::initializeLVT() {
     // Default values
     LVTEntry lvtEntry{};
-    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED,
-    lvtEntry.pinPolarity = LVTEntry::PinPolarity::HIGH,
-    lvtEntry.triggerMode = LVTEntry::TriggerMode::EDGE,
+    lvtEntry.deliveryMode = LVTEntry::DeliveryMode::FIXED;
+    lvtEntry.pinPolarity = LVTEntry::PinPolarity::HIGH;
+    lvtEntry.triggerMode = LVTEntry::TriggerMode::EDGE;
     lvtEntry.isMasked = true;
 
     // Set all the vector numbers
