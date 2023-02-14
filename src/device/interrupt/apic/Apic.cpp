@@ -94,19 +94,19 @@ void Device::Apic::initializeSmp() {
             continue;
         }
 
-        LocalApic::clearErrors();
-        LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT);
-        // The deassert is required for CPUs with a discrete APIC, these do not support the STARTUP IPI,
+        // The INIT IPI is required for CPUs with a discrete APIC, these do not support the STARTUP IPI,
         // and this implementation only supports xApic anyway, so this is disabled.
+        // For these CPUs, the startup routines address has to be written to the BIOS memory segment, and the
+        // system has to be configured for warm-reset to start executing there.
+        // LocalApic::clearErrors();
+        // LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT);
         // LocalApic::sendIpiInit(localApic->localInfo.id, ICREntry::Level::DEASSERT);
-
-        // Ugly wait, because we have no PIT yet.
-        // These timings are basically random, I would be surprised if this works anywhere else than in QEMU.
-        for (uint32_t j = 0; j < 100000; ++j) {}
+        // for (uint32_t j = 0; j < 100000; ++j) {}
 
         LocalApic::clearErrors();
         LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
         // It is not clear if the second one is required or not, so just send one.
+        // OSdev mentions that it could also be for good measure in case the first one goes missing.
         LocalApic::clearErrors();
         LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
 
