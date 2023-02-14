@@ -20,12 +20,13 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : cpuId(Loc
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "APIC timer yield interval can't be 0!");
     }
 
-    // Only set these once, so they are equal for all cores
+    // Only set this once, so all cores are equal with single calibration.
+    // Of course every timer could calibrate itself to a different interval, but
+    // I thought that would be useless.
     if (timerInt == 0) {
         timerInt = timerInterval;
-    }
-    if (yieldInt == 0) {
-        yieldInt = yieldInterval;
+    } else if (timerInt != timerInterval) {
+        log.warn("Changed APIC timer interval for CPU [%d] to [%uns] instead of the requested [%uns]!", LocalApic::getId(), timerInt, timerInterval);
     }
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
