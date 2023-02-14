@@ -55,14 +55,6 @@ uint8_t LocalApic::getVersion() {
 }
 
 void LocalApic::initialize() {
-    if (initialized) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
-    }
-
-    if (cpuId != getId()) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "AP can only initialize itself!");
-    }
-
     // Mask all local interrupt sources
     initializeLVT();
 

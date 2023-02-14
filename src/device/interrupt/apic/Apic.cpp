@@ -126,7 +126,14 @@ void Device::Apic::initializeSmp() {
 }
 
 void Apic::initializeCurrentLocalApic() {
-    getCurrentLocalApic().initialize();
+    LocalApic &localApic = getCurrentLocalApic();
+    if (localApic.initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
+    }
+    if (localApic.cpuId != LocalApic::getId()) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "AP can only initialize itself!");
+    }
+    localApic.initialize();
 }
 
 uint8_t Apic::getCpuCount() {
