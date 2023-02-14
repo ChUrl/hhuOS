@@ -99,14 +99,6 @@ private:
     bool status(Kernel::GlobalSystemInterrupt gsi);
 
     /**
-     * @brief Send an end of interrupt signal (only acts on level-triggered interrupts).
-     *
-     * @param vector The vector number of the interrupt that will be marked as completed
-     * @param gsi The GSI number of the interrupt that will be marked as completed
-     */
-    void sendEndOfInterrupt(Kernel::InterruptVector vector, Kernel::GlobalSystemInterrupt gsi);
-
-    /**
      * @brief Ensure that a GSI belongs to this I/O APIC.
      */
     void ensureValidGsi(Kernel::GlobalSystemInterrupt gsi) const;
@@ -187,7 +179,6 @@ private:
     uint8_t ioId;
     uint32_t baseAddress;
     uint32_t mmioAddress = 0;
-    static bool supportsDirectedEOI;
 
     Kernel::GlobalSystemInterrupt gsiBase;
     Kernel::GlobalSystemInterrupt gsiMax = static_cast<Kernel::GlobalSystemInterrupt>(0);

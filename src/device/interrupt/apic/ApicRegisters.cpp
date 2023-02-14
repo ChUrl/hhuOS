@@ -18,10 +18,10 @@ SVREntry::SVREntry(uint32_t registerValue)
   : vector(static_cast<Kernel::InterruptVector>(registerValue & 0xFF)),
     isSWEnabled(registerValue & (1 << 8)),
     hasFocusProcessorChecking(registerValue & (1 << 9)),
-    hasEOIBroadcastSuppression(registerValue & (1 << 12)) {}
+    suppressEoiBroadcasting(registerValue & (1 << 12)) {}
 
 SVREntry::operator uint32_t() const {
-    return static_cast<uint32_t>(vector) | static_cast<uint32_t>(isSWEnabled) << 8 | static_cast<uint32_t>(hasFocusProcessorChecking) << 9 | static_cast<uint32_t>(hasEOIBroadcastSuppression) << 12;
+    return static_cast<uint32_t>(vector) | static_cast<uint32_t>(isSWEnabled) << 8 | static_cast<uint32_t>(hasFocusProcessorChecking) << 9 | static_cast<uint32_t>(suppressEoiBroadcasting) << 12;
 }
 
 // IA-32 manual, sec. 3.11.5.1

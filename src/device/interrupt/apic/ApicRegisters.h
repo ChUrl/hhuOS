@@ -28,7 +28,7 @@ struct SVREntry {
     Kernel::InterruptVector vector;
     bool isSWEnabled;
     bool hasFocusProcessorChecking;
-    bool hasEOIBroadcastSuppression;
+    bool suppressEoiBroadcasting;
 
     SVREntry() = default;
 

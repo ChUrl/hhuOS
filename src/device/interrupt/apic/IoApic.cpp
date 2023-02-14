@@ -6,7 +6,6 @@
 
 namespace Device {
 
-bool IoApic::supportsDirectedEOI = false;
 Kernel::GlobalSystemInterrupt IoApic::systemGsiMax = static_cast<Kernel::GlobalSystemInterrupt>(0);
 Util::ArrayList<IoApic::IrqOverride *> IoApic::irqOverrides;
 
@@ -26,9 +25,6 @@ void IoApic::initialize() {
     // Account for possible misalignment
     const uint32_t pageOffset = baseAddress % Util::PAGESIZE;
     mmioAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
-
-    // https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
-    supportsDirectedEOI = (readIndirectRegister(VER) & 0xFF) >= 0x20;
 
     // With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
     // With ICH5 and other ICHs it is always 24 (ICH5 only has 1 IO APIC, as other consumer hardware)
@@ -70,26 +66,6 @@ void IoApic::forbid(Kernel::GlobalSystemInterrupt gsi) {
 bool IoApic::status(Kernel::GlobalSystemInterrupt gsi) {
     ensureValidGsi(gsi);
     return readREDTBL(gsi).isMasked;
-}
-
-void IoApic::sendEndOfInterrupt(Kernel::InterruptVector vector, Kernel::GlobalSystemInterrupt gsi) {
-    const REDTBLEntry redtblEntry = readREDTBL(gsi);
-    if (redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE) {
-        return; // Edge triggered interrupts are EOI'd only by the local APIC
-    }
-
-    if (supportsDirectedEOI) {
-        writeMMIORegister<uint32_t>(EOI, vector);
-    } else {
-        // Marking a level triggered interrupt as edge triggered and masked clears the remote IRR bit
-        // See https://github.com/torvalds/linux/blob/master/arch/x86/kernel/apic/io_apic.c#L470
-        REDTBLEntry tempRedtblEntry = redtblEntry; // Copy to restore old values afterwards
-        tempRedtblEntry.isMasked = true;
-        tempRedtblEntry.triggerMode = REDTBLEntry::TriggerMode::EDGE;
-
-        writeREDTBL(gsi, tempRedtblEntry); // Mark as edge triggered and masked
-        writeREDTBL(gsi, redtblEntry);     // Restore old values
-    }
 }
 
 void IoApic::ensureValidGsi(Kernel::GlobalSystemInterrupt gsi) const {

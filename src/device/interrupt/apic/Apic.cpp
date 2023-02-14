@@ -231,18 +231,16 @@ void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
     }
 
     if (isLocalInterrupt(vector) && vector != Kernel::InterruptVector::LINT1) {
-        // Excludes LINT1 (NMI)
+        // Excludes NMI, IPIs and SMIs are also excluded, but these don't have vector numbers,
+        // so they won't reach this anyway.
         LocalApic::sendEndOfInterrupt();
     } else if (isExternalInterrupt(vector)) {
-        auto interruptRequest = static_cast<InterruptRequest>(vector - 32); // Hardware interrupt pin
-        const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
-        const Kernel::GlobalSystemInterrupt gsi = override == nullptr
-                                                  ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
-                                                  : override->target;
-        IoApic &ioApic = getIoApic(gsi);
-
-        LocalApic::sendEndOfInterrupt();        // External interrupts get forwarded by the local APIC, so local EOI required
-        ioApic.sendEndOfInterrupt(vector, gsi); // This is only required for level-triggered interrupts
+        // Edge-triggered external interrupts have to be EOId in the local APIC,
+        // level-triggered external interrupts can EOId in the local APIC if EOI-broadcasting is enabled,
+        // otherwise they can be directly EOId in the I/O APIC by using the I/O APICs EOI register or
+        // masking them and setting them as edge-triggered temporarily (which clears the remote IRR bit).
+        // Here, EOI broadcasting is enabled, which makes it very simple:
+        LocalApic::sendEndOfInterrupt(); // External interrupts get forwarded by the local APIC, so local EOI required
     }
 }
 
@@ -483,7 +481,7 @@ void Apic::dumpDebugInfo() {
 
     log.info("I/O APIC version: [0x%x] (EOI support: [%d])",
              (*ioApics.begin())->getVersion(),
-             static_cast<int>(IoApic::supportsDirectedEOI));
+             static_cast<int>((*ioApics.begin())->getVersion() >= 0x20));
     log.info("I/O APIC max GSI: [%d]", static_cast<uint32_t>(IoApic::systemGsiMax));
     log.info("I/O APIC IRQ overrides:");
     for (uint32_t i = 0; i < IoApic::irqOverrides.size(); ++i) {

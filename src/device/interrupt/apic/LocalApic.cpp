@@ -81,7 +81,7 @@ void LocalApic::initialize() {
     SVREntry svrEntry{};
     svrEntry.vector = Kernel::InterruptVector::SPURIOUS;
     svrEntry.isSWEnabled = true;
-    svrEntry.hasEOIBroadcastSuppression = true; // I/O APIC EOIs are handled directly in IoApic::sendEndOfInterrupt()
+    svrEntry.suppressEoiBroadcasting = false; // EOI level triggered external interrupts through the local APIC
     writeSVR(svrEntry);
 
     // Clear outstanding stuff
