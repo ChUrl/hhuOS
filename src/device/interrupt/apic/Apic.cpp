@@ -4,6 +4,7 @@
 #include "device/power/acpi/Acpi.h"
 #include "kernel/paging/Paging.h"
 #include "kernel/service/InterruptService.h"
+#include "kernel/service/TimeService.h"
 #include "kernel/system/System.h"
 #include "lib/util/base/Constants.h"
 #include "LocalApic.h"
@@ -86,9 +87,6 @@ void Device::Apic::initializeSmp() {
     allocateSmpStacks();
     copySmpStartupCode();
 
-    // This does not prevent SIPIs
-    Cpu::disableInterrupts();
-
     // Call the startup code on each AP using the SIPI
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
         LocalApic *localApic = localApics.get(i);
@@ -97,27 +95,44 @@ void Device::Apic::initializeSmp() {
             continue;
         }
 
+        // Info on discrete APIC:
         // The INIT IPI is required for CPUs with a discrete APIC, these do not support the STARTUP IPI,
         // and this implementation only supports xApic anyway, so this is not implemented.
         // https://wiki.osdev.org/Symmetric_Multiprocessing#Initialisation_of_an_old_SMP_system
-        // For these CPUs, the startup routines address has to be written to the BIOS memory segment, and the
-        // system has to be configured for warm-reset to start executing there.
-        // LocalApic::clearErrors();
-        // LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT);
-        // LocalApic::sendIpiInit(localApic->localInfo.id, ICREntry::Level::DEASSERT);
-        // for (uint32_t j = 0; j < 100000; ++j) {}
+        // For these CPUs, the startup routines address has to be written to the BIOS memory segment
+        // (warm reset vector), and the system has to be configured for warm-reset to start executing there.
 
+        // Because we use xApic, issue the SIPI: Just sending it once is not robust,
+        // but should suffice for an emulated environment (it works in QEMU™).
         LocalApic::clearErrors();
         LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
 
-        // Wait until the AP is running, so we can continue to the next one.
-        // Because we initialize the APs one at a time, runningAPs is not synchronized.
-        // If the AP initialization fails (and the system doesn't crash), this will lock the BSP.
-        // The same will happen if the SIPI does not reach its target.
-        while (!(runningAPs & (1 << localApic->cpuId))) {}
-    }
+        // The PIT can't wait that short in its default configuration, it would be better to initialize
+        // one of its counters to the desired interval for oneshot. OSdev just waits 0.2 milliseconds here!
+        // I am unsure why exactly this wait is even needed, considering we poll the delivery bit right after?
+        // For QEMU, it makes seemingly no difference if waited 1s or not at all...
+        // timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(1));
 
-    Cpu::enableInterrupts();
+        // Wait for IPI delivery
+        do {
+            // Spinloop: Pause prevents speculative memory reads, memory prevents compiler memory reordering,
+            //           so the ICR polls (simple memory reads after all) should happen as intended.
+            asm volatile("pause" : : : "memory");
+        } while (LocalApic::readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING);
+
+        // Wait until the AP marks it is running, so we can continue to the next one.
+        // Because we initialize the APs one at a time, runningAPs is not synchronized.
+        // If the AP initialization fails (and the system doesn't crash), this will lock the BSP,
+        // the same will happen if the SIPI does not reach its target. That's why we break on timeout.
+        auto &timeService = Kernel::System::getService<Kernel::TimeService>();
+        const Util::Time::Timestamp apBootStart = timeService.getSystemTime();
+        while (!(runningAPs & (1 << localApic->cpuId))) {
+            if (timeService.getSystemTime().toSeconds() - apBootStart.toSeconds() > 1) {
+                log.error("CPU [%d] didn't phone home, it could be in undefined state!", i);
+                break;
+            }
+        }
+    }
 
     // Free the startup routine page and the stackpointer array, now that all APs are running
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();

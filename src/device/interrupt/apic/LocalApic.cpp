@@ -130,14 +130,6 @@ void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO;
     icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
-
-    // TODO: Move waiting and polling to Apic.cpp
-    // TODO: Wait with PIT
-    for (uint32_t i = 0; i < 100000; ++i) {} // Wait without the PIT (interrupts are disabled)
-
-    do {
-        asm volatile("pause" : : : "memory");
-    } while (readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING); // Wait for delivery
 }
 
 void LocalApic::clearErrors() {

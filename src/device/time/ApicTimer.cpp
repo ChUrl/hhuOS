@@ -28,6 +28,7 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval) : cpuId(Loc
     } else if (timerInt != timerInterval) {
         log.warn("Changed APIC timer interval for CPU [%d] to [%uns] instead of the requested [%uns]!", LocalApic::getId(), timerInt, timerInterval);
     }
+    yieldInt = yieldInterval;
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
     LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, Divide::BY_16); // BY_1 is the highest resolution (overkill)

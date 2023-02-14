@@ -139,14 +139,14 @@ void System::initializeSystem() {
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
 
-    // Requires PIT, interrupts and local APIC
+    // Requires PIT + interrupts and local APIC
     if (Device::Apic::isInitialized()) {
         log.info("APIC detected -> Initializing BSP APIC Timer");
         Device::Apic::initializeCurrentTimer();
     }
 
-    // Requires an initialized BSP and BSP APIC timer
-    if (Device::Apic::isInitialized() && Device::Apic::isCurrentTimerInitialized() && Device::Apic::isSmpSupported()) {
+    // Requires an initialized BSP and PIT + interrupts (for waiting)
+    if (Device::Apic::isInitialized() && Device::Apic::isSmpSupported()) {
         log.info("Detected SMP support -> Initializing AP(s)");
         Device::Apic::initializeSmp();
     }
