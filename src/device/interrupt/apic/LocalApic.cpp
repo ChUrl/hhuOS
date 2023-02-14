@@ -107,7 +107,7 @@ void LocalApic::enableXApicMode() {
     // disabling the APIC after enabling it.
     // If this is supposed to be freed, the last LocalApic instance has to do it.
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(baseAddress, Util::PAGESIZE);
+    void *virtAddress = memoryService.mapIO(baseAddress, Util::PAGESIZE); // Throws
 
     // Account for possible misalignment, as mapIO returns a page-aligned pointer
     const uint32_t pageOffset = baseAddress % Util::PAGESIZE;
@@ -120,6 +120,18 @@ void LocalApic::enableXApicMode() {
     log.info("Running in xApic mode.");
 }
 
+void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
+    ICREntry icrEntry{};
+    icrEntry.vector = static_cast<Kernel::InterruptVector>(0); // INIT should have vector number 0
+    icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT;
+    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL;
+    icrEntry.level = level; // ASSERT or DEASSERT
+    icrEntry.triggerMode = ICREntry::TriggerMode::LEVEL;
+    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO; // Only broadcast to CPU in destination field
+    icrEntry.destination = id;
+    writeICR(icrEntry); // Writing ICR issues IPI
+}
+
 void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     ICREntry icrEntry{};
     icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12); // Startup code physical page
@@ -130,6 +142,14 @@ void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO;
     icrEntry.destination = id;
     writeICR(icrEntry); // Writing ICR issues IPI
+}
+
+void LocalApic::waitForIpiDispatch() {
+    do {
+        // Spinloop: Pause prevents speculative memory reads, memory prevents compiler memory reordering,
+        //           so the ICR polls (simple memory reads after all) should happen as intended.
+        asm volatile("pause" : : : "memory");
+    } while (readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING);
 }
 
 void LocalApic::clearErrors() {

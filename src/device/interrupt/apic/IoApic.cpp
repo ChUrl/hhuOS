@@ -22,7 +22,7 @@ uint8_t IoApic::getVersion() {
 
 void IoApic::initialize() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    void *virtAddress = memoryService.mapIO(baseAddress, Util::PAGESIZE, true);
+    void *virtAddress = memoryService.mapIO(baseAddress, Util::PAGESIZE, true); // Throws
 
     // Account for possible misalignment
     const uint32_t pageOffset = baseAddress % Util::PAGESIZE;

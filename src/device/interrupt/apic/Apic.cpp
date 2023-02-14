@@ -88,43 +88,46 @@ void Device::Apic::initializeSmp() {
     copySmpStartupCode();
 
     // Call the startup code on each AP using the SIPI
+    auto &timeService = Kernel::System::getService<Kernel::TimeService>();
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
         LocalApic *localApic = localApics.get(i);
         if (localApic->cpuId == LocalApic::getId()) {
-            // Skip this AP if it's the BSP or ACPI reports it as disabled
+            // Skip this AP if it's the BSP (disabled processors won't even show up in this list)
             continue;
         }
 
         // Info on discrete APIC:
-        // The INIT IPI is required for CPUs with a discrete APIC, these do not support the STARTUP IPI,
-        // and this implementation only supports xApic anyway, so this is not implemented.
-        // https://wiki.osdev.org/Symmetric_Multiprocessing#Initialisation_of_an_old_SMP_system
+        // The INIT IPI is required for CPUs with a discrete APIC, these ignore the STARTUP IPI.
         // For these CPUs, the startup routines address has to be written to the BIOS memory segment
         // (warm reset vector), and the system has to be configured for warm-reset to start executing there.
+        // It is still done here, to follow the "universal startup algorithm" (MPSpec, sec. B.4):
+        LocalApic::clearErrors();
+        LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT); // Level-triggered, needs to be...
+        LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
+        timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(10)); // 10 milliseconds in MPSpec
+        LocalApic::waitForIpiDispatch();
 
-        // Because we use xApic, issue the SIPI: Just sending it once is not robust,
-        // but should suffice for an emulated environment (it works in QEMU™).
+        // Issue the SIPI twice (for xApic):
         LocalApic::clearErrors();
         LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
+        timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(10)); // 200 microseconds in MPSpec
+        LocalApic::waitForIpiDispatch();
 
-        // The PIT can't wait that short in its default configuration, it would be better to initialize
-        // one of its counters to the desired interval for oneshot. OSdev just waits 0.2 milliseconds here!
-        // I am unsure why exactly this wait is even needed, considering we poll the delivery bit right after?
-        // For QEMU, it makes seemingly no difference if waited 1s or not at all...
-        // timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(1));
+        LocalApic::clearErrors();
+        LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
+        timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(10)); // 200 microseconds in MPSpec
+        LocalApic::waitForIpiDispatch();
 
-        // Wait for IPI delivery
-        do {
-            // Spinloop: Pause prevents speculative memory reads, memory prevents compiler memory reordering,
-            //           so the ICR polls (simple memory reads after all) should happen as intended.
-            asm volatile("pause" : : : "memory");
-        } while (LocalApic::readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING);
+        // Info on the busyWait times:
+        // The SIPI waiting times of 10 milliseconds are waaayyy to long, but the PIT can't wait that short
+        // in its default configuration. It would be better to initialize one of its counters to the
+        // desired interval for oneshot wait. MPSpec mentions a minimal waiting time of 20 microseconds
+        // for SIPI dispatch and recommends 200 microseconds between SIPIs.
 
         // Wait until the AP marks it is running, so we can continue to the next one.
         // Because we initialize the APs one at a time, runningAPs is not synchronized.
         // If the AP initialization fails (and the system doesn't crash), this will lock the BSP,
         // the same will happen if the SIPI does not reach its target. That's why we break on timeout.
-        auto &timeService = Kernel::System::getService<Kernel::TimeService>();
         const Util::Time::Timestamp apBootStart = timeService.getSystemTime();
         while (!(runningAPs & (1 << localApic->cpuId))) {
             if (timeService.getSystemTime().toSeconds() - apBootStart.toSeconds() > 1) {
