@@ -134,19 +134,9 @@ private:
     static void enableXApicMode();
 
     /**
-     * @brief Send an INIT IPI to an AP.
-     *
-     * The INIT IPI prepares an unitialized AP for startup.
-     *
-     * @param id The local APIC id/CPU id of the AP to initialize
-     * @param level Assert or deassert
-     */
-    static void sendIpiInit(uint8_t id, ICREntry::Level level);
-
-    /**
      * @brief Send an STARTUP IPI (SIPI) to an AP.
      *
-     * The STARTUP IPI instructs an AP in INIT state to load its startup routine from a supplied address and
+     * The STARTUP IPI instructs an AP to load its startup routine from a supplied address and
      * execute it, booting the AP.
      *
      * @param id The local APIC id/CPU id of the AP to boot

@@ -120,25 +120,6 @@ void LocalApic::enableXApicMode() {
     log.info("Running in xApic mode.");
 }
 
-void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
-    ICREntry icrEntry{};
-    icrEntry.vector = static_cast<Kernel::InterruptVector>(0); // INIT should have vector number 0
-    icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT;
-    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL;
-    icrEntry.level = level; // ASSERT or DEASSERT
-    icrEntry.triggerMode = ICREntry::TriggerMode::LEVEL;
-    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::NO; // Only broadcast to CPU in destination field
-    icrEntry.destination = id;
-    writeICR(icrEntry); // Writing ICR issues IPI
-
-    do {
-        asm volatile("pause"
-                     :
-                     :
-                     : "memory");
-    } while (readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING); // Wait for delivery
-}
-
 void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
     ICREntry icrEntry{};
     icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12); // Startup code physical page
