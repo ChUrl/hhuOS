@@ -528,8 +528,9 @@ void Apic::printLocalApics(Util::String &string) {
     string += "\nLocal APICs:\n";
     for (uint32_t i = 0; i < localApics.size(); ++i) {
         const LocalApic *localApic = localApics.get(i);
-        string += Util::String::format("Id: [0x%x], NMI: (LINT: [%d], Polarity: [%s], Trigger: [%s])\n",
+        string += Util::String::format("Id: [0x%x], Running: [%d], NMI: (LINT: [%d], Polarity: [%s], Trigger: [%s])\n",
                                        localApic->cpuId,
+                                       localApic->initialized,
                                        localApic->nmiLint - LocalApic::LINT0,
                                        localApic->nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
                                        localApic->nmiTrigger == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
