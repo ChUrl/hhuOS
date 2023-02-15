@@ -107,7 +107,7 @@ private:
      */
     void initializeREDTBL();
 
-    void dumpREDTBL();
+    void printRedtbl(Util::String &string);
 
     /**
      * @brief Configure an NMI for this I/O APIC, if one exists.

@@ -83,6 +83,7 @@
 #include "device/network/rtl8139/Rtl8139.h"
 #include "device/network/NetworkDevice.h"
 #include "kernel/network/ip4/Ip4RoutingModule.h"
+#include "device/interrupt/apic/Apic.h"
 
 namespace Device {
 class Machine;
@@ -162,6 +163,8 @@ void GatesOfHell::enter() {
     enablePortLogging();
 
     mountDevices();
+
+    Device::Apic::mountDeviceNodes();
 
     printBanner();
 

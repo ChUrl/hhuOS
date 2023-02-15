@@ -8,9 +8,6 @@
 #include "kernel/log/Logger.h"
 #include "LocalApic.h"
 
-// Enable of disable the huge APIC debug dump
-const constexpr bool HHUOS_APIC_ENABLE_DEBUG = true;
-
 namespace Device {
 
 /**
@@ -45,6 +42,13 @@ public:
      * @brief Initialize the BSP's local APIC and all I/O APICs.
      */
     static void enable();
+
+    /**
+     * @brief Mount info nodes to /device/apic/.
+     *
+     * Those do not get updated if something changes during runtime.
+     */
+    static void mountDeviceNodes();
 
     /**
      * @brief Check if the system supports symmetric multiprocessing mode with multiple processors.
@@ -163,7 +167,9 @@ private:
      */
     static IoApic &getIoApic(Kernel::GlobalSystemInterrupt gsi);
 
-    static void dumpDebugInfo();
+    static void printLocalApics(Util::String &string);
+
+    static void printIoApics(Util::String &string);
 
 private:
     static bool initialized;  ///< @brief Indicates if Apic::enable() has been called.

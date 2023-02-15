@@ -147,7 +147,10 @@ void LocalApic::waitForIpiDispatch() {
         // Spinloop: Pause prevents speculative memory reads, memory prevents compiler memory reordering,
         //           so the ICR polls (simple memory reads after all) should happen as intended.
         // I am actually not sure if this is necessary, since the MMIO read address is marked volatile?
-        asm volatile("pause" : : : "memory");
+        asm volatile("pause"
+                     :
+                     :
+                     : "memory");
     } while (readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING);
 }
 
@@ -205,19 +208,20 @@ void LocalApic::initializeLVT() {
     writeLVT(ERROR, lvtEntry);
 }
 
-void LocalApic::dumpLVT() {
+void LocalApic::printLvt(Util::String &string) {
     const Util::Array<const char *> lintNames = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
 
-    log.info("Local Vector Table (Local APIC Id: [%d]):", getId());
+    string += Util::String::format("Local Vector Table [%d]:\n", getId());
     for (uint8_t lint = CMCI; lint <= ERROR; ++lint) {
         const LVTEntry lvtEntry = readLVT(static_cast<LocalInterrupt>(lint));
-        log.info("- Local Interrupt [%s]: (Vector: [0x%x], Masked: [%d], DeliveryMode: [0b%b], PinPolarity: [%s], TriggerMode: [%s])",
-                 lintNames[lint],
-                 static_cast<uint8_t>(lvtEntry.vector),
-                 static_cast<uint8_t>(lvtEntry.isMasked),
-                 static_cast<uint8_t>(lvtEntry.deliveryMode),
-                 lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                 lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+        string += Util::String::format(
+          "Vector: [0x%x], Masked: [%d], Polarity: [%s], Trigger: [%s] (%s)\n",
+          static_cast<uint8_t>(lvtEntry.vector),
+          static_cast<uint8_t>(lvtEntry.isMasked),
+          lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+          lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL",
+          lintNames[lint]
+        );
     }
 }
 

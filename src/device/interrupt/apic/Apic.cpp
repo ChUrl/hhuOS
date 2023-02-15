@@ -3,7 +3,10 @@
 #include "device/power/acpi/Acpi.h"
 #include "device/time/Cmos.h"
 #include "device/time/Pit.h"
+#include "filesystem/memory/MemoryDriver.h"
+#include "filesystem/memory/MemoryFileNode.h"
 #include "kernel/paging/Paging.h"
+#include "kernel/service/FilesystemService.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
 #include "lib/util/base/Constants.h"
@@ -61,11 +64,34 @@ void Apic::enable() {
     errorHandler.plugin();       // Does not allow the interrupt!
     enableCurrentErrorHandler(); // Allows the interrupt for this AP
 
-    if constexpr (HHUOS_APIC_ENABLE_DEBUG) {
-        dumpDebugInfo();
-    }
-
     initialized = true;
+}
+
+void Apic::mountDeviceNodes() {
+    auto &filesystemService = Kernel::System::getService<Kernel::FilesystemService>();
+    auto &driver = filesystemService.getFilesystem().getVirtualDriver("/device");
+
+    auto *localApicNode = new Filesystem::Memory::MemoryFileNode("lapic");
+    auto *ioApicNode = new Filesystem::Memory::MemoryFileNode("ioapic");
+    auto *lvtNode = new Filesystem::Memory::MemoryFileNode("lvt");
+    auto *redtblNode = new Filesystem::Memory::MemoryFileNode("redtbl");
+
+    Util::String lapic, ioapic, lvt, redtbl;
+    printLocalApics(lapic);
+    printIoApics(ioapic);
+    LocalApic::printLvt(lvt);
+    (*ioApics.begin())->printRedtbl(redtbl);
+
+    localApicNode->writeData(static_cast<const uint8_t *>(lapic), 0, lapic.length());
+    ioApicNode->writeData(static_cast<const uint8_t *>(ioapic), 0, ioapic.length());
+    lvtNode->writeData(static_cast<const uint8_t *>(lvt), 0, lvt.length());
+    redtblNode->writeData(static_cast<const uint8_t *>(redtbl), 0, redtbl.length());
+
+    filesystemService.createDirectory("/device/apic");
+    driver.addNode("/apic/", localApicNode);
+    driver.addNode("/apic/", ioApicNode);
+    driver.addNode("/apic/", lvtNode);
+    driver.addNode("/apic/", redtblNode);
 }
 
 bool Apic::isSmpSupported() {
@@ -395,7 +421,7 @@ void Apic::populateIoApics() {
     }
 }
 
-void Device::Apic::prepareApStacks() {
+void Apic::prepareApStacks() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
     // Allocate the stackpointer array
@@ -419,7 +445,7 @@ void Device::Apic::prepareApStacks() {
     }
 }
 
-void Device::Apic::prepareApStartupCode() {
+void Apic::prepareApStartupCode() {
     if (boot_ap_size > Util::PAGESIZE) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Startup code does not fit into one page!");
     }
@@ -490,60 +516,57 @@ IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
     Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "No I/O APIC found for the supplied GSI!");
 }
 
-void Apic::dumpDebugInfo() {
-    log.info("Dumping BSP APIC system information...");
-    log.info("Local APIC supported modes: [%s%s] (Current mode: [xApic])",
-             LocalApic::supportsXApic() ? "xApic" : "None",
-             LocalApic::supportsX2Apic() ? ", x2Apic" : "");
-    log.info("Local APIC version: [0x%x]", LocalApic::getVersion());
-    log.info("Local APIC xApic MMIO: ([0x%x] (phys) -> [0x%x] (virt))",
-             LocalApic::baseAddress,
-             LocalApic::mmioAddress);
-    log.info("Local APICs:");
-    for (uint32_t i = 0; i < localApics.size(); ++i) {
-        LocalApic *localApic = localApics.get(i);
-        log.info("- Id: [0x%x], NMI: (LINT: [%d], Polarity: [%s], TriggerMode: [%s])",
-                 localApic->cpuId,
-                 localApic->nmiLint - LocalApic::LINT0,
-                 localApic->nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                 localApic->nmiTrigger == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
-    }
+void Apic::printLocalApics(Util::String &string) {
+    string += Util::String::format("Local APIC supported modes: [%s%s] (Current mode: [xApic])\n",
+                                   LocalApic::supportsXApic() ? "xApic" : "None",
+                                   LocalApic::supportsX2Apic() ? ", x2Apic" : "");
+    string += Util::String::format("Local APIC version: [0x%x]\n", LocalApic::getVersion());
+    string += Util::String::format("Local APIC xApic MMIO: [0x%x] (phys) -> [0x%x] (virt)\n",
+                                   LocalApic::baseAddress,
+                                   LocalApic::mmioAddress);
 
-    log.info("I/O APIC version: [0x%x] (EOI support: [%d])",
-             (*ioApics.begin())->getVersion(),
-             static_cast<int>((*ioApics.begin())->getVersion() >= 0x20));
-    log.info("I/O APIC max GSI: [%d]", static_cast<uint32_t>(IoApic::systemGsiMax));
-    log.info("I/O APIC IRQ overrides:");
-    for (uint32_t i = 0; i < IoApic::irqOverrides.size(); ++i) {
-        const IoApic::IrqOverride *override = IoApic::irqOverrides.get(i);
-        log.info("- Source: [%d], Target: [%d], Polarity: [%s], TriggerMode: [%s]",
-                 static_cast<uint32_t>(override->source),
-                 static_cast<uint32_t>(override->target),
-                 override->polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                 override->trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+    string += "\nLocal APICs:\n";
+    for (uint32_t i = 0; i < localApics.size(); ++i) {
+        const LocalApic *localApic = localApics.get(i);
+        string += Util::String::format("Id: [0x%x], NMI: (LINT: [%d], Polarity: [%s], Trigger: [%s])\n",
+                                       localApic->cpuId,
+                                       localApic->nmiLint - LocalApic::LINT0,
+                                       localApic->nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                                       localApic->nmiTrigger == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
-    log.info("I/O APICs:");
+}
+
+void Apic::printIoApics(Util::String &string) {
+    string += Util::String::format("I/O APIC version: [0x%x]\n",
+                                   (*ioApics.begin())->getVersion());
+    string += Util::String::format("Supports directed EOI: [%d]\n",
+                                   static_cast<int>((*ioApics.begin())->getVersion() >= 0x20));
+
+    string += "\nI/O APICs:\n";
     for (uint32_t i = 0; i < ioApics.size(); ++i) {
-        IoApic *ioApic = ioApics.get(i);
-        log.info("- Id: [%d], GSI: (Base: [%d], Max [%d]), MMIO: ([0x%x] (phys) -> [0x%x] (virt))",
-                 ioApic->ioId,
-                 static_cast<uint32_t>(ioApic->gsiBase),
-                 static_cast<uint32_t>(ioApic->gsiMax),
-                 ioApic->baseAddress,
-                 ioApic->mmioAddress);
+        const IoApic *ioApic = ioApics.get(i);
+        string += Util::String::format("Id: [%d], GSI: [%d] - [%d], MMIO: [0x%x] (phys) -> [0x%x] (virt)\n",
+                                       ioApic->ioId,
+                                       static_cast<uint32_t>(ioApic->gsiBase),
+                                       static_cast<uint32_t>(ioApic->gsiMax),
+                                       ioApic->baseAddress,
+                                       ioApic->mmioAddress);
         if (ioApic->hasNmi) {
-            log.info("  NMI: (GSI: [%d], Polarity: [%s], TriggerMode: [%s])",
-                     static_cast<uint32_t>(ioApic->nmiGsi),
-                     ioApic->nmiPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                     ioApic->nmiTrigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+            string += Util::String::format("NMI: (GSI: [%d], Polarity: [%s], Trigger: [%s])\n",
+                                           static_cast<uint32_t>(ioApic->nmiGsi),
+                                           ioApic->nmiPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                                           ioApic->nmiTrigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
         }
     }
 
-    log.info("Dumping BSP APIC interrupt configuration...");
-    LocalApic::dumpLVT();
-    for (uint32_t i = 0; i < ioApics.size(); ++i) {
-        IoApic *ioApic = ioApics.get(i);
-        ioApic->dumpREDTBL();
+    string += ("\nI/O APIC IRQ overrides:\n");
+    for (uint32_t i = 0; i < IoApic::irqOverrides.size(); ++i) {
+        const IoApic::IrqOverride *override = IoApic::irqOverrides.get(i);
+        string += Util::String::format("Source: [%d], Target: [%d], Polarity: [%s], Trigger: [%s]\n",
+                                       static_cast<uint32_t>(override->source),
+                                       static_cast<uint32_t>(override->target),
+                                       override->polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                                       override->trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 }
 

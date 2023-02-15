@@ -96,19 +96,18 @@ void IoApic::initializeREDTBL() {
     }
 }
 
-void IoApic::dumpREDTBL() {
-    log.info("Redirection Table (I/O APIC Id: [%d]):", ioId);
+void IoApic::printRedtbl(Util::String &string) {
+    string += Util::String::format("Redirection Table [%d]:\n", ioId);
     for (uint32_t gsi = gsiBase; gsi < gsiMax; ++gsi) {
         const REDTBLEntry redtblEntry = readREDTBL(static_cast<Kernel::GlobalSystemInterrupt>(gsi));
-        log.info("- External Interrupt [%d]: (Vector: [0x%x], Masked: [%d], Destination: [%d], DeliveryMode: [0b%b], DestinationMode: [%s], PinPolarity: [%s], TriggerMode: [%s])",
-                 gsi,
-                 static_cast<uint8_t>(redtblEntry.vector),
-                 static_cast<uint8_t>(redtblEntry.isMasked),
-                 redtblEntry.destination,
-                 static_cast<uint8_t>(redtblEntry.deliveryMode),
-                 redtblEntry.destinationMode == REDTBLEntry::DestinationMode::PHYSICAL ? "PHYSICAL" : "LOGICAL",
-                 redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                 redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+        string += Util::String::format(
+          "Vector: [0x%x], Masked: [%d], Destination: [%d], Polarity: [%s], Trigger: [%s] (IRQ %d)\n",
+          static_cast<uint8_t>(redtblEntry.vector),
+          static_cast<uint8_t>(redtblEntry.isMasked),
+          redtblEntry.destination,
+          redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+          redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL",
+          gsi);
     }
 }
 
