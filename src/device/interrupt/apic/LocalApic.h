@@ -118,9 +118,9 @@ private:
      *
      * The local APIC initialization consists of multiple steps:
      * 1. The BSP calls LocalApic::enableXApicMode(), to set up the system for local APIC initialization.
-     * 2. The BSP calls LocalApic::initialize(), to complete the BSP's local APIC initialization.
+     * 2. The BSP calls LocalApic::enable(), to complete the BSP's local APIC initialization.
      * 3. The APs are booted up.
-     * 4. Every AP calls LocalApic::initialize() individually.
+     * 4. Every AP calls LocalApic::enable() individually.
      *
      * This function must not be called before LocalApic::enableXApicMode().
      */
@@ -140,7 +140,7 @@ private:
      * BIOS code. If a warm reset is performed while the startup routine's address
      * is set in the warm reset vector, it can be used to boot an AP.
      *
-     * @param id The local APIC id/CPU id of the AP to initialize
+     * @param id The local APIC id/CPU id of the AP to enable
      * @param level Assert or deassert
      */
     static void sendIpiInit(uint8_t id, ICREntry::Level level);

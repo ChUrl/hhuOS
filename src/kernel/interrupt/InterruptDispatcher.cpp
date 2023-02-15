@@ -92,12 +92,13 @@ uint32_t InterruptDispatcher::getInterruptDepth() const {
 
 bool InterruptDispatcher::isUnrecoverableException(InterruptVector slot) {
     // Apic interrupts
-    if (Device::Apic::isInitialized() && (Device::Apic::isLocalInterrupt(slot) || Device::Apic::isExternalInterrupt(slot))) {
+    if (Device::Apic::isEnabled() &&
+        (Device::Apic::isLocalInterrupt(slot) || Device::Apic::isExternalInterrupt(slot))) {
         return false;
     }
 
     // Pic interrupts
-    if (!Device::Apic::isInitialized() && slot - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
+    if (!Device::Apic::isEnabled() && slot - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
         return false;
     }
 

@@ -2,6 +2,7 @@
 #include "device/cpu/Cpu.h"
 #include "device/cpu/Smp.h"
 #include "device/power/acpi/Acpi.h"
+#include "device/time/Pit.h"
 #include "kernel/paging/Paging.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/service/TimeService.h"
@@ -12,7 +13,8 @@
 namespace Device {
 
 bool Apic::initialized = false;
-bool Apic::smpInitialized = false;
+bool Apic::smpEnabled = false;
+bool Apic::timerRunning = false;
 Util::ArrayList<LocalApic *> Apic::localApics;
 Util::ArrayList<IoApic *> Apic::ioApics;
 Util::ArrayList<ApicTimer *> Apic::timers;
@@ -24,11 +26,11 @@ bool Apic::isSupported() {
     return LocalApic::supportsXApic() && Acpi::isAvailable() && Acpi::getRsdp().revision == 0;
 }
 
-bool Apic::isInitialized() {
+bool Apic::isEnabled() {
     return initialized;
 }
 
-void Apic::initialize() {
+void Apic::enable() {
     if (initialized) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
@@ -72,8 +74,8 @@ bool Apic::isSmpSupported() {
 }
 
 // This works if local APIC IDs are contiguous, but I think they always are
-void Device::Apic::initializeSmp() {
-    if (smpInitialized) {
+void Device::Apic::startupSmp() {
+    if (smpEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
 
@@ -88,7 +90,6 @@ void Device::Apic::initializeSmp() {
     copySmpStartupCode();
 
     // Call the startup code on each AP using the SIPI
-    auto &timeService = Kernel::System::getService<Kernel::TimeService>();
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
         LocalApic *localApic = localApics.get(i);
         if (localApic->cpuId == LocalApic::getId()) {
@@ -96,54 +97,53 @@ void Device::Apic::initializeSmp() {
             continue;
         }
 
+        // TODO: https://github.com/mit-pdos/xv6-public/blob/master/lapic.c#L129
+
         // Info on discrete APIC:
         // The INIT IPI is required for CPUs with a discrete APIC, these ignore the STARTUP IPI.
         // For these CPUs, the startup routines address has to be written to the BIOS memory segment
         // (warm reset vector), and the system has to be configured for warm-reset to start executing there.
-        // It is still done here, to follow the "universal startup algorithm" (MPSpec, sec. B.4):
+        // This is not implemented here. The INIT IPI is still issued, to follow the IA-32 manual's
+        // "INIT-SIPI-SIPI" sequence and the "universal startup algorithm" (MPSpec, sec. B.4):
         LocalApic::clearErrors();
-        LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT); // Level-triggered, needs to be...
+        LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
         LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
-        timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(10)); // 10 milliseconds in MPSpec
+        Pit::earlyDelay(10'000);                                             // 10 ms
         LocalApic::waitForIpiDispatch();
 
         // Issue the SIPI twice (for xApic):
-        LocalApic::clearErrors();
-        LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
-        timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(10)); // 200 microseconds in MPSpec
-        LocalApic::waitForIpiDispatch();
-
-        LocalApic::clearErrors();
-        LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
-        timeService.busyWait(Util::Time::Timestamp::ofMilliseconds(10)); // 200 microseconds in MPSpec
-        LocalApic::waitForIpiDispatch();
-
-        // Info on the busyWait times:
-        // The SIPI waiting times of 10 milliseconds are waaayyy to long, but the PIT can't wait that short
-        // in its default configuration. It would be better to initialize one of its counters to the
-        // desired interval for oneshot wait. MPSpec mentions a minimal waiting time of 20 microseconds
-        // for SIPI dispatch and recommends 200 microseconds between SIPIs.
+        for (uint8_t j = 0; j < 2; ++j) {
+            LocalApic::clearErrors();
+            LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
+            LocalApic::waitForIpiDispatch();
+            Pit::earlyDelay(200); // 200 us
+        }
 
         // Wait until the AP marks it is running, so we can continue to the next one.
         // Because we initialize the APs one at a time, runningAPs is not synchronized.
         // If the AP initialization fails (and the system doesn't crash), this will lock the BSP,
-        // the same will happen if the SIPI does not reach its target. That's why we break on timeout.
-        const Util::Time::Timestamp apBootStart = timeService.getSystemTime();
+        // the same will happen if the SIPI does not reach its target. That's why we abort.
+        // Because the systemtime is not yet functional, we delay to measure the approx. time.
+        uint32_t readCount = 0;
         while (!(runningAPs & (1 << localApic->cpuId))) {
-            if (timeService.getSystemTime().toSeconds() - apBootStart.toSeconds() > 1) {
+            if (readCount > 100) {
+                // Waited 100 * 10 ms = 1 s in total
                 log.error("CPU [%d] didn't phone home, it could be in undefined state!", i);
                 break;
             }
+            Pit::earlyDelay(10'000); // 10 ms
+            readCount++;
         }
     }
 
-    // Free the startup routine page and the stackpointer array, now that all APs are running
+    // Free the startup routine page and the stackpointer array, now that all APs are running.
+    // Keep the stacks though!
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
     memoryService.freeKernelMemory(reinterpret_cast<void *>(apStacks));
     memoryService.freeKernelMemory(reinterpret_cast<void *>(apStartupAddress));
     apStacks = nullptr;
 
-    smpInitialized = true;
+    smpEnabled = true;
 }
 
 void Apic::initializeCurrentLocalApic() {
@@ -152,7 +152,7 @@ void Apic::initializeCurrentLocalApic() {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
     if (localApic.cpuId != LocalApic::getId()) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "AP can only initialize itself!");
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "AP can only enable itself!");
     }
     localApic.initialize();
 }
@@ -176,7 +176,11 @@ LocalApic &Apic::getCurrentLocalApic() {
     Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find local APIC for current CPU!");
 }
 
-bool Apic::isCurrentTimerInitialized() {
+bool Apic::isBspTimerRunning() {
+    return timerRunning;
+}
+
+bool Apic::isCurrentTimerRunning() {
     for (uint32_t i = 0; i < timers.size(); ++i) {
         ApicTimer *timer = timers.get(i);
         if (timer->cpuId == LocalApic::getId()) {
@@ -187,8 +191,8 @@ bool Apic::isCurrentTimerInitialized() {
     return false;
 }
 
-void Apic::initializeCurrentTimer() {
-    if (isCurrentTimerInitialized()) {
+void Apic::startCurrentTimer() {
+    if (isCurrentTimerRunning()) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC timer for this CPU has already been initialized!");
     }
 
@@ -196,6 +200,7 @@ void Apic::initializeCurrentTimer() {
     auto *apicTimer = new Device::ApicTimer();
     apicTimer->plugin();
     timers.add(apicTimer);
+    timerRunning = true;
 }
 
 ApicTimer &Apic::getCurrentTimer() {

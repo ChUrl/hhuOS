@@ -39,12 +39,12 @@ public:
     /**
      * @brief Check if both LocalApic and IoApic devices are initialized.
      */
-    static bool isInitialized();
+    static bool isEnabled();
 
     /**
      * @brief Initialize the BSP's local APIC and all I/O APICs.
      */
-    static void initialize();
+    static void enable();
 
     /**
      * @brief Check if the system supports symmetric multiprocessing mode with multiple processors.
@@ -54,7 +54,7 @@ public:
     /**
      * @brief Initialize the APs when SMP is supported.
      */
-    static void initializeSmp();
+    static void startupSmp();
 
     /**
      * @brief Initialize the local APIC of the current CPU, called by the APs.
@@ -69,12 +69,17 @@ public:
     /**
      * @brief Check if the BSP's local APIC timer has been initialized.
      */
-    static bool isCurrentTimerInitialized();
+    static bool isBspTimerRunning();
+
+    /**
+     * @brief Check if this core's local APIC timer has been initialized.
+     */
+    static bool isCurrentTimerRunning();
 
     /**
      * @brief Initialize the current processor's local APIC timer.
      */
-    static void initializeCurrentTimer();
+    static void startCurrentTimer();
 
     /**
      * @brief Get the ApicTimer instance that belongs to the current CPU.
@@ -161,8 +166,9 @@ private:
     static void dumpDebugInfo();
 
 private:
-    static bool initialized;         ///< @brief Indicates if Apic::initialize() has been called.
-    static bool smpInitialized;
+    static bool initialized;  ///< @brief Indicates if Apic::enable() has been called.
+    static bool smpEnabled;   ///< @brief Indicates if Apic::startupSmp() has been called.
+    static bool timerRunning; ///< @brief Indicates if Apic::startCurrentTimer() has been called.
 
     // Memory allocated for instances contained in these lists is never freed,
     // this implementation doesn't support disabling the APIC at all.

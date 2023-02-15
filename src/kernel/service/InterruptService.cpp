@@ -31,7 +31,7 @@ void InterruptService::dispatchInterrupt(const InterruptFrame &frame) {
 }
 
 void InterruptService::allowHardwareInterrupt(Device::InterruptRequest interrupt) {
-    if (Device::Apic::isInitialized()) {
+    if (Device::Apic::isEnabled()) {
         Device::Apic::allow(interrupt);
     } else {
         pic.allow(interrupt);
@@ -39,7 +39,7 @@ void InterruptService::allowHardwareInterrupt(Device::InterruptRequest interrupt
 }
 
 void InterruptService::forbidHardwareInterrupt(Device::InterruptRequest interrupt) {
-    if (Device::Apic::isInitialized()) {
+    if (Device::Apic::isEnabled()) {
         Device::Apic::forbid(interrupt);
     } else {
         pic.forbid(interrupt);
@@ -47,7 +47,7 @@ void InterruptService::forbidHardwareInterrupt(Device::InterruptRequest interrup
 }
 
 void InterruptService::sendEndOfInterrupt(InterruptVector interrupt) {
-    if (Device::Apic::isInitialized()) {
+    if (Device::Apic::isEnabled()) {
         Device::Apic::sendEndOfInterrupt(interrupt);
     } else if (interrupt - 32 <= Device::InterruptRequest::SECONDARY_ATA) {
         pic.sendEndOfInterrupt(static_cast<Device::InterruptRequest>(interrupt - 32));
@@ -55,7 +55,7 @@ void InterruptService::sendEndOfInterrupt(InterruptVector interrupt) {
 }
 
 bool InterruptService::checkSpuriousInterrupt(InterruptVector interrupt) {
-    if (Device::Apic::isInitialized()) {
+    if (Device::Apic::isEnabled()) {
         return interrupt == InterruptVector::SPURIOUS;
     }
 

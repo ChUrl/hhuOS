@@ -92,8 +92,7 @@ void LocalApic::enableXApicMode() {
     // Mask all PIC interrupts that have been enabled previously. After the APIC has been initialized, the
     // InterruptService only reaches the I/O APIC's REDTBL registers.
     // At this point, no PIC interrupts should be unmasked, plugging in interrupt handlers should
-    // be done after the APIC is initialized!
-    // Otherwise, these would be "plugged out" here.
+    // be done after the APIC is initialized, otherwise they will be lost!
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     for (uint8_t i = 0; i < 16; ++i) {
         interruptService.forbidHardwareInterrupt(static_cast<InterruptRequest>(i));
@@ -105,7 +104,6 @@ void LocalApic::enableXApicMode() {
 
     // The memory allocated here is never freed, because this implementation does not support
     // disabling the APIC after enabling it.
-    // If this is supposed to be freed, the last LocalApic instance has to do it.
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
     void *virtAddress = memoryService.mapIO(baseAddress, Util::PAGESIZE); // Throws
 
@@ -115,7 +113,7 @@ void LocalApic::enableXApicMode() {
 
     // This implementation only supports xApic mode. Because the local APIC starts with xApic mode and every AP uses
     // the same address space, memory allocation only has to be done once and the IA32_APIC_BASE_MSR does not
-    // have to be written. To enable x2Apic mode, every AP would have to set the x2Apic-enable flag in its
+    // have to be written at all. To enable x2Apic mode, every AP would have to set the x2Apic-enable flag in its
     // IA32_APIC_BASE_MSR, without requiring the MMIO region.
     log.info("Running in xApic mode.");
 }
@@ -148,6 +146,7 @@ void LocalApic::waitForIpiDispatch() {
     do {
         // Spinloop: Pause prevents speculative memory reads, memory prevents compiler memory reordering,
         //           so the ICR polls (simple memory reads after all) should happen as intended.
+        // I am actually not sure if this is necessary, since the MMIO read address is marked volatile?
         asm volatile("pause" : : : "memory");
     } while (readICR().deliveryStatus == ICREntry::DeliveryStatus::PENDING);
 }
