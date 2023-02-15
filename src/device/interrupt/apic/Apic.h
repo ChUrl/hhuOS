@@ -139,19 +139,19 @@ private:
     /**
      * @brief Prepare the memory regions used by the AP's stacks.
      */
-    static void allocateSmpStacks();
+    static void prepareApStacks();
 
     /**
      * @brief Copy the AP startup routine to lower physical memory.
      *
      * @return The page, on which the startup routine is located
      */
-    static void copySmpStartupCode();
+    static void prepareApStartupCode();
 
     /**
      * @brief Place the AP startup routine address into the warm reset vector and prepare CMOS for warm reset.
      */
-    static void prepareWarmReset();
+    static void prepareApWarmReset();
 
     /**
      * @brief Get the LocalApic instance that belongs to the current CPU.
@@ -170,7 +170,7 @@ private:
     static bool smpEnabled;   ///< @brief Indicates if Apic::startupSmp() has been called.
     static bool timerRunning; ///< @brief Indicates if Apic::startCurrentTimer() has been called.
 
-    // Memory allocated for instances contained in these lists is never freed,
+    // Memory allocated for or by instances contained in these lists is never freed,
     // this implementation doesn't support disabling the APIC at all.
     // Once the switch from PIC to APIC is done, it can't be switched back.
     static Util::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.

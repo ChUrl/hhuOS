@@ -83,9 +83,9 @@ void Device::Apic::startupSmp() {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "CPUs with more than 64 cores are not supported!");
     }
 
-    allocateSmpStacks();
-    copySmpStartupCode();
-    prepareWarmReset(); // This is technically only required for discrete APIC, see below
+    prepareApStacks();
+    prepareApStartupCode();
+    prepareApWarmReset(); // This is technically only required for discrete APIC, see below
 
     // Call the startup code on each AP using the SIPI
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
@@ -139,7 +139,7 @@ void Device::Apic::startupSmp() {
     // TODO:
     // memoryService.freeKernelMemory(reinterpret_cast<void *>(apStacks));
     // memoryService.freeLowerMemory(reinterpret_cast<void *>(apStartupAddress));
-    apStacks = nullptr;
+    // apStacks = nullptr;
 
     smpEnabled = true;
 }
@@ -395,7 +395,7 @@ void Apic::populateIoApics() {
     }
 }
 
-void Device::Apic::allocateSmpStacks() {
+void Device::Apic::prepareApStacks() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
     // Allocate the stackpointer array
@@ -419,7 +419,7 @@ void Device::Apic::allocateSmpStacks() {
     }
 }
 
-void Device::Apic::copySmpStartupCode() {
+void Device::Apic::prepareApStartupCode() {
     if (boot_ap_size > Util::PAGESIZE) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Startup code does not fit into one page!");
     }
@@ -462,7 +462,7 @@ void Device::Apic::copySmpStartupCode() {
     destination.copyRange(startupCode, boot_ap_size);
 }
 
-void Apic::prepareWarmReset() {
+void Apic::prepareApWarmReset() {
     Cmos::write(0xF, 0x0A); // Shutdown status byte (MPSpec, sec. B.4)
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
@@ -504,7 +504,7 @@ void Apic::dumpDebugInfo() {
         LocalApic *localApic = localApics.get(i);
         log.info("- Id: [0x%x], NMI: (LINT: [%d], Polarity: [%s], TriggerMode: [%s])",
                  localApic->cpuId,
-                 localApic->nmiLint,
+                 localApic->nmiLint - LocalApic::LINT0,
                  localApic->nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
                  localApic->nmiTrigger == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
