@@ -30,6 +30,9 @@ struct InterruptFrame;
 
 namespace Device {
 
+const IoPort Pit::controlPort = IoPort(0x43);
+const IoPort Pit::dataPort0 = IoPort(0x40);
+
 Kernel::Logger Pit::log = Kernel::Logger::get("Pit");
 
 Pit::Pit(uint16_t interruptRateDivisor, uint32_t yieldInterval) : yieldInterval(yieldInterval) {
@@ -61,7 +64,7 @@ void Pit::trigger(const Kernel::InterruptFrame &frame) {
     time.addNanoseconds(timerInterval);
 
     // Don't use PIT for scheduling when APIC Timer is enabled
-    if (Apic::isCurrentTimerInitialized()) {
+    if (Apic::isCurrentTimerRunning()) {
         return;
     }
 
@@ -72,6 +75,24 @@ void Pit::trigger(const Kernel::InterruptFrame &frame) {
 
 Util::Time::Timestamp Pit::getTime() {
     return time;
+}
+
+void Pit::earlyDelay(uint16_t us) {
+    const uint32_t counter = (static_cast<double>(BASE_FREQUENCY) / 1'000'000) * us;
+    if (counter == 0) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "PIT: Interval too small!");
+    }
+    if (counter > static_cast<uint16_t>(-1)) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "PIT: Interval too large!");
+    }
+
+    controlPort.writeByte(0b110000); // Channel 0, mode 0, low-/high byte access mode
+    dataPort0.writeByte(static_cast<uint8_t>(counter & 0xFF)); // Low byte
+    dataPort0.writeByte(static_cast<uint8_t>((counter >> 8) & 0xFF)); // High byte
+
+    do {
+        controlPort.writeByte(0b11100010); // Readback channel 0, don't latch (deasserts line again)
+    } while (!(dataPort0.readByte() & (1 << 7))); // Bit 7 is the output pin state
 }
 
 }

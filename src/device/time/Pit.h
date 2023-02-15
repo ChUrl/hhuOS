@@ -72,6 +72,16 @@ public:
      */
     [[nodiscard]] Util::Time::Timestamp getTime() override;
 
+    /**
+     * @brief Wait for a specified amount of time.
+     *
+     * Intended for usage before interrupts are enabled and the PIT has been initialized to
+     * rate-generator mode. It may not be used afterwards!
+     *
+     * @param us The delay in microseconds
+     */
+    static void earlyDelay(uint16_t us);
+
     static const constexpr uint32_t BASE_FREQUENCY = 1193182;
 
 private:
@@ -87,8 +97,8 @@ private:
     uint32_t timerInterval = 0;
     uint32_t yieldInterval;
 
-    IoPort controlPort = IoPort(0x43);
-    IoPort dataPort0 = IoPort(0x40);
+    static const IoPort controlPort;
+    static const IoPort dataPort0;
 
     static Kernel::Logger log;
 
