@@ -1,11 +1,10 @@
 #include "Apic.h"
-#include "device/cpu/Cpu.h"
 #include "device/cpu/Smp.h"
 #include "device/power/acpi/Acpi.h"
+#include "device/time/Cmos.h"
 #include "device/time/Pit.h"
 #include "kernel/paging/Paging.h"
 #include "kernel/service/InterruptService.h"
-#include "kernel/service/TimeService.h"
 #include "kernel/system/System.h"
 #include "lib/util/base/Constants.h"
 #include "LocalApic.h"
@@ -73,7 +72,6 @@ bool Apic::isSmpSupported() {
     return getCpuCount() > 1;
 }
 
-// This works if local APIC IDs are contiguous, but I think they always are
 void Device::Apic::startupSmp() {
     if (smpEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
@@ -85,9 +83,9 @@ void Device::Apic::startupSmp() {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "CPUs with more than 64 cores are not supported!");
     }
 
-    ensureContiguousCpuIds();
     allocateSmpStacks();
     copySmpStartupCode();
+    prepareWarmReset(); // This is technically only required for discrete APIC, see below
 
     // Call the startup code on each AP using the SIPI
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
@@ -97,18 +95,17 @@ void Device::Apic::startupSmp() {
             continue;
         }
 
-        // TODO: https://github.com/mit-pdos/xv6-public/blob/master/lapic.c#L129
-
         // Info on discrete APIC:
         // The INIT IPI is required for CPUs with a discrete APIC, these ignore the STARTUP IPI.
         // For these CPUs, the startup routines address has to be written to the BIOS memory segment
-        // (warm reset vector), and the system has to be configured for warm-reset to start executing there.
-        // This is not implemented here. The INIT IPI is still issued, to follow the IA-32 manual's
+        // (warm reset vector), and the AP has to be configured for warm-reset to start executing there.
+        // This is unused for xApic. The INIT IPI is still issued though, to follow the IA-32 manual's
         // "INIT-SIPI-SIPI" sequence and the "universal startup algorithm" (MPSpec, sec. B.4):
         LocalApic::clearErrors();
         LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
+        LocalApic::waitForIpiDispatch();                                     // xv6 waits 200 us instead.
         LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
-        Pit::earlyDelay(10'000);                                             // 10 ms
+        Pit::earlyDelay(10'000);                                             // 10 ms, xv6 waits 100 us instead.
         LocalApic::waitForIpiDispatch();
 
         // Issue the SIPI twice (for xApic):
@@ -139,8 +136,9 @@ void Device::Apic::startupSmp() {
     // Free the startup routine page and the stackpointer array, now that all APs are running.
     // Keep the stacks though!
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    memoryService.freeKernelMemory(reinterpret_cast<void *>(apStacks));
-    memoryService.freeKernelMemory(reinterpret_cast<void *>(apStartupAddress));
+    // TODO:
+    // memoryService.freeKernelMemory(reinterpret_cast<void *>(apStacks));
+    // memoryService.freeLowerMemory(reinterpret_cast<void *>(apStartupAddress));
     apStacks = nullptr;
 
     smpEnabled = true;
@@ -397,24 +395,6 @@ void Apic::populateIoApics() {
     }
 }
 
-void Apic::ensureContiguousCpuIds() {
-    // Verify that the ids are contiguous. We don't take assumptions about the order of appearance though.
-    // This is only here to verify some assumptions I made, based on the manuals (ACPI and IA-32), OSdev
-    // and some implementations (xv6, SerenityOS).
-    // This hardware specific stuff is however hard to verify, and I couldn't find a definitive answer
-    // to these assumptions, so let's choose the dumb way and just abort the whole OS if they are wrong.
-    uint64_t idBitmap = 0;
-    for (uint32_t i = 0; i < localApics.size(); ++i) {
-        LocalApic *localApic = localApics.get(i);
-        idBitmap |= (1 << localApic->cpuId);
-    }
-    const uint64_t idBitmapMask = static_cast<uint64_t>(-1) >> (64 - localApics.size());
-    if (idBitmap != idBitmapMask) {
-        // We require contiguous ids, because the AP stackpointer array uses the id as index
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC ids are not contiguous!");
-    }
-}
-
 void Device::Apic::allocateSmpStacks() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
@@ -480,6 +460,23 @@ void Device::Apic::copySmpStartupCode() {
     // Copy the startup routine and prepared variables to the identity mapped page
     // log.info("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)", reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
+}
+
+void Apic::prepareWarmReset() {
+    Cmos::write(0xF, 0x0A); // Shutdown status byte (MPSpec, sec. B.4)
+
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+    const uint32_t wrvPhys = 0x40 << 4 | 0x67; // MPSpec, sec. B.4
+    void *warmResetVector = memoryService.mapIO(wrvPhys, Util::PAGESIZE);
+
+    // Account for possible misalignment, as mapIO returns a page-aligned pointer
+    const uint32_t pageOffset = wrvPhys % Util::PAGESIZE;
+    const uint32_t wrvVirt = reinterpret_cast<uint32_t>(warmResetVector) + pageOffset;
+
+    *reinterpret_cast<volatile uint16_t *>(wrvVirt) = apStartupAddress;
+
+    // TODO:
+    // memoryService.freeLowerMemory(warmResetVector);
 }
 
 IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {

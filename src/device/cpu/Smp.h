@@ -25,11 +25,13 @@ namespace Device {
 // Export to smp.asm
 extern "C" [[noreturn]] void smpEntry(uint8_t apicid);
 extern uint32_t **apStacks;
-extern volatile uint64_t runningAPs; // This is used as a bitmap, once an AP is running it sets its corresponding bit to 1
+// This is used as a bitmap, once an AP is running it sets its corresponding bit to 1.
+// MPSpec requires the ids to be sequential (sec. B.4), so it works for a max. of 64 CPUs.
+extern volatile uint64_t runningAPs;
 
 // If any of these two are changed, smp.asm has to be changed too (the %defines at the top)!
 const constexpr uint32_t apStackSize = 0x1000;      ///< @brief Size of the stack allocated for each AP.
-const constexpr uint32_t apStartupAddress = 0x8000; ///< @brief Physical address the AP startup routine is copied to.
+const constexpr uint16_t apStartupAddress = 0x8000; ///< @brief Physical address the AP startup routine is copied to.
 
 } // namespace Device
 

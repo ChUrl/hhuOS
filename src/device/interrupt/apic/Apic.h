@@ -137,11 +137,6 @@ private:
     static void populateIoApics();
 
     /**
-     * @brief Make sure that the local APIC ids are contiguous.
-     */
-    static void ensureContiguousCpuIds();
-
-    /**
      * @brief Prepare the memory regions used by the AP's stacks.
      */
     static void allocateSmpStacks();
@@ -152,6 +147,11 @@ private:
      * @return The page, on which the startup routine is located
      */
     static void copySmpStartupCode();
+
+    /**
+     * @brief Place the AP startup routine address into the warm reset vector and prepare CMOS for warm reset.
+     */
+    static void prepareWarmReset();
 
     /**
      * @brief Get the LocalApic instance that belongs to the current CPU.
