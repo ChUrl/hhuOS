@@ -28,6 +28,9 @@ void IoApic::initialize() {
     const uint32_t pageOffset = baseAddress % Util::PAGESIZE;
     mmioAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
 
+    // Set the I/O APIC ID (the id register is initialized to 0) read from ACPI
+    writeIndirectRegister(ID, static_cast<uint32_t>(ioId) << 24); // ICH5, sec. 9.5.6
+
     // With the IRQPA there is a way to address more than 255 GSIs although maxREDTBLEntries only has 8 bits
     // With ICH5 and other ICHs it is always 24 (ICH5 only has 1 IO APIC, as other consumer hardware)
     gsiMax = static_cast<Kernel::GlobalSystemInterrupt>(gsiBase + (readIndirectRegister(VER) >> 16));
