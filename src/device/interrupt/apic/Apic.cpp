@@ -68,6 +68,10 @@ void Apic::enable() {
 }
 
 void Apic::mountDeviceNodes() {
+    if (!initialized) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Not initialized!");
+    }
+
     auto &filesystemService = Kernel::System::getService<Kernel::FilesystemService>();
     auto &driver = filesystemService.getFilesystem().getVirtualDriver("/device");
 

@@ -164,7 +164,9 @@ void GatesOfHell::enter() {
 
     mountDevices();
 
-    Device::Apic::mountDeviceNodes();
+    if (Device::Apic::isEnabled()) {
+        Device::Apic::mountDeviceNodes();
+    }
 
     printBanner();
 
