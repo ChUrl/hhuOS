@@ -64,7 +64,7 @@ void Pit::trigger(const Kernel::InterruptFrame &frame) {
     time.addNanoseconds(timerInterval);
 
     // Don't use PIT for scheduling when APIC Timer is enabled
-    if (Apic::isBspTimerRunning()) {
+    if (Apic::isEnabled()) {
         return;
     }
 

@@ -14,9 +14,8 @@
 
 namespace Device {
 
-bool Apic::initialized = false;
+bool Apic::apicEnabled = false;
 bool Apic::smpEnabled = false;
-bool Apic::timerRunning = false;
 Util::ArrayList<LocalApic *> Apic::localApics;
 Util::ArrayList<IoApic *> Apic::ioApics;
 Util::ArrayList<ApicTimer *> Apic::timers;
@@ -29,11 +28,11 @@ bool Apic::isSupported() {
 }
 
 bool Apic::isEnabled() {
-    return initialized;
+    return apicEnabled;
 }
 
 void Apic::enable() {
-    if (initialized) {
+    if (apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
 
@@ -64,11 +63,16 @@ void Apic::enable() {
     errorHandler.plugin();       // Does not allow the interrupt!
     enableCurrentErrorHandler(); // Allows the interrupt for this AP
 
-    initialized = true;
+    // In contrast to the errorHandler, there are multiple timers in multicore systems, because they keep
+    // track of the "core-local" time.
+    ApicTimer::calibrate();
+    startCurrentTimer();
+
+    apicEnabled = true;
 }
 
 void Apic::mountDeviceNodes() {
-    if (!initialized) {
+    if (!apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Not initialized!");
     }
 
@@ -113,13 +117,13 @@ void Device::Apic::startupSmp() {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "CPUs with more than 64 cores are not supported!");
     }
 
-    prepareApStacks();
-    prepareApStartupCode();
-    prepareApWarmReset(); // This is technically only required for discrete APIC, see below
+    void *apStacks = prepareApStacks();
+    void *apStartupCode = prepareApStartupCode(apStacks);
+    void *apWarmReset = prepareApWarmReset(); // This is technically only required for discrete APIC, see below
 
     // Call the startup code on each AP using the SIPI
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
-        LocalApic *localApic = localApics.get(i);
+        const LocalApic *localApic = localApics.get(i);
         if (localApic->cpuId == LocalApic::getId()) {
             // Skip this AP if it's the BSP (disabled processors won't even show up in this list)
             continue;
@@ -135,8 +139,8 @@ void Device::Apic::startupSmp() {
         LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
         LocalApic::waitForIpiDispatch();                                     // xv6 waits 200 us instead.
         LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
+        LocalApic::waitForIpiDispatch();                                     // Not necessary with 10ms delay
         Pit::earlyDelay(10'000);                                             // 10 ms, xv6 waits 100 us instead.
-        LocalApic::waitForIpiDispatch();
 
         // Issue the SIPI twice (for xApic):
         for (uint8_t j = 0; j < 2; ++j) {
@@ -150,11 +154,11 @@ void Device::Apic::startupSmp() {
         // Because we initialize the APs one at a time, runningAPs is not synchronized.
         // If the AP initialization fails (and the system doesn't crash), this will lock the BSP,
         // the same will happen if the SIPI does not reach its target. That's why we abort.
-        // Because the systemtime is not yet functional, we delay to measure the approx. time.
+        // Because the systemtime is not yet functional, we delay to measure the ~ time.
         uint32_t readCount = 0;
         while (!(runningAPs & (1 << localApic->cpuId))) {
             if (readCount > 100) {
-                // Waited 100 * 10 ms = 1 s in total
+                // Waited 100 * 10 ms = 1 s in total (arbitrary, could be way shorter)
                 log.error("CPU [%d] didn't phone home, it could be in undefined state!", i);
                 break;
             }
@@ -163,13 +167,11 @@ void Device::Apic::startupSmp() {
         }
     }
 
-    // Free the startup routine page and the stackpointer array, now that all APs are running.
-    // Keep the stacks though!
-    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    // TODO:
-    // memoryService.freeKernelMemory(reinterpret_cast<void *>(apStacks));
-    // memoryService.freeLowerMemory(reinterpret_cast<void *>(apStartupAddress));
-    // apStacks = nullptr;
+    // Free the startup routine page, stackpointer array and warm-reset vector memory,
+    // now that all APs are running. Keep the stacks though!
+    delete apStacks;
+    delete apStartupCode;
+    delete apWarmReset;
 
     smpEnabled = true;
 }
@@ -186,7 +188,7 @@ void Apic::initializeCurrentLocalApic() {
 }
 
 uint8_t Apic::getCpuCount() {
-    if (!initialized) {
+    if (!apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Uninitialized CPU count!");
     }
 
@@ -202,10 +204,6 @@ LocalApic &Apic::getCurrentLocalApic() {
     }
 
     Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find local APIC for current CPU!");
-}
-
-bool Apic::isBspTimerRunning() {
-    return timerRunning;
 }
 
 bool Apic::isCurrentTimerRunning() {
@@ -226,9 +224,8 @@ void Apic::startCurrentTimer() {
 
     // We use multiple instances because each timer has its own timestamp
     auto *apicTimer = new Device::ApicTimer();
-    apicTimer->plugin();
+    apicTimer->plugin(); // Multiple invocations register multiple handlers to the APICTIMER vector
     timers.add(apicTimer);
-    timerRunning = true;
 }
 
 ApicTimer &Apic::getCurrentTimer() {
@@ -248,7 +245,7 @@ void Apic::enableCurrentErrorHandler() {
 }
 
 void Apic::allow(InterruptRequest interruptRequest) {
-    if (!initialized) {
+    if (!apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
 
@@ -261,7 +258,7 @@ void Apic::allow(InterruptRequest interruptRequest) {
 }
 
 void Apic::forbid(InterruptRequest interruptRequest) {
-    if (!initialized) {
+    if (!apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
 
@@ -274,7 +271,7 @@ void Apic::forbid(InterruptRequest interruptRequest) {
 }
 
 bool Apic::status(InterruptRequest interruptRequest) {
-    if (!initialized) {
+    if (!apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
 
@@ -287,7 +284,7 @@ bool Apic::status(InterruptRequest interruptRequest) {
 }
 
 void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
-    if (!initialized) {
+    if (!apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
 
@@ -375,7 +372,8 @@ void Apic::populateIoApics() {
         // Find the maximum GSI of ioInfo by finding the next larger GSI base
         const Acpi::IoApic *nextIoInfo = acpiIoApics.get(0);
         for (const auto *nIoInfo : acpiIoApics) {
-            if (nIoInfo->globalSystemInterruptBase > ioInfo->globalSystemInterruptBase && nIoInfo->globalSystemInterruptBase <= nextIoInfo->globalSystemInterruptBase) {
+            if (nIoInfo->globalSystemInterruptBase > ioInfo->globalSystemInterruptBase
+                && nIoInfo->globalSystemInterruptBase <= nextIoInfo->globalSystemInterruptBase) {
                 nextIoInfo = nIoInfo;
             }
         }
@@ -383,9 +381,10 @@ void Apic::populateIoApics() {
         // Select the NMI that belongs to ioInfo (if it exists)
         const Acpi::NmiSource *nmiInfo = nullptr;
         for (const auto *ioNmi : acpiNmiSources) {
-            if (ioNmi->globalSystemInterrupt >= ioInfo->globalSystemInterruptBase && (ioNmi->globalSystemInterrupt < nextIoInfo->globalSystemInterruptBase
-                                                                                      // In case there is 1 I/O APIC, they are equal:
-                                                                                      || ioInfo->globalSystemInterruptBase == nextIoInfo->globalSystemInterruptBase)) {
+            if (ioNmi->globalSystemInterrupt >= ioInfo->globalSystemInterruptBase
+                && (ioNmi->globalSystemInterrupt < nextIoInfo->globalSystemInterruptBase
+                    // In case there is 1 I/O APIC, they are equal:
+                    || ioInfo->globalSystemInterruptBase == nextIoInfo->globalSystemInterruptBase)) {
                 nmiInfo = ioNmi;
                 break;
             }
@@ -425,11 +424,11 @@ void Apic::populateIoApics() {
     }
 }
 
-void Apic::prepareApStacks() {
+void *Apic::prepareApStacks() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
     // Allocate the stackpointer array
-    apStacks = reinterpret_cast<uint32_t **>(memoryService.allocateKernelMemory(sizeof(uint32_t *) * getCpuCount()));
+    auto **apStacks = reinterpret_cast<uint32_t **>(memoryService.allocateKernelMemory(sizeof(uint32_t *) * getCpuCount()));
     if (apStacks == nullptr) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP stack memory!");
     }
@@ -447,9 +446,11 @@ void Apic::prepareApStacks() {
             Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP stack memory!");
         }
     }
+
+    return reinterpret_cast<void *>(apStacks);
 }
 
-void Apic::prepareApStartupCode() {
+void *Apic::prepareApStartupCode(void *apStacks) {
     if (boot_ap_size > Util::PAGESIZE) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Startup code does not fit into one page!");
     }
@@ -490,9 +491,11 @@ void Apic::prepareApStartupCode() {
     // Copy the startup routine and prepared variables to the identity mapped page
     // log.info("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)", reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
+
+    return reinterpret_cast<void *>(apStartupAddress);
 }
 
-void Apic::prepareApWarmReset() {
+void *Apic::prepareApWarmReset() {
     Cmos::write(0xF, 0x0A); // Shutdown status byte (MPSpec, sec. B.4)
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
@@ -505,8 +508,7 @@ void Apic::prepareApWarmReset() {
 
     *reinterpret_cast<volatile uint16_t *>(wrvVirt) = apStartupAddress;
 
-    // TODO:
-    // memoryService.freeLowerMemory(warmResetVector);
+    return reinterpret_cast<void *>(wrvVirt);
 }
 
 IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {

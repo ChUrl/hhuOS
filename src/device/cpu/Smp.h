@@ -24,7 +24,6 @@ namespace Device {
 
 // Export to smp.asm
 extern "C" [[noreturn]] void smpEntry(uint8_t apicid);
-extern uint32_t **apStacks;
 // This is used as a bitmap, once an AP is running it sets its corresponding bit to 1.
 // MPSpec requires the ids to be sequential (sec. B.4), so it works for a max. of 64 CPUs.
 extern volatile uint64_t runningAPs;

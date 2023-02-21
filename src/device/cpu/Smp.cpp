@@ -13,12 +13,6 @@ Kernel::Logger log = Kernel::Logger::get("SMP");
     log.info("CPU [%d] is now online!", apicid);
     runningAPs |= (1 << apicid); // Mark that this AP is running
 
-    // Wait until the BSP APIC has been initialized fully before continuing:
-    // At this point the interrupts will be enabled again, so the current timer
-    // would be able to calibrate itself (which it doesn't do because the BSP
-    // timer already did it).
-    while (!Device::Apic::isBspTimerRunning()) {}
-
     // Initialize this AP's APIC
     Device::Apic::initializeCurrentLocalApic();
     Device::Apic::enableCurrentErrorHandler();

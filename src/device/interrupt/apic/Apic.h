@@ -57,6 +57,8 @@ public:
 
     /**
      * @brief Initialize the APs when SMP is supported.
+     *
+     * Implements the "Universal Startup Algorithm" from the Intel MultiProcessor Specification.
      */
     static void startupSmp();
 
@@ -69,11 +71,6 @@ public:
      * @brief Get the total CPU count.
      */
     static uint8_t getCpuCount();
-
-    /**
-     * @brief Check if the BSP's local APIC timer has been initialized.
-     */
-    static bool isBspTimerRunning();
 
     /**
      * @brief Check if this core's local APIC timer has been initialized.
@@ -143,19 +140,19 @@ private:
     /**
      * @brief Prepare the memory regions used by the AP's stacks.
      */
-    static void prepareApStacks();
+    static void *prepareApStacks();
 
     /**
      * @brief Copy the AP startup routine to lower physical memory.
      *
      * @return The page, on which the startup routine is located
      */
-    static void prepareApStartupCode();
+    static void *prepareApStartupCode(void *apStacks);
 
     /**
      * @brief Place the AP startup routine address into the warm reset vector and prepare CMOS for warm reset.
      */
-    static void prepareApWarmReset();
+    static void *prepareApWarmReset();
 
     /**
      * @brief Get the LocalApic instance that belongs to the current CPU.
@@ -172,9 +169,8 @@ private:
     static void printIoApics(Util::String &string);
 
 private:
-    static bool initialized;  ///< @brief Indicates if Apic::enable() has been called.
+    static bool apicEnabled;  ///< @brief Indicates if Apic::enable() has been called.
     static bool smpEnabled;   ///< @brief Indicates if Apic::startupSmp() has been called.
-    static bool timerRunning; ///< @brief Indicates if Apic::startCurrentTimer() has been called.
 
     // Memory allocated for or by instances contained in these lists is never freed,
     // this implementation doesn't support disabling the APIC at all.

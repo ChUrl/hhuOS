@@ -12,6 +12,9 @@ namespace Device {
  *
  * Its purpose is to trigger per-core scheduler preemption in SMP systems, although it is also used
  * in singlecore systems. It is not used for system-time keeping, this is still done by the PIT.
+ *
+ * It receives its tick interval in milliseconds, which should be precise enough for scheduling.
+ * If a more precise interval is required, the timer divider might need adjustment.
  */
 class ApicTimer : public Kernel::InterruptHandler, public TimeProvider {
     friend class Apic;
@@ -20,10 +23,10 @@ public:
     /**
      * @brief Construct an ApicTimer instance.
      *
-     * @param timerInterval The tick interval in nanoseconds (10 milliseconds by default)
+     * @param timerInterval The tick interval in milliseconds (10 milliseconds by default)
      * @param yieldInterval The preemption interval in milliseconds (10 milliseconds by default)
      */
-    explicit ApicTimer(uint32_t timerInterval = 10'000'000, uint32_t yieldInterval = 10);
+    explicit ApicTimer(uint32_t timerInterval = 10, uint32_t yieldInterval = 10);
 
     ApicTimer(const ApicTimer &copy) = delete;
 
@@ -69,19 +72,21 @@ private:
 
 private:
     /**
-     * @brief Calibrates the APIC timer to fire interrupts in the interval set at construction.
+     * @brief Calibrate the APIC timer using the PIT.
      *
-     * Because the APIC timer has no fixed frequency, it is calibrated using the PIT as calibration source.
+     * Uses the PIT to measure how often the APIC timer ticks in 10ms. When constructing
+     * a new timer, this value will be used to calculate the initial counter for the desired interval.
      */
-    [[nodiscard]] static uint32_t calibrateInitialCounter();
+    static void calibrate();
 
 private:
-    uint8_t cpuId;            ///< @brief The id of the CPU that uses this timer.
-    static uint32_t counter;  ///< @brief The counter the BSP's APIC timer was initialized with.
-    static uint32_t timerInt; ///< @brief The interrupt trigger interval in nanoseconds.
-    static uint32_t yieldInt; ///< @brief The preemption trigger interval in milliseconds.
+    uint8_t cpuId;               ///< @brief The id of the CPU that uses this timer.
+    uint32_t timerInterval;      ///< @brief The interrupt trigger interval in milliseconds.
+    uint32_t yieldInterval;      ///< @brief The preemption trigger interval in milliseconds.
+    static uint32_t ticksIn1ms; ///< @brief The number of ticks the APIC timer does in 10 ms.
 
-    Util::Time::Timestamp time{};
+    Util::Time::Timestamp time{}; ///< @brief The "core-local" timestamp.
+
     static Kernel::Logger log;
 };
 

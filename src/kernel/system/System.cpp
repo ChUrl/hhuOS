@@ -110,15 +110,15 @@ void System::initializeSystem() {
 
     initialized = true;
 
+    // Init APIC before interrupts are enabled or any devices have plugged-in!
     if (Device::Apic::isSupported()) {
         log.info("APIC support detected -> Initializing BSP Local APIC + I/O APIC(s)");
         Device::Apic::enable();
-    }
 
-    // Needs to be done before interrupts + before PIT!
-    if (Device::Apic::isEnabled() && Device::Apic::isSmpSupported()) {
-        log.info("Detected SMP support -> Initializing AP(s)");
-        Device::Apic::startupSmp();
+        if (Device::Apic::isSmpSupported()) {
+            log.info("Detected SMP support -> Initializing AP(s)");
+            Device::Apic::startupSmp();
+        }
     }
 
     // The base system is initialized. We can now enable interrupts and initialize timer devices
@@ -144,12 +144,6 @@ void System::initializeSystem() {
     }
 
     registerService(TimeService::SERVICE_ID, new Kernel::TimeService(pit, rtc));
-
-    // Requires TimeService + interrupts and local APIC!
-    if (Device::Apic::isEnabled()) {
-        log.info("APIC detected -> Initializing BSP APIC Timer");
-        Device::Apic::startCurrentTimer();
-    }
 
     // Create thread to refill block pool of paging area manager
     auto &refillThread = Kernel::Thread::createKernelThread("Paging-Area-Pool-Refiller", processService->getKernelProcess(), new PagingAreaManagerRefillRunnable(*pagingAreaManager));
