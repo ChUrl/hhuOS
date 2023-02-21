@@ -40,6 +40,8 @@ public:
 
     /**
      * @brief Initialize the BSP's local APIC and all I/O APICs.
+     *
+     * Includes APIC timer and APIC error handler.
      */
     static void enable();
 

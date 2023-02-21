@@ -49,7 +49,7 @@ void ApicTimer::trigger(const Kernel::InterruptFrame &frame) {
     }
 
     // Increase the "core-local" time, the systemtime is still managed by the PIT.
-    time.addNanoseconds(timerInterval);
+    time.addNanoseconds(timerInterval * 1'000'000); // Interval is in milliseconds
 
     if (cpuId != 0) {
         // Currently there is only one scheduler, it should get triggered only by the BSP.

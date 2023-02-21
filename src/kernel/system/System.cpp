@@ -112,11 +112,11 @@ void System::initializeSystem() {
 
     // Init APIC before interrupts are enabled or any devices have plugged-in!
     if (Device::Apic::isSupported()) {
-        log.info("APIC support detected -> Initializing BSP Local APIC + I/O APIC(s)");
-        Device::Apic::enable();
+        log.info("APIC detected -> Initializing BSP's local APIC + I/O APIC(s)");
+        Device::Apic::enable(); // This also starts the timer
 
         if (Device::Apic::isSmpSupported()) {
-            log.info("Detected SMP support -> Initializing AP(s)");
+            log.info("Multiple CPUs (SMP) detected -> Initializing AP(s)");
             Device::Apic::startupSmp();
         }
     }

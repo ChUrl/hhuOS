@@ -47,6 +47,7 @@ void Apic::enable() {
 
     // Initialize our local APIC, all others are only initialized when SMP is started up
     LocalApic::enableXApicMode();
+    apicEnabled = true; // Now everything is ready for normal operation
     initializeCurrentLocalApic();
 
     // Multiple I/O APICs are possible, but in the usual Intel consumer chipsets there is only one
@@ -67,8 +68,6 @@ void Apic::enable() {
     // track of the "core-local" time.
     ApicTimer::calibrate();
     startCurrentTimer();
-
-    apicEnabled = true;
 }
 
 void Apic::mountDeviceNodes() {
@@ -110,7 +109,9 @@ void Device::Apic::startupSmp() {
     if (smpEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
-
+    if (!apicEnabled) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
+    }
     if (getCpuCount() > 64) {
         // This limit is pretty arbitrary, but the runningAPs bitmap currently only has 64 bits (in Smp.h).
         // Technically xApic supports 8-bit CPU ids though, x2Apic even more (32-bit CPU ids).
@@ -177,6 +178,9 @@ void Device::Apic::startupSmp() {
 }
 
 void Apic::initializeCurrentLocalApic() {
+    if (!apicEnabled) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
+    }
     LocalApic &localApic = getCurrentLocalApic();
     if (localApic.initialized) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
@@ -218,6 +222,9 @@ bool Apic::isCurrentTimerRunning() {
 }
 
 void Apic::startCurrentTimer() {
+    if (!apicEnabled) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
+    }
     if (isCurrentTimerRunning()) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC timer for this CPU has already been initialized!");
     }
@@ -240,6 +247,9 @@ ApicTimer &Apic::getCurrentTimer() {
 }
 
 void Apic::enableCurrentErrorHandler() {
+    if (!apicEnabled) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
+    }
     // This part needs to be done for each AP
     LocalApic::allow(LocalApic::ERROR);
 }
@@ -303,10 +313,16 @@ void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
 }
 
 bool Apic::isLocalInterrupt(Kernel::InterruptVector vector) {
+    if (!apicEnabled) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
+    }
     return vector >= Kernel::InterruptVector::CMCI && vector <= Kernel::InterruptVector::ERROR;
 }
 
 bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
+    if (!apicEnabled) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
+    }
     // Remapping can be ignored here, as all GSIs are contiguous anyway
     return static_cast<Kernel::GlobalSystemInterrupt>(vector - 32) <= IoApic::systemGsiMax;
 }
