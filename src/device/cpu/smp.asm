@@ -42,6 +42,14 @@ boot_ap:
     or al, 0x1 ; Set PE bit
     mov cr0, eax
 
+    ; Setup the protected mode segments
+    mov ax, 0x10
+    mov ds, ax ; Data segment register
+    mov es, ax ; Extra segment register
+    mov ss, ax ; Stack segment register
+    mov fs, ax ; General purpose segment register
+    mov gs, ax ; General purpose segment register
+
     ; Far jump to protected mode, sets cs (code segment register)
     jmp dword 0x8:boot_ap_32 - boot_ap + startup_address
 
@@ -98,14 +106,6 @@ boot_ap_entry:
 bits 32
 align 8
 boot_ap_32:
-    ; Setup the protected mode segments
-    mov ax, 0x10
-    mov ds, ax ; Data segment register
-    mov es, ax ; Extra segment register
-    mov ss, ax ; Stack segment register
-    mov fs, ax ; General purpose segment register
-    mov gs, ax ; General purpose segment register
-
     ; 1. Set cr3 to BSP value (for the page directory)
     mov eax, [boot_ap_cr3 - boot_ap + startup_address]
     mov cr3, eax
