@@ -166,7 +166,7 @@ private:
      *
      * Because this memory is identity-mapped, the physical address can be used to free the memory again.
      *
-     * @return The page, on which the startup routine is located
+     * @return The virtual/physical address at which the startup routine is located
      */
     static void *prepareApStartupCode(void *apGdts, void *apStacks);
 
