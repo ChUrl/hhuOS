@@ -142,11 +142,15 @@ private:
 
     /**
      * @brief Prepare the memory regions used by the AP's stacks.
+     *
+     * @return The virtual address of the stackpointer array
      */
     static void *prepareApStacks();
 
     /**
      * @brief Copy the AP startup routine to lower physical memory.
+     *
+     * Because this memory is identity-mapped, the physical address can be used to free the memory again.
      *
      * @return The page, on which the startup routine is located
      */
@@ -154,6 +158,8 @@ private:
 
     /**
      * @brief Place the AP startup routine address into the warm reset vector and prepare CMOS for warm reset.
+     *
+     * @return The virtual address of the allocated memory used to write the warm-reset vector
      */
     static void *prepareApWarmReset();
 
