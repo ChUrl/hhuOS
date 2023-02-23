@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="qemu-gdb (BIOS)" type="CLion_Remote" version="1" remoteCommand="localhost:1234" symbolFile="$PROJECT_DIR$/cmake-build-debug/bin/system" sysroot="">
-    <debugger kind="GDB">/nix/store/rd3q2hxn7iwkc4kcfhff4sp8vrinzbd6-devshell-dir/bin/gdb</debugger>
+    <debugger kind="GDB">/nix/store/6xfqbwq1qq8crzhha6yr3v9j77c3sxic-devshell-dir/bin/gdb</debugger>
     <method v="2">
       <option name="ToolBeforeRunTask" enabled="true" actionId="Tool_External Tools_qemu-gdb (BIOS)" />
     </method>

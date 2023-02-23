@@ -173,7 +173,7 @@ private:
      * This is determined using the ACPI I/O APIC MADT structures. This is valid, because
      * with multiple I/O APICs there are never gaps in the GSI coverage.
      *
-     * @return The GSI after the max. supported one. If only one I/O APIC is present, this I/O APIC's
+     * @return The max. supported GSI. If only one I/O APIC is present, this I/O APIC's
      *         GSI base will be returned.
      */
     static Kernel::GlobalSystemInterrupt getIoApicMaxGsi(const Acpi::IoApic &ioInfo,

@@ -398,7 +398,7 @@ void Apic::populateIoApics() {
         for (const auto *nmi : acpiNmiSources) {
             if (maxGsi == ioInfo->globalSystemInterruptBase
                 || (nmi->globalSystemInterrupt >= ioInfo->globalSystemInterruptBase
-                    && nmi->globalSystemInterrupt < maxGsi)) {
+                    && nmi->globalSystemInterrupt <= maxGsi)) {
                 // The first condition is valid for a single I/O APIC
                 ioApic->addNonMaskableInterrupt(static_cast<Kernel::GlobalSystemInterrupt>(nmi->globalSystemInterrupt),
                                                 nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
@@ -531,15 +531,19 @@ IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
 
 Kernel::GlobalSystemInterrupt Apic::getIoApicMaxGsi(const Acpi::IoApic &ioInfo,
                                                     const Util::ArrayList<const Acpi::IoApic *> &acpiIoApics) {
+    if (acpiIoApics.size() == 1) {
+        return static_cast<Kernel::GlobalSystemInterrupt>(acpiIoApics.get(0)->globalSystemInterruptBase);
+    }
+
     // Find the maximum GSI of ioInfo by finding the next larger GSI base
-    const Acpi::IoApic *nextIoInfo = acpiIoApics.get(0);
+    const Acpi::IoApic *nextIoInfo = acpiIoApics.get(1);
     for (const auto *nIoInfo : acpiIoApics) {
         if (nIoInfo->globalSystemInterruptBase > ioInfo.globalSystemInterruptBase
             && nIoInfo->globalSystemInterruptBase <= nextIoInfo->globalSystemInterruptBase) {
             nextIoInfo = nIoInfo;
         }
     }
-    return static_cast<Kernel::GlobalSystemInterrupt>(nextIoInfo->globalSystemInterruptBase);
+    return static_cast<Kernel::GlobalSystemInterrupt>(nextIoInfo->globalSystemInterruptBase - 1);
 }
 
 void Apic::printLocalApics(Util::String &string) {
