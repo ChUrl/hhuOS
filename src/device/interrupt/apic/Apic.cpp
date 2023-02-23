@@ -264,6 +264,9 @@ void Apic::allow(InterruptRequest interruptRequest) {
                                               ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
                                               : override->target;
     IoApic &ioApic = getIoApic(gsi); // Select responsible I/O APIC
+    if (ioApic.isNonMaskableInterrupt(gsi)) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI is non-maskable!");
+    }
     ioApic.allow(gsi);
 }
 
@@ -277,6 +280,9 @@ void Apic::forbid(InterruptRequest interruptRequest) {
                                               ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
                                               : override->target;
     IoApic &ioApic = getIoApic(gsi);
+    if (ioApic.isNonMaskableInterrupt(gsi)) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI is non-maskable!");
+    }
     ioApic.forbid(gsi);
 }
 
@@ -384,37 +390,20 @@ void Apic::populateIoApics() {
 
     // Create IoApic instances
     for (const auto *ioInfo : acpiIoApics) {
-        // The Nmi is assigned to the correct I/O APIC. This is a mess, because ACPI does not report
-        // the maximum GSI an I/O APIC supports.
-
-        // Find the maximum GSI of ioInfo by finding the next larger GSI base
-        const Acpi::IoApic *nextIoInfo = acpiIoApics.get(0);
-        for (const auto *nIoInfo : acpiIoApics) {
-            if (nIoInfo->globalSystemInterruptBase > ioInfo->globalSystemInterruptBase
-                && nIoInfo->globalSystemInterruptBase <= nextIoInfo->globalSystemInterruptBase) {
-                nextIoInfo = nIoInfo;
-            }
-        }
-
-        // Select the NMI that belongs to ioInfo (if it exists)
-        const Acpi::NmiSource *nmiInfo = nullptr;
-        for (const auto *ioNmi : acpiNmiSources) {
-            if (ioNmi->globalSystemInterrupt >= ioInfo->globalSystemInterruptBase
-                && (ioNmi->globalSystemInterrupt < nextIoInfo->globalSystemInterruptBase
-                    // In case there is 1 I/O APIC, they are equal:
-                    || ioInfo->globalSystemInterruptBase == nextIoInfo->globalSystemInterruptBase)) {
-                nmiInfo = ioNmi;
-                break;
-            }
-        }
-
         auto *ioApic = new IoApic(ioInfo->ioApicId, ioInfo->ioApicAddress,
                                   static_cast<Kernel::GlobalSystemInterrupt>(ioInfo->globalSystemInterruptBase));
 
-        if (nmiInfo != nullptr) {
-            ioApic->addNonMaskableInterrupt(static_cast<Kernel::GlobalSystemInterrupt>(nmiInfo->globalSystemInterrupt),
-                                            nmiInfo->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
-                                            nmiInfo->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL);
+        // Add all NMIs that belong to this I/O APIC
+        const uint32_t maxGsi = getIoApicMaxGsi(*ioInfo, acpiIoApics);
+        for (const auto *nmi : acpiNmiSources) {
+            if (maxGsi == ioInfo->globalSystemInterruptBase
+                || (nmi->globalSystemInterrupt >= ioInfo->globalSystemInterruptBase
+                    && nmi->globalSystemInterrupt < maxGsi)) {
+                // The first condition is valid for a single I/O APIC
+                ioApic->addNonMaskableInterrupt(static_cast<Kernel::GlobalSystemInterrupt>(nmi->globalSystemInterrupt),
+                                                nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
+                                                nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL);
+            }
         }
 
         ioApics.add(ioApic);
@@ -531,13 +520,26 @@ void *Apic::prepareApWarmReset() {
 
 IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
     for (uint32_t i = 0; i < ioApics.size(); ++i) {
-        IoApic *ioApic = ioApics.get(i);
-        if (gsi >= ioApic->gsiBase && gsi <= ioApic->gsiMax) {
-            return *ioApic;
+        IoApic &ioApic = *ioApics.get(i);
+        if (gsi >= ioApic.gsiBase && gsi <= ioApic.gsiMax) {
+            return ioApic;
         }
     }
 
     Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "No I/O APIC found for the supplied GSI!");
+}
+
+Kernel::GlobalSystemInterrupt Apic::getIoApicMaxGsi(const Acpi::IoApic &ioInfo,
+                                                    const Util::ArrayList<const Acpi::IoApic *> &acpiIoApics) {
+    // Find the maximum GSI of ioInfo by finding the next larger GSI base
+    const Acpi::IoApic *nextIoInfo = acpiIoApics.get(0);
+    for (const auto *nIoInfo : acpiIoApics) {
+        if (nIoInfo->globalSystemInterruptBase > ioInfo.globalSystemInterruptBase
+            && nIoInfo->globalSystemInterruptBase <= nextIoInfo->globalSystemInterruptBase) {
+            nextIoInfo = nIoInfo;
+        }
+    }
+    return static_cast<Kernel::GlobalSystemInterrupt>(nextIoInfo->globalSystemInterruptBase);
 }
 
 void Apic::printLocalApics(Util::String &string) {
@@ -551,13 +553,13 @@ void Apic::printLocalApics(Util::String &string) {
 
     string += "\nLocal APICs:\n";
     for (uint32_t i = 0; i < localApics.size(); ++i) {
-        const LocalApic *localApic = localApics.get(i);
+        const LocalApic &localApic = *localApics.get(i);
         string += Util::String::format("Id: [0x%x], Running: [%d], NMI: (LINT: [%d], Polarity: [%s], Trigger: [%s])\n",
-                                       localApic->cpuId,
-                                       localApic->initialized,
-                                       localApic->nmiLint - LocalApic::LINT0,
-                                       localApic->nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                                       localApic->nmiTrigger == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+                                       localApic.cpuId,
+                                       localApic.initialized,
+                                       localApic.nmiLint - LocalApic::LINT0,
+                                       localApic.nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                                       localApic.nmiTrigger == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 }
 
@@ -569,29 +571,30 @@ void Apic::printIoApics(Util::String &string) {
 
     string += "\nI/O APICs:\n";
     for (uint32_t i = 0; i < ioApics.size(); ++i) {
-        const IoApic *ioApic = ioApics.get(i);
+        const IoApic &ioApic = *ioApics.get(i);
         string += Util::String::format("Id: [%d], GSI: [%d] - [%d], MMIO: [0x%x] (phys) -> [0x%x] (virt)\n",
-                                       ioApic->ioId,
-                                       static_cast<uint32_t>(ioApic->gsiBase),
-                                       static_cast<uint32_t>(ioApic->gsiMax),
-                                       ioApic->baseAddress,
-                                       ioApic->mmioAddress);
-        if (ioApic->hasNmi) {
-            string += Util::String::format("NMI: (GSI: [%d], Polarity: [%s], Trigger: [%s])\n",
-                                           static_cast<uint32_t>(ioApic->nmiGsi),
-                                           ioApic->nmiPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                                           ioApic->nmiTrigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+                                       ioApic.ioId,
+                                       static_cast<uint32_t>(ioApic.gsiBase),
+                                       static_cast<uint32_t>(ioApic.gsiMax),
+                                       ioApic.baseAddress,
+                                       ioApic.mmioAddress);
+        for (uint32_t j = 0; j < ioApic.nmiSources.size(); ++j) {
+            const IoApic::NmiSource &nmi = *ioApic.nmiSources.get(j);
+            string += Util::String::format("  NMI: (GSI: [%d], Polarity: [%s], Trigger: [%s])\n",
+                                           static_cast<uint32_t>(nmi.source),
+                                           nmi.polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                                           nmi.trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
         }
     }
 
     string += ("\nI/O APIC IRQ overrides:\n");
     for (uint32_t i = 0; i < IoApic::irqOverrides.size(); ++i) {
-        const IoApic::IrqOverride *override = IoApic::irqOverrides.get(i);
+        const IoApic::IrqOverride &override = *IoApic::irqOverrides.get(i);
         string += Util::String::format("Source: [%d], Target: [%d], Polarity: [%s], Trigger: [%s]\n",
-                                       static_cast<uint32_t>(override->source),
-                                       static_cast<uint32_t>(override->target),
-                                       override->polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                                       override->trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+                                       static_cast<uint32_t>(override.source),
+                                       static_cast<uint32_t>(override.target),
+                                       override.polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                                       override.trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 }
 

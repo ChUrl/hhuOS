@@ -3,6 +3,7 @@
 
 #include "device/interrupt/InterruptRequest.h"
 #include "kernel/interrupt/GlobalSystemInterrupt.h"
+#include "lib/util/collection/ArrayList.h"
 #include "LocalApic.h"
 
 namespace Device {
@@ -24,6 +25,12 @@ public:
     IoApic &operator=(const IoApic &copy) = delete;
 
 private:
+    struct NmiSource {
+        Kernel::GlobalSystemInterrupt source;
+        REDTBLEntry::PinPolarity polarity;
+        REDTBLEntry::TriggerMode trigger;
+    };
+
     struct IrqOverride {
         InterruptRequest source;
         Kernel::GlobalSystemInterrupt target;
@@ -110,6 +117,11 @@ private:
     void printRedtbl(Util::String &string);
 
     /**
+     * @brief Check if an interrupt is non-maskable.
+     */
+    bool isNonMaskableInterrupt(Kernel::GlobalSystemInterrupt interrupt);
+
+    /**
      * @brief Configure an NMI for this I/O APIC, if one exists.
      */
     void addNonMaskableInterrupt(Kernel::GlobalSystemInterrupt nmiGsi, REDTBLEntry::PinPolarity nmiPolarity,
@@ -179,11 +191,7 @@ private:
     Kernel::GlobalSystemInterrupt gsiMax = static_cast<Kernel::GlobalSystemInterrupt>(0);
     static Kernel::GlobalSystemInterrupt systemGsiMax;
 
-    bool hasNmi = false;
-    Kernel::GlobalSystemInterrupt nmiGsi = static_cast<Kernel::GlobalSystemInterrupt>(0);
-    REDTBLEntry::PinPolarity nmiPolarity = REDTBLEntry::PinPolarity::HIGH;
-    REDTBLEntry::TriggerMode nmiTrigger = REDTBLEntry::TriggerMode::EDGE;
-
+    Util::ArrayList<NmiSource *> nmiSources;
     static Util::ArrayList<IrqOverride *> irqOverrides;
 
     static Util::Async::Spinlock registerLock;

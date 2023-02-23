@@ -3,6 +3,7 @@
 
 #include "ApicErrorHandler.h"
 #include "ApicRegisters.h"
+#include "device/power/acpi/Acpi.h"
 #include "device/time/ApicTimer.h"
 #include "IoApic.h"
 #include "kernel/log/Logger.h"
@@ -165,6 +166,18 @@ private:
      * @brief Get the IoApic instance that is responsible for handling a specific GSI.
      */
     static IoApic &getIoApic(Kernel::GlobalSystemInterrupt gsi);
+
+    /**
+     * @brief Get the maximum GSI an I/O APIC can handle.
+     *
+     * This is determined using the ACPI I/O APIC MADT structures. This is valid, because
+     * with multiple I/O APICs there are never gaps in the GSI coverage.
+     *
+     * @return The GSI after the max. supported one. If only one I/O APIC is present, this I/O APIC's
+     *         GSI base will be returned.
+     */
+    static Kernel::GlobalSystemInterrupt getIoApicMaxGsi(const Acpi::IoApic &ioInfo,
+                                                         const Util::ArrayList<const Acpi::IoApic *> &acpiIoApics);
 
     static void printLocalApics(Util::String &string);
 

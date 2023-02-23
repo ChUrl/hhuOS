@@ -40,17 +40,17 @@ void IoApic::initialize() {
 
     initializeREDTBL();
 
-    // Configure NMI if it exists
-    if (hasNmi) {
+    // Configure NMIs
+    for (const auto *nmi : nmiSources) {
         REDTBLEntry redtblEntry{};
         redtblEntry.vector = static_cast<Kernel::InterruptVector>(0);
         redtblEntry.deliveryMode = REDTBLEntry::DeliveryMode::NMI;
         redtblEntry.destinationMode = REDTBLEntry::DestinationMode::PHYSICAL;
-        redtblEntry.pinPolarity = nmiPolarity;
-        redtblEntry.triggerMode = nmiTrigger;
+        redtblEntry.pinPolarity = nmi->polarity;
+        redtblEntry.triggerMode = nmi->trigger;
         redtblEntry.isMasked = false;
         redtblEntry.destination = LocalApic::getId(); // Send to the BSP
-        writeREDTBL(nmiGsi, redtblEntry);
+        writeREDTBL(nmi->source, redtblEntry);
     }
 }
 
@@ -111,12 +111,24 @@ void IoApic::printRedtbl(Util::String &string) {
     }
 }
 
+bool IoApic::isNonMaskableInterrupt(Kernel::GlobalSystemInterrupt interrupt) {
+    for (uint32_t i = 0; i < nmiSources.size(); ++i) {
+        const NmiSource &nmi = *nmiSources.get(i);
+        if (nmi.source == interrupt) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void IoApic::addNonMaskableInterrupt(Kernel::GlobalSystemInterrupt nmiGsi, REDTBLEntry::PinPolarity nmiPolarity,
                                      REDTBLEntry::TriggerMode nmiTrigger) {
-    hasNmi = true;
-    this->nmiGsi = nmiGsi;
-    this->nmiPolarity = nmiPolarity;
-    this->nmiTrigger = nmiTrigger;
+    auto *nmi = new NmiSource{};
+    nmi->source = nmiGsi;
+    nmi->polarity = nmiPolarity;
+    nmi->trigger = nmiTrigger;
+    nmiSources.add(nmi);
 }
 
 void IoApic::addIrqOverride(InterruptRequest source, Kernel::GlobalSystemInterrupt target,
