@@ -74,7 +74,7 @@
             qemu # Start os in virtual machine
 
             # Development
-            jetbrains.clion
+            # jetbrains.clion # Try with global clion
             bear # To generate compilation database
             gdb
             cling # To try out my bullshit implementations

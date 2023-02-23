@@ -117,8 +117,8 @@ boot_ap_32:
     mov cr4, eax
 
     ; Load the system GDT and IDT
-	lgdt [boot_ap_gdtr - boot_ap + startup_address]
-	lidt [boot_ap_idtr - boot_ap + startup_address]
+    lgdt [boot_ap_gdtr - boot_ap + startup_address]
+    lidt [boot_ap_idtr - boot_ap + startup_address]
 
     ; Get the local APIC id/CPU id of this AP
     mov eax, 0x1

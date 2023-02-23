@@ -23,8 +23,8 @@ ApicErrorHandler Apic::errorHandler = ApicErrorHandler();
 Kernel::Logger Apic::log = Kernel::Logger::get("Apic");
 
 bool Apic::isSupported() {
-    // Only support ACPI 1.0, there are changes in later versions
-    return LocalApic::supportsXApic() && Acpi::isAvailable() && Acpi::getRsdp().revision == 0;
+    // Only support ACPI 1.0 fully, there are changes in later versions, but it should still work, so don't force.
+    return LocalApic::supportsXApic() && Acpi::isAvailable(); // && Acpi::getRsdp().revision == 0;
 }
 
 bool Apic::isEnabled() {
@@ -365,6 +365,8 @@ void Apic::populateLocalApics() {
                                      nmiInfo->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTEntry::PinPolarity::HIGH : LVTEntry::PinPolarity::LOW,
                                      nmiInfo->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTEntry::TriggerMode::EDGE : LVTEntry::TriggerMode::LEVEL));
     }
+
+    log.info("Found [%d] CPUs of which [%d] are usable.", acpiProcessorLocalApics.size(), localApics.size());
 }
 
 void Apic::populateIoApics() {
