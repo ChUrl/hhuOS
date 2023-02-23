@@ -124,8 +124,8 @@ void Device::Apic::startupSmp() {
 
     // Call the startup code on each AP using the SIPI
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
-        const LocalApic *localApic = localApics.get(i);
-        if (localApic->cpuId == LocalApic::getId()) {
+        const LocalApic &localApic = *localApics.get(i);
+        if (localApic.cpuId == LocalApic::getId()) {
             // Skip this AP if it's the BSP (disabled processors won't even show up in this list)
             continue;
         }
@@ -137,16 +137,16 @@ void Device::Apic::startupSmp() {
         // This is unused for xApic. The INIT IPI is still issued though, to follow the IA-32 manual's
         // "INIT-SIPI-SIPI" sequence and the "universal startup algorithm" (MPSpec, sec. B.4):
         LocalApic::clearErrors();
-        LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
+        LocalApic::sendIpiInit(localApic.cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
         LocalApic::waitForIpiDispatch();                                     // xv6 waits 200 us instead.
-        LocalApic::sendIpiInit(localApic->cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
+        LocalApic::sendIpiInit(localApic.cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
         LocalApic::waitForIpiDispatch();                                     // Not necessary with 10ms delay
         Pit::earlyDelay(10'000);                                             // 10 ms, xv6 waits 100 us instead.
 
         // Issue the SIPI twice (for xApic):
         for (uint8_t j = 0; j < 2; ++j) {
             LocalApic::clearErrors();
-            LocalApic::sendIpiStartup(localApic->cpuId, apStartupAddress);
+            LocalApic::sendIpiStartup(localApic.cpuId, apStartupAddress);
             LocalApic::waitForIpiDispatch();
             Pit::earlyDelay(200); // 200 us
         }
@@ -157,7 +157,7 @@ void Device::Apic::startupSmp() {
         // the same will happen if the SIPI does not reach its target. That's why we abort.
         // Because the systemtime is not yet functional, we delay to measure the ~ time.
         uint32_t readCount = 0;
-        while (!(runningAPs & (1 << localApic->cpuId))) {
+        while (!(runningAPs & (1 << localApic.cpuId))) {
             if (readCount > 100) {
                 // Waited 100 * 10 ms = 1 s in total (arbitrary, could be way shorter)
                 log.error("CPU [%d] didn't phone home, it could be in undefined state!", i);
@@ -201,9 +201,9 @@ uint8_t Apic::getCpuCount() {
 
 LocalApic &Apic::getCurrentLocalApic() {
     for (uint32_t i = 0; i < localApics.size(); ++i) {
-        LocalApic *localApic = localApics.get(i);
-        if (localApic->cpuId == LocalApic::getId()) {
-            return *localApic;
+        LocalApic &localApic = *localApics.get(i);
+        if (localApic.cpuId == LocalApic::getId()) {
+            return localApic;
         }
     }
 
@@ -212,8 +212,8 @@ LocalApic &Apic::getCurrentLocalApic() {
 
 bool Apic::isCurrentTimerRunning() {
     for (uint32_t i = 0; i < timers.size(); ++i) {
-        ApicTimer *timer = timers.get(i);
-        if (timer->cpuId == LocalApic::getId()) {
+        const ApicTimer &timer = *timers.get(i);
+        if (timer.cpuId == LocalApic::getId()) {
             return true;
         }
     }
@@ -237,9 +237,9 @@ void Apic::startCurrentTimer() {
 
 ApicTimer &Apic::getCurrentTimer() {
     for (uint32_t i = 0; i < timers.size(); ++i) {
-        ApicTimer *timer = timers.get(i);
-        if (timer->cpuId == LocalApic::getId()) {
-            return *timer;
+        ApicTimer &timer = *timers.get(i);
+        if (timer.cpuId == LocalApic::getId()) {
+            return timer;
         }
     }
 
@@ -338,8 +338,8 @@ void Apic::populateLocalApics() {
     const auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
     Util::ArrayList<const Acpi::ProcessorLocalApic *> acpiProcessorLocalApics;
     Util::ArrayList<const Acpi::LocalApicNmi *> acpiLocalApicNmis;
-    Acpi::collectMadtStructures(&acpiProcessorLocalApics, Acpi::PROCESSOR_LOCAL_APIC);
-    Acpi::collectMadtStructures(&acpiLocalApicNmis, Acpi::LOCAL_APIC_NMI);
+    Acpi::collectMadtStructures(acpiProcessorLocalApics, Acpi::PROCESSOR_LOCAL_APIC);
+    Acpi::collectMadtStructures(acpiLocalApicNmis, Acpi::LOCAL_APIC_NMI);
 
     if (acpiProcessorLocalApics.size() == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any local APIC(s)!");
@@ -363,7 +363,7 @@ void Apic::populateLocalApics() {
             }
         }
         if (nmiInfo == nullptr) {
-            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find NMI for local APIC, skipping initialization!");
+            Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find NMI for local APIC!");
         }
 
         localApics.add(new LocalApic(localInfo->apicId, madt->localApicAddress,
@@ -380,9 +380,9 @@ void Apic::populateIoApics() {
     Util::ArrayList<const Acpi::IoApic *> acpiIoApics;
     Util::ArrayList<const Acpi::NmiSource *> acpiNmiSources;
     Util::ArrayList<const Acpi::InterruptSourceOverride *> acpiInterruptSourceOverrides;
-    Acpi::collectMadtStructures(&acpiIoApics, Acpi::IO_APIC);
-    Acpi::collectMadtStructures(&acpiNmiSources, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
-    Acpi::collectMadtStructures(&acpiInterruptSourceOverrides, Acpi::INTERRUPT_SOURCE_OVERRIDE);
+    Acpi::collectMadtStructures(acpiIoApics, Acpi::IO_APIC);
+    Acpi::collectMadtStructures(acpiNmiSources, Acpi::NON_MASKABLE_INTERRUPT_SOURCE);
+    Acpi::collectMadtStructures(acpiInterruptSourceOverrides, Acpi::INTERRUPT_SOURCE_OVERRIDE);
 
     if (acpiIoApics.size() == 0) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any I/O APIC(s)!");
