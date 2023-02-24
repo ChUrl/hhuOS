@@ -81,4 +81,13 @@ bool Pic::isSpurious(InterruptRequest interrupt) {
     return false;
 }
 
+void Pic::printStatus(Util::String &string) {
+    string += "PIC Interrupts:\n";
+    Pic  pic;
+    for (uint8_t i = 0; i < 16; ++i) {
+        string += Util::String::format("Vector: [%d], Masked: [%d] (IRQ %d)\n",
+                                       i + 32, pic.status(static_cast<InterruptRequest>(i)), i);
+    }
+}
+
 } // namespace Device

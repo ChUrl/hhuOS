@@ -20,6 +20,7 @@
 
 #include "InterruptRequest.h"
 #include "device/cpu/IoPort.h"
+#include "lib/util/base/String.h"
 
 namespace Device {
 
@@ -93,6 +94,8 @@ public:
      * @return true, if a spurious interrupt has occurred
      */
     bool isSpurious(InterruptRequest interrupt);
+
+    static void printStatus(Util::String &string);
 
 private:
 
