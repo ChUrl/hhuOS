@@ -144,7 +144,7 @@ private:
     /**
      * @brief Read information from ACPI's MADT and create an instance for each I/O APIC found.
      */
-    static void populateIoApics();
+    static void populateIoApic();
 
     static void prepareInterruptCounters();
 

@@ -39,7 +39,7 @@ void Apic::enable() {
 
     // Read information from ACPI's MADT and create our LocalApic/IoApic instances
     populateLocalApics();
-    populateIoApics();
+    populateIoApic();
 
     // Initialize our local APIC, all others are only initialized when SMP is started up
     LocalApic::enableXApicMode();
@@ -166,7 +166,7 @@ void Apic::populateLocalApics() {
 
 // TODO: I think I can just remove multi I/O APICs (IA-32 only has a single I/O APIC).
 // TODO: Do this when the working tree is clean and compare, remove if the code is significantly cleaner
-void Apic::populateIoApics() {
+void Apic::populateIoApic() {
     // Get our required information from ACPI
     Util::ArrayList<const Acpi::IoApic *> acpiIoApics;
     Util::ArrayList<const Acpi::NmiSource *> acpiNmiSources;
@@ -185,7 +185,7 @@ void Apic::populateIoApics() {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Multiple I/O APICs are unsupported!");
     }
 
-    const auto *ioInfo = *acpiIoApics.begin();
+    const auto *ioInfo = acpiIoApics.get(0);
 
     ioApic = new IoApic(ioInfo->ioApicId, ioInfo->ioApicAddress,
                         static_cast<Kernel::GlobalSystemInterrupt>(ioInfo->globalSystemInterruptBase));
@@ -224,8 +224,6 @@ void Apic::populateIoApics() {
 
 void Apic::prepareInterruptCounters() {
     // This turned out to be very unenjoyable
-    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-
     interruptCounter = new Util::Array<Util::Array<uint32_t> *>(256);
     interruptCounterWrapper = new Util::Array<Util::Array<Util::Async::Atomic<uint32_t> *> *>(256);
 
