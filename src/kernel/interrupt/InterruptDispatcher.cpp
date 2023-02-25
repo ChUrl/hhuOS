@@ -15,24 +15,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 
-#include "kernel/service/InterruptService.h"
-#include "kernel/system/System.h"
-#include "device/cpu/Cpu.h"
-#include "lib/util/collection/ArrayList.h"
-#include "kernel/service/ProcessService.h"
 #include "kernel/interrupt/InterruptDispatcher.h"
+#include "device/cpu/Cpu.h"
+#include "device/interrupt/apic/Apic.h"
+#include "InterruptDispatcher.h"
 #include "kernel/interrupt/InterruptHandler.h"
 #include "kernel/process/Process.h"
 #include "kernel/process/ThreadState.h"
+#include "kernel/service/InterruptService.h"
+#include "kernel/service/ProcessService.h"
+#include "kernel/system/System.h"
 #include "lib/util/base/Exception.h"
+#include "lib/util/base/System.h"
 #include "lib/util/collection/Array.h"
+#include "lib/util/collection/ArrayList.h"
 #include "lib/util/collection/Collection.h"
 #include "lib/util/collection/Iterator.h"
 #include "lib/util/collection/List.h"
 #include "lib/util/io/stream/PrintStream.h"
-#include "lib/util/base/System.h"
-#include "InterruptDispatcher.h"
-#include "device/interrupt/apic/Apic.h"
 
 namespace Kernel {
 
@@ -64,6 +64,9 @@ void InterruptDispatcher::dispatch(const InterruptFrame &frame) {
     if (handlerList == nullptr) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "No handler registered!");
     }
+
+    // Track what vectors were called how often, but only after the APIC is enabled
+    Device::Apic::countInterrupt(slot);
 
     interruptDepthWrapper.inc();
     interruptService.sendEndOfInterrupt(slot);

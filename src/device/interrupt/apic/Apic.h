@@ -7,6 +7,7 @@
 #include "device/time/ApicTimer.h"
 #include "IoApic.h"
 #include "kernel/log/Logger.h"
+#include "lib/util/async/Atomic.h"
 #include "LocalApic.h"
 
 namespace Device {
@@ -51,7 +52,7 @@ public:
      *
      * Those do not get updated if something changes during runtime.
      */
-    static void mountDeviceNodes();
+    static void mountVirtualFilesystemNodes();
 
     /**
      * @brief Check if the system supports symmetric multiprocessing mode with multiple processors.
@@ -129,7 +130,11 @@ public:
      */
     static bool isExternalInterrupt(Kernel::InterruptVector vector);
 
+    static void countInterrupt(Kernel::InterruptVector vector);
+
 private:
+    static void ensureApic();
+
     /**
      * @brief Read information from ACPI's MADT and create an instance for each local APIC found.
      */
@@ -139,6 +144,8 @@ private:
      * @brief Read information from ACPI's MADT and create an instance for each I/O APIC found.
      */
     static void populateIoApics();
+
+    static void prepareInterruptCounters();
 
     /**
      * @brief Prepare the memory regions used by the AP's stacks.
@@ -189,6 +196,8 @@ private:
 
     static void printIoApics(Util::String &string);
 
+    static void printInterrupts(Util::String &string);
+
 private:
     static bool apicEnabled;  ///< @brief Indicates if Apic::enable() has been called.
     static bool smpEnabled;   ///< @brief Indicates if Apic::startupSmp() has been called.
@@ -200,6 +209,11 @@ private:
     static Util::ArrayList<IoApic *> ioApics;       ///< @brief All IoApic instances.
     static Util::ArrayList<ApicTimer *> timers;     ///< @brief All ApicTimer instances.
     static ApicErrorHandler errorHandler;           ///< @brief The interrupt handler that gets triggered on an internal APIC error.
+
+    // TODO: Just use one dimension but BIG
+    // Funky <<<O_o>>>
+    static Util::Array<Util::Array<uint32_t> *> *interruptCounter;
+    static Util::Array<Util::Array<Util::Async::Atomic<uint32_t> *> *> *interruptCounterWrapper;
 
     static Kernel::Logger log;
 };

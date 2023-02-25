@@ -20,6 +20,8 @@ Util::ArrayList<LocalApic *> Apic::localApics;
 Util::ArrayList<IoApic *> Apic::ioApics;
 Util::ArrayList<ApicTimer *> Apic::timers;
 ApicErrorHandler Apic::errorHandler = ApicErrorHandler();
+Util::Array<Util::Array<uint32_t> *> *Apic::interruptCounter = nullptr;
+Util::Array<Util::Array<Util::Async::Atomic<uint32_t> *> *> *Apic::interruptCounterWrapper = nullptr;
 Kernel::Logger Apic::log = Kernel::Logger::get("Apic");
 
 bool Apic::isSupported() {
@@ -70,10 +72,10 @@ void Apic::enable() {
     startCurrentTimer();
 }
 
-void Apic::mountDeviceNodes() {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Not initialized!");
-    }
+void Apic::mountVirtualFilesystemNodes() {
+    ensureApic();
+    // TODO: Create some UpdateOnReadFileNode or sth. that executes a updateCallback function before read
+    //       to update these files lazily (wouldn't want to update the interrupts file on every interrupt...)
 
     auto &filesystemService = Kernel::System::getService<Kernel::FilesystemService>();
     auto &driver = filesystemService.getFilesystem().getVirtualDriver("/device");
@@ -82,23 +84,31 @@ void Apic::mountDeviceNodes() {
     auto *ioApicNode = new Filesystem::Memory::MemoryFileNode("ioapic");
     auto *lvtNode = new Filesystem::Memory::MemoryFileNode("lvt");
     auto *redtblNode = new Filesystem::Memory::MemoryFileNode("redtbl");
+    auto *picNode = new Filesystem::Memory::MemoryFileNode("pic");
+    auto *irqsNode = new Filesystem::Memory::MemoryFileNode("irqs");
 
-    Util::String lapic, ioapic, lvt, redtbl;
+    Util::String lapic, ioapic, lvt, redtbl, pic, irqs;
     printLocalApics(lapic);
     printIoApics(ioapic);
     LocalApic::printLvt(lvt);
     (*ioApics.begin())->printRedtbl(redtbl);
+    Pic::printStatus(pic);
+    printInterrupts(irqs);
 
     localApicNode->writeData(static_cast<const uint8_t *>(lapic), 0, lapic.length());
     ioApicNode->writeData(static_cast<const uint8_t *>(ioapic), 0, ioapic.length());
     lvtNode->writeData(static_cast<const uint8_t *>(lvt), 0, lvt.length());
     redtblNode->writeData(static_cast<const uint8_t *>(redtbl), 0, redtbl.length());
+    picNode->writeData(static_cast<const uint8_t *>(pic), 0, pic.length());
+    irqsNode->writeData(static_cast<const uint8_t *>(irqs), 0, irqs.length());
 
     filesystemService.createDirectory("/device/apic");
     driver.addNode("/apic/", localApicNode);
     driver.addNode("/apic/", ioApicNode);
     driver.addNode("/apic/", lvtNode);
     driver.addNode("/apic/", redtblNode);
+    driver.addNode("/apic/", picNode);
+    driver.addNode("/apic/", irqsNode);
 }
 
 bool Apic::isSmpSupported() {
@@ -106,11 +116,9 @@ bool Apic::isSmpSupported() {
 }
 
 void Device::Apic::startupSmp() {
+    ensureApic();
     if (smpEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
-    }
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
     }
     if (getCpuCount() > 64) {
         // This limit is pretty arbitrary, but the runningAPs bitmap currently only has 64 bits (in Smp.h).
@@ -178,9 +186,7 @@ void Device::Apic::startupSmp() {
 }
 
 void Apic::initializeCurrentLocalApic() {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
-    }
+    ensureApic();
     LocalApic &localApic = getCurrentLocalApic();
     if (localApic.initialized) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
@@ -192,10 +198,7 @@ void Apic::initializeCurrentLocalApic() {
 }
 
 uint8_t Apic::getCpuCount() {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Uninitialized CPU count!");
-    }
-
+    ensureApic();
     return localApics.size();
 }
 
@@ -222,9 +225,7 @@ bool Apic::isCurrentTimerRunning() {
 }
 
 void Apic::startCurrentTimer() {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
-    }
+    ensureApic();
     if (isCurrentTimerRunning()) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC timer for this CPU has already been initialized!");
     }
@@ -247,18 +248,14 @@ ApicTimer &Apic::getCurrentTimer() {
 }
 
 void Apic::enableCurrentErrorHandler() {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
-    }
+    ensureApic();
     // This part needs to be done for each AP
     LocalApic::allow(LocalApic::ERROR);
+    LocalApic::clearErrors(); // Arm the Error interrupt
 }
 
 void Apic::allow(InterruptRequest interruptRequest) {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
-    }
-
+    ensureApic();
     const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
     const Kernel::GlobalSystemInterrupt gsi = override == nullptr
                                               ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
@@ -271,10 +268,7 @@ void Apic::allow(InterruptRequest interruptRequest) {
 }
 
 void Apic::forbid(InterruptRequest interruptRequest) {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
-    }
-
+    ensureApic();
     const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
     const Kernel::GlobalSystemInterrupt gsi = override == nullptr
                                               ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
@@ -287,10 +281,7 @@ void Apic::forbid(InterruptRequest interruptRequest) {
 }
 
 bool Apic::status(InterruptRequest interruptRequest) {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
-    }
-
+    ensureApic();
     const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
     const Kernel::GlobalSystemInterrupt gsi = override == nullptr
                                               ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
@@ -300,10 +291,7 @@ bool Apic::status(InterruptRequest interruptRequest) {
 }
 
 void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
-    }
-
+    ensureApic();
     if (isLocalInterrupt(vector) && vector != Kernel::InterruptVector::LINT1) {
         // Excludes NMI, IPIs and SMIs are also excluded, but these don't have vector numbers,
         // so they won't reach this anyway.
@@ -319,18 +307,29 @@ void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
 }
 
 bool Apic::isLocalInterrupt(Kernel::InterruptVector vector) {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
-    }
+    ensureApic();
     return vector >= Kernel::InterruptVector::CMCI && vector <= Kernel::InterruptVector::ERROR;
 }
 
 bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
+    ensureApic();
+    // Remapping can be ignored here, as all GSIs are contiguous anyway
+    return static_cast<Kernel::GlobalSystemInterrupt>(vector - 32) <= IoApic::systemGsiMax;
+}
+
+void Apic::countInterrupt(Kernel::InterruptVector vector) {
+    // Do not throw here, just do nothing if it's an early interrupt
+    if (interruptCounter != nullptr && interruptCounterWrapper != nullptr) {
+        (*(*interruptCounterWrapper)[vector])[LocalApic::getId()]->inc();
+    }
+}
+
+// Private member functions begin here
+
+void Apic::ensureApic() {
     if (!apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
     }
-    // Remapping can be ignored here, as all GSIs are contiguous anyway
-    return static_cast<Kernel::GlobalSystemInterrupt>(vector - 32) <= IoApic::systemGsiMax;
 }
 
 void Apic::populateLocalApics() {
@@ -385,6 +384,7 @@ void Apic::populateIoApics() {
     Acpi::collectMadtStructures(acpiInterruptSourceOverrides, Acpi::INTERRUPT_SOURCE_OVERRIDE);
 
     if (acpiIoApics.size() == 0) {
+        // This is illegal, because this implementation does not support virtual wire mode
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any I/O APIC(s)!");
     }
 
@@ -415,19 +415,38 @@ void Apic::populateIoApics() {
         REDTBLEntry::PinPolarity polarity = REDTBLEntry::PinPolarity::HIGH;
         REDTBLEntry::TriggerMode trigger = REDTBLEntry::TriggerMode::EDGE;
 
+        // If flags[0:1] is 0, the bus default is used
         if ((override->flags & 0x3) != 0 && (override->flags & Acpi::IntiFlag::ACTIVE_LOW)) {
-            // If flags[0:1] is 0, the bus default is used
+            // Use override instead of bus default (HIGH)
             polarity = REDTBLEntry::PinPolarity::LOW;
         }
 
+        // If flags[2:3] is 0, the bus default is used
         if ((override->flags & 0xC) != 0 && (override->flags & Acpi::IntiFlag::LEVEL_TRIGGERED)) {
-            // If flags[2:3] is 0, the bus default is used
+            // Use override instead of bus default (EDGE)
             trigger = REDTBLEntry::TriggerMode::LEVEL;
         }
 
         IoApic::addIrqOverride(static_cast<InterruptRequest>(override->source),
                                static_cast<Kernel::GlobalSystemInterrupt>(override->globalSystemInterrupt),
                                polarity, trigger);
+    }
+}
+
+void Apic::prepareInterruptCounters() {
+    // This turned out to be very unenjoyable
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+
+    interruptCounter = new Util::Array<Util::Array<uint32_t> *>(256);
+    interruptCounterWrapper = new Util::Array<Util::Array<Util::Async::Atomic<uint32_t> *> *>(256);
+
+    for (uint32_t i = 0; i < 256; ++i) {
+        (*interruptCounter)[i] = new Util::Array<uint32_t>(getCpuCount());
+        (*interruptCounterWrapper)[i] = new Util::Array<Util::Async::Atomic<uint32_t> *>(getCpuCount());
+        for (uint32_t cpu = 0; cpu < getCpuCount(); ++cpu) {
+            (*(*interruptCounter)[i])[cpu] = 0;
+            (*(*interruptCounterWrapper)[i])[cpu] = new Util::Async::Atomic<uint32_t>((*(*interruptCounter)[i])[cpu]);
+        }
     }
 }
 
@@ -454,6 +473,7 @@ void *Apic::prepareApStacks() {
         }
     }
 
+    // Return the address for later cleanup
     return reinterpret_cast<void *>(apStacks);
 }
 
@@ -499,9 +519,11 @@ void *Apic::prepareApStartupCode(void *apStacks) {
     // log.info("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)", reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
 
+    // Return the address for later cleanup
     return reinterpret_cast<void *>(apStartupAddress);
 }
 
+// NOTE: Booting APs using this method was never tested, as QEMU only has xApic or x2Apic which uses the SIPI
 void *Apic::prepareApWarmReset() {
     Cmos::write(0xF, 0x0A); // Shutdown status byte (MPSpec, sec. B.4)
 
@@ -515,6 +537,7 @@ void *Apic::prepareApWarmReset() {
 
     *reinterpret_cast<volatile uint16_t *>(wrvVirt) = apStartupAddress;
 
+    // Return the address for later cleanup
     return reinterpret_cast<void *>(wrvVirt);
 }
 
@@ -599,6 +622,33 @@ void Apic::printIoApics(Util::String &string) {
                                        static_cast<uint32_t>(override.target),
                                        override.polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
                                        override.trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+    }
+}
+
+void Apic::printInterrupts(Util::String &string) {
+    // Print the header
+    string += "vector";
+    for (uint32_t i = 0; i < getCpuCount(); ++i) {
+        string += Util::String::format(",cpu%d", i);
+    }
+    string += "\n";
+
+    // Print a line for each interrupt, listing the amounts per core
+    for (uint32_t i = 0; i < 256; ++i) {
+        Util::String nextline = Util::String::format("%d", i);
+        bool occured = false;
+        const auto *cpulist = (*interruptCounter)[i];
+        for (uint32_t cpu = 0; cpu < getCpuCount(); ++cpu) {
+            const auto count = (*cpulist)[cpu];
+            occured = occured | (count != 0);
+            nextline += Util::String::format(",%d", count);
+        }
+        nextline += "\n";
+
+        // Skip lines that only contain 0
+        if (occured) {
+            string += nextline;
+        }
     }
 }
 
