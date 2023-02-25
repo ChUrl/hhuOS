@@ -8,6 +8,7 @@
 namespace Device {
 
 uint32_t ApicTimer::ticksIn1ms = 0;
+ApicTimer::Divide ApicTimer::divider = ApicTimer::BY_16; // Modify this to change the precision
 Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
 ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval)
@@ -27,7 +28,7 @@ ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval)
              cpuId, timerInterval, counter);
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
-    LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, Divide::BY_16); // BY_1 is the highest resolution (overkill)
+    LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, divider); // BY_1 is the highest resolution (overkill)
     LVTEntry lvtEntry = LocalApic::readLVT(LocalApic::TIMER);
     lvtEntry.timerMode = LVTEntry::TimerMode::PERIODIC;
     LocalApic::writeLVT(LocalApic::TIMER, lvtEntry);
@@ -71,9 +72,13 @@ Util::Time::Timestamp ApicTimer::getTime() {
 
 void ApicTimer::calibrate() {
     // The calibration works by waiting the desired interval and measuring how many ticks the timer does.
+    LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, divider);
+    LVTEntry lvtEntry = LocalApic::readLVT(LocalApic::TIMER);
+    lvtEntry.timerMode = LVTEntry::TimerMode::PERIODIC;
+    LocalApic::writeLVT(LocalApic::TIMER, lvtEntry);
     LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, 0xFFFFFFFF);                     // Max initial counter, writing starts timer
-    Pit::earlyDelay(50'000);                                                              // Wait 50 ms
-    ticksIn1ms = (0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT)) / 50; // Ticks in 1 ms
+    Pit::earlyDelay(10'000);                                                              // Wait 10 ms
+    ticksIn1ms = (0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT)) / 10; // Ticks in 1 ms
 }
 
 } // namespace Device

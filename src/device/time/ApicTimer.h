@@ -80,10 +80,12 @@ private:
     static void calibrate();
 
 private:
-    uint8_t cpuId;               ///< @brief The id of the CPU that uses this timer.
-    uint32_t timerInterval;      ///< @brief The interrupt trigger interval in milliseconds.
-    uint32_t yieldInterval;      ///< @brief The preemption trigger interval in milliseconds.
+    uint8_t cpuId;              ///< @brief The id of the CPU that uses this timer.
+    uint32_t timerInterval;     ///< @brief The interrupt trigger interval in milliseconds.
+    uint32_t yieldInterval;     ///< @brief The preemption trigger interval in milliseconds.
+
     static uint32_t ticksIn1ms; ///< @brief The number of ticks the APIC timer does in 10 ms.
+    static Divide divider;      ///< @brief The used divider, it has to be consistent to get consistent timings.
 
     Util::Time::Timestamp time{}; ///< @brief The "core-local" timestamp.
 
