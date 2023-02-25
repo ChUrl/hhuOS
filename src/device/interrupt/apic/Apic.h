@@ -3,12 +3,15 @@
 
 #include "ApicErrorHandler.h"
 #include "ApicRegisters.h"
+#include "device/cpu/Smp.h"
 #include "device/power/acpi/Acpi.h"
 #include "device/time/ApicTimer.h"
 #include "IoApic.h"
 #include "kernel/log/Logger.h"
 #include "lib/util/async/Atomic.h"
 #include "LocalApic.h"
+
+// TODO: Replace the duplicated checks by ensureSth...
 
 namespace Device {
 
@@ -161,7 +164,7 @@ private:
      *
      * @return The page, on which the startup routine is located
      */
-    static void *prepareApStartupCode(void *apStacks);
+    static void *prepareApStartupCode(void *apGdts, void *apStacks);
 
     /**
      * @brief Place the AP startup routine address into the warm reset vector and prepare CMOS for warm reset.
@@ -169,6 +172,17 @@ private:
      * @return The virtual address of the allocated memory used to write the warm-reset vector
      */
     static void *prepareApWarmReset();
+
+    static void *prepareApGdts();
+
+    /**
+     * @brief Sets up the GDT for the AP.
+     *
+     * The memory is allocated by MemoryService::AllocateKernelMemory with enabled paging, so its a virtual address.
+     * This is basically a shorter and slightly modified version of System::InitializeGlobalDescriptorTables.
+     * The main difference is that only a single GDT is used and its memory is allocated by this function.
+     */
+    static Descriptor *allocateApGdt();
 
     /**
      * @brief Get the LocalApic instance that belongs to the current CPU.

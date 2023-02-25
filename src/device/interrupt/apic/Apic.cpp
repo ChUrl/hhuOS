@@ -1,6 +1,6 @@
 #include "Apic.h"
-#include "device/cpu/Smp.h"
 #include "device/power/acpi/Acpi.h"
+#include "device/cpu/Cpu.h"
 #include "device/time/Cmos.h"
 #include "device/time/Pit.h"
 #include "filesystem/memory/MemoryDriver.h"
@@ -10,7 +10,11 @@
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
 #include "lib/util/base/Constants.h"
+#include "kernel/system/TaskStateSegment.h"
+#include "kernel/paging/MemoryLayout.h"
 #include "LocalApic.h"
+
+// TODO: This file is waay too large for my taste, but I don't know if there is a sensible way to split it...
 
 namespace Device {
 
@@ -126,9 +130,15 @@ void Device::Apic::startupSmp() {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "CPUs with more than 64 cores are not supported!");
     }
 
+    void *apGdts = prepareApGdts();
     void *apStacks = prepareApStacks();
-    void *apStartupCode = prepareApStartupCode(apStacks);
+    void *apStartupCode = prepareApStartupCode(apGdts, apStacks);
     void *apWarmReset = prepareApWarmReset(); // This is technically only required for discrete APIC, see below
+
+    // Universal Startup Algorithm requires all interrupts disabled (they should be disabled anyway,
+    // but disabling them a second time is twice as good)
+    Cpu::disableInterrupts();
+    Cmos::disableNmi();
 
     // Call the startup code on each AP using the SIPI
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
@@ -145,16 +155,16 @@ void Device::Apic::startupSmp() {
         // This is unused for xApic. The INIT IPI is still issued though, to follow the IA-32 manual's
         // "INIT-SIPI-SIPI" sequence and the "universal startup algorithm" (MPSpec, sec. B.4):
         LocalApic::clearErrors();
-        LocalApic::sendIpiInit(localApic.cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
+        LocalApic::sendInitIpi(localApic.cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
         LocalApic::waitForIpiDispatch();                                     // xv6 waits 200 us instead.
-        LocalApic::sendIpiInit(localApic.cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
+        LocalApic::sendInitIpi(localApic.cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
         LocalApic::waitForIpiDispatch();                                     // Not necessary with 10ms delay
         Pit::earlyDelay(10'000);                                             // 10 ms, xv6 waits 100 us instead.
 
         // Issue the SIPI twice (for xApic):
         for (uint8_t j = 0; j < 2; ++j) {
             LocalApic::clearErrors();
-            LocalApic::sendIpiStartup(localApic.cpuId, apStartupAddress);
+            LocalApic::sendStartupIpi(localApic.cpuId, apStartupAddress);
             LocalApic::waitForIpiDispatch();
             Pit::earlyDelay(200); // 200 us
         }
@@ -166,8 +176,8 @@ void Device::Apic::startupSmp() {
         // Because the systemtime is not yet functional, we delay to measure the ~ time.
         uint32_t readCount = 0;
         while (!(runningAPs & (1 << localApic.cpuId))) {
-            if (readCount > 100) {
-                // Waited 100 * 10 ms = 1 s in total (arbitrary, could be way shorter)
+            if (readCount > 10) {
+                // Waited 10 * 10 ms = 0.1 s in total (pretty arbitrarily chosen by me)
                 log.error("CPU [%d] didn't phone home, it could be in undefined state!", i);
                 break;
             }
@@ -176,8 +186,14 @@ void Device::Apic::startupSmp() {
         }
     }
 
-    // Free the startup routine page, stackpointer array and warm-reset vector memory,
-    // now that all APs are running. Keep the stacks though!
+    Cmos::enableNmi();
+    Cpu::enableInterrupts();
+
+    // TODO: We're deleting void * here, but I think this is safe, because no destructors or similar C++ stuff
+    //       is involved? Otherwise, cast to uint32_t * or some other primitive pointer type?
+    // Free the startup routine page, stackpointer array, gdts array and warm-reset vector memory,
+    // now that all APs are running. Keep the stacks though, they are not temporary!
+    delete apGdts;
     delete apStacks;
     delete apStartupCode;
     delete apWarmReset;
@@ -332,6 +348,8 @@ void Apic::ensureApic() {
     }
 }
 
+// TODO: Sort these lists beforehand, this way the getIoApic etc. functions can just use ioApics.get(id) in O(1)
+// TODO: This requires sequential ids
 void Apic::populateLocalApics() {
     // Get our required information from ACPI
     const auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
@@ -347,6 +365,7 @@ void Apic::populateLocalApics() {
     // Create LocalApic instances
     for (const auto *localInfo : acpiProcessorLocalApics) {
         if (!(localInfo->flags & 0x1)) {
+            // TODO: When using an array, the disabled CPUs have to be marked as nullptr
             // When ACPI reports this local APIC as disabled, it may not be used by the OS.
             // ACPI 1.0 specification, sec. 5.2.8.1
             continue;
@@ -374,6 +393,8 @@ void Apic::populateLocalApics() {
     log.info("Found [%d] CPUs of which [%d] are usable.", acpiProcessorLocalApics.size(), localApics.size());
 }
 
+// TODO: I think I can just remove multi I/O APICs (IA-32 only has a single I/O APIC).
+// TODO: Do this when the working tree is clean and compare, remove if the code is significantly cleaner
 void Apic::populateIoApics() {
     // Get our required information from ACPI
     Util::ArrayList<const Acpi::IoApic *> acpiIoApics;
@@ -409,6 +430,7 @@ void Apic::populateIoApics() {
         ioApics.add(ioApic);
     }
 
+    // TODO: I could store them inside an IrqOverride[16] array (inside IoApic) and improve the getOverride function
     // Add the IRQ overrides
     for (const auto *override : acpiInterruptSourceOverrides) {
         // ISA bus default values
@@ -459,6 +481,7 @@ void *Apic::prepareApStacks() {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP stack memory!");
     }
 
+    // TODO: This does not account for disabled CPUs: If a CPU is disabled, the IDs are no longer sequential
     // Allocate the stacks, just iterates from 0 to cpuCount - 1 because ids are contiguous (we assume)
     for (uint32_t i = 0; i < getCpuCount(); ++i) {
         if (i == LocalApic::getId()) {
@@ -477,7 +500,7 @@ void *Apic::prepareApStacks() {
     return reinterpret_cast<void *>(apStacks);
 }
 
-void *Apic::prepareApStartupCode(void *apStacks) {
+void *Apic::prepareApStartupCode(void *apGdts, void *apStacks) {
     if (boot_ap_size > Util::PAGESIZE) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Startup code does not fit into one page!");
     }
@@ -512,6 +535,7 @@ void *Apic::prepareApStartupCode(void *apStacks) {
                  : "=a"(boot_ap_cr3));
     asm volatile("mov %%cr4, %%eax;"
                  : "=a"(boot_ap_cr4));
+    boot_ap_gdts = reinterpret_cast<uint32_t>(apGdts);
     boot_ap_stacks = reinterpret_cast<uint32_t>(apStacks);
     boot_ap_entry = reinterpret_cast<uint32_t>(&smpEntry);
 
@@ -541,6 +565,69 @@ void *Apic::prepareApWarmReset() {
     return reinterpret_cast<void *>(wrvVirt);
 }
 
+// TODO: When using an array, the disabled CPUs have to be marked as nullptr
+void *Apic::prepareApGdts() {
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+
+    // Allocate descriptor pointer array
+    auto **apGdts = reinterpret_cast<Descriptor **>(memoryService.allocateKernelMemory(sizeof(Descriptor *) * getCpuCount()));
+    if (apGdts == nullptr) {
+        Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP GDTs memory!");
+    }
+
+    for (uint32_t i = 0; i < getCpuCount(); ++i) {
+        if (i == LocalApic::getId()) {
+            // The BSP already has a GDT, we need this entry to keep the AP GDTs addressible by their ids
+            apGdts[i] = nullptr;
+            continue;
+        }
+
+        apGdts[i] = allocateApGdt();
+    }
+
+    // Return the address for later cleanup
+    return reinterpret_cast<void *>(apGdts);
+}
+
+Descriptor *Apic::allocateApGdt() {
+    // Allocate memory for the GDT and TSS. This is never freed, as its used as long as the system runs.
+    auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
+
+    auto *gdt = reinterpret_cast<uint16_t *>(memoryService.allocateLowerMemory(48));
+    if (gdt == nullptr) {
+        Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP GDT memory!");
+    }
+
+    const uint32_t tssSize = sizeof(Kernel::TaskStateSegment);
+    auto *tss = reinterpret_cast<void *>(memoryService.allocateLowerMemory(tssSize));
+    if (tss == nullptr) {
+        Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP TSS memory!");
+    }
+
+    // Zero everything
+    Util::Address<uint32_t>(gdt).setRange(0, 48);
+    Util::Address<uint32_t>(tss).setRange(0, tssSize);
+
+    // Set up general GDT for the AP
+    // First entry has to be null
+    Kernel::System::createGlobalDescriptorTableEntry(gdt, 0, 0, 0, 0, 0);
+    // Kernel code segment
+    Kernel::System::createGlobalDescriptorTableEntry(gdt, 1, 0, 0xFFFFFFFF, 0x9A, 0xC);
+    // Kernel data segment
+    Kernel::System::createGlobalDescriptorTableEntry(gdt, 2, 0, 0xFFFFFFFF, 0x92, 0xC);
+    // User code segment
+    Kernel::System::createGlobalDescriptorTableEntry(gdt, 3, 0, 0xFFFFFFFF, 0xFA, 0xC);
+    // User data segment
+    Kernel::System::createGlobalDescriptorTableEntry(gdt, 4, 0, 0xFFFFFFFF, 0xF2, 0xC);
+    // TSS segment
+    Kernel::System::createGlobalDescriptorTableEntry(gdt, 5, reinterpret_cast<uint32_t>(tss), tssSize, 0x89, 0x4);
+
+    return new Descriptor {
+      .size = 6 * 8, // TODO: Why 6 * 8? Isn't it 24 * 4 (boot.asm gdt: "times (24) dw 0")?
+      .address = reinterpret_cast<uint64_t>(gdt) // + Kernel::MemoryLayout::KERNEL_START
+    };
+}
+
 IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
     for (uint32_t i = 0; i < ioApics.size(); ++i) {
         IoApic &ioApic = *ioApics.get(i);
@@ -552,6 +639,7 @@ IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
     Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "No I/O APIC found for the supplied GSI!");
 }
 
+// TODO: Replace this with simpler function using a sorted list
 Kernel::GlobalSystemInterrupt Apic::getIoApicMaxGsi(const Acpi::IoApic &ioInfo,
                                                     const Util::ArrayList<const Acpi::IoApic *> &acpiIoApics) {
     if (acpiIoApics.size() == 1) {

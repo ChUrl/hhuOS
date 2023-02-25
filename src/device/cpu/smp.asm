@@ -14,6 +14,7 @@ global boot_ap_idtr
 global boot_ap_cr0
 global boot_ap_cr3
 global boot_ap_cr4
+global boot_ap_gdts
 global boot_ap_stacks
 global boot_ap_entry
 
@@ -24,8 +25,11 @@ global boot_ap_entry
 align 8
 bits 16
 boot_ap:
-    ; Disable interrupts
+    ; Disable interrupts (maskable and non-maskable)
     cli
+    ; TODO: Does CMOS work core-locally?
+    ; mov	al, 0x80
+    ; out	0x70, al
 
     ; Enable A20 address line
     in al, 0x92
@@ -76,9 +80,9 @@ tmp_gdt_desc:
 	dw tmp_gdt_end - tmp_gdt_start - 1 ; GDT size
 	dd tmp_gdt_start - boot_ap + startup_address
 
-; The following is set at runtime by Apic::copySmpStartupCode():
+; The following is set at runtime by Apic.cpp
 align 8
-boot_ap_gdtr:
+boot_ap_gdtr: ; TODO: This will be obsolete in the future
     dw 0x0
     dd 0x0
 align 8
@@ -93,6 +97,9 @@ boot_ap_cr3:
     dw 0x0
 align 8
 boot_ap_cr4:
+    dw 0x0
+align 8
+boot_ap_gdts:
     dw 0x0
 align 8
 boot_ap_stacks:
@@ -112,20 +119,36 @@ boot_ap_32:
     ; 2. Set cr0 to BSP value (to enable paging + page protection)
     mov eax, [boot_ap_cr0 - boot_ap + startup_address]
     mov cr0, eax
-    ; 3. Set cr4 to BSP value (for PAE + PSE or other features)
+    ; 3. Set cr4 to BSP value (for PAE + PSE, if enabled)
     mov eax, [boot_ap_cr4 - boot_ap + startup_address]
     mov cr4, eax
 
-    ; Load the system GDT and IDT
-    lgdt [boot_ap_gdtr - boot_ap + startup_address]
+    ; Load the system IDT
     lidt [boot_ap_idtr - boot_ap + startup_address]
+    ; lgdt [boot_ap_gdtr - boot_ap + startup_address]
 
-    ; Get the local APIC id/CPU id of this AP
+    ; Get the local APIC ID of this AP, to locate GDT and stack
     mov eax, 0x1
     cpuid
     shr ebx, 0x18
-    mov edi, ebx
+    mov edi, ebx ; Now the ID is in EDI
 
+    ; Load the prepared AP GDT
+    mov ebx, [boot_ap_gdts - boot_ap + startup_address] ; GDT descriptor array
+    mov eax, [ebx + edi * 0x4] ; Choose correct GDT, each boot_ap_gdts entry is a 4 byte pointer to a descriptor
+    lgdt [eax]
+
+    ; TODO: Do I have to set up the segment registers again here?
+    ; Setup the segments for new GDT
+    ; mov ax, 0x10
+    ; mov ds, ax ; Data segment register
+    ; mov es, ax ; Extra segment register
+    ; mov ss, ax ; Stack segment register
+    ; mov fs, ax ; General purpose segment register
+    ; mov gs, ax ; General purpose segment register
+    ; jmp dword 0x8:boot_ap_finalize - boot_ap + startup_address ; Code segment register
+
+; boot_ap_finalize:
     ; Load the correct stack for this AP (allocated by Apic::allocateSmpStacks)
     mov ebx, [boot_ap_stacks - boot_ap + startup_address] ; Stackpointer array
     mov esp, [ebx + edi * 0x4] ; Choose correct stack, each boot_ap_stacks entry is a 4 byte pointer to a stack
