@@ -144,6 +144,10 @@ boot_ap_32:
     mov eax, [ebx + edi * 0x4] ; Choose correct GDT, each boot_ap_gdts entry is a 4 byte pointer to a descriptor
     lgdt [eax]
 
+    ; Load the TSS
+    mov ax, 0x28
+    ltr ax
+
     ; TODO: Do I have to set up the segment registers again here?
     ; Setup the segments for new GDT
     ; mov ax, 0x10
