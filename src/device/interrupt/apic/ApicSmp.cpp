@@ -6,8 +6,8 @@
 #include "kernel/service/FilesystemService.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
-#include "lib/util/base/Constants.h"
 #include "kernel/system/TaskStateSegment.h"
+#include "lib/util/base/Constants.h"
 
 namespace Device {
 
@@ -54,10 +54,10 @@ void Device::Apic::startupSmp() {
         // "INIT-SIPI-SIPI" sequence and the "universal startup algorithm" (MPSpec, sec. B.4):
         LocalApic::clearErrors();
         LocalApic::sendInitIpi(localApic.cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
-        LocalApic::waitForIpiDispatch();                                     // xv6 waits 200 us instead.
+        LocalApic::waitForIpiDispatch();                                    // xv6 waits 200 us instead.
         LocalApic::sendInitIpi(localApic.cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
-        LocalApic::waitForIpiDispatch();                                     // Not necessary with 10ms delay
-        Pit::earlyDelay(10'000);                                             // 10 ms, xv6 waits 100 us instead.
+        LocalApic::waitForIpiDispatch();                                    // Not necessary with 10ms delay
+        Pit::earlyDelay(10'000);                                            // 10 ms, xv6 waits 100 us instead.
 
         // Issue the SIPI twice (for xApic):
         for (uint8_t j = 0; j < 2; ++j) {
@@ -153,15 +153,15 @@ void *Apic::prepareApStartupCode(void *apGdts, void *apStacks) {
 
     // Prepare the empty variables in the startup routine at their original location
     asm volatile("sgdt %0"
-      : "=m"(boot_ap_gdtr));
+                 : "=m"(boot_ap_gdtr));
     asm volatile("sidt %0"
-      : "=m"(boot_ap_idtr));
+                 : "=m"(boot_ap_idtr));
     asm volatile("mov %%cr0, %%eax;"
-      : "=a"(boot_ap_cr0));
+                 : "=a"(boot_ap_cr0));
     asm volatile("mov %%cr3, %%eax;"
-      : "=a"(boot_ap_cr3));
+                 : "=a"(boot_ap_cr3));
     asm volatile("mov %%cr4, %%eax;"
-      : "=a"(boot_ap_cr4));
+                 : "=a"(boot_ap_cr4));
     boot_ap_gdts = reinterpret_cast<uint32_t>(apGdts);
     boot_ap_stacks = reinterpret_cast<uint32_t>(apStacks);
     boot_ap_entry = reinterpret_cast<uint32_t>(&smpEntry);
@@ -179,7 +179,7 @@ void *Apic::prepareApWarmReset() {
     Cmos::write(0xF, 0x0A); // Shutdown status byte (MPSpec, sec. B.4)
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
-    const uint32_t wrvPhys = 0x40 << 4 | 0x67; // MPSpec, sec. B.4
+    const uint32_t wrvPhys = 0x40 << 4 | 0x67;                     // MPSpec, sec. B.4
     void *warmResetVector = memoryService.mapIO(wrvPhys, 2, true); // WRV is DWORD
 
     // Account for possible misalignment, as mapIO returns a page-aligned pointer
@@ -249,10 +249,10 @@ Descriptor *Apic::allocateApGdt() {
     // TSS segment
     Kernel::System::createGlobalDescriptorTableEntry(gdt, 5, reinterpret_cast<uint32_t>(tss), tssSize, 0x89, 0x4);
 
-    return new Descriptor {
-      .size = 6 * 8, // TODO: Why 6 * 8? Isn't it 24 * 4 (boot.asm gdt: "times (24) dw 0")?
+    return new Descriptor{
+      .size = 6 * 8,                             // TODO: Why 6 * 8? Isn't it 24 * 4 (boot.asm gdt: "times (24) dw 0")?
       .address = reinterpret_cast<uint64_t>(gdt) // + Kernel::MemoryLayout::KERNEL_START
     };
 }
 
-}
+} // namespace Device

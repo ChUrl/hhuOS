@@ -239,8 +239,7 @@ void LocalApic::printLvt(Util::String &string) {
           static_cast<uint8_t>(lvtEntry.isMasked),
           lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
           lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL",
-          lintNames[lint]
-        );
+          lintNames[lint]);
     }
 }
 

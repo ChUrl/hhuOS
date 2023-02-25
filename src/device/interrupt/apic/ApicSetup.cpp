@@ -1,6 +1,6 @@
 #include "Apic.h"
-#include "filesystem/memory/MemoryFileNode.h"
 #include "filesystem/memory/MemoryDriver.h"
+#include "filesystem/memory/MemoryFileNode.h"
 #include "kernel/paging/Paging.h"
 #include "kernel/service/FilesystemService.h"
 #include "kernel/service/InterruptService.h"
@@ -12,9 +12,9 @@ namespace Device {
 
 bool Apic::apicEnabled = false;
 Util::ArrayList<LocalApic *> Apic::localApics;
-Util::ArrayList<IoApic *> Apic::ioApics;
 Util::ArrayList<ApicTimer *> Apic::timers;
-LocalApicError Apic::errorHandler = LocalApicError();
+IoApic *Apic::ioApic = nullptr;
+LocalApicError *Apic::errorHandler = new LocalApicError();
 Util::Array<Util::Array<uint32_t> *> *Apic::interruptCounter = nullptr;
 Util::Array<Util::Array<Util::Async::Atomic<uint32_t> *> *> *Apic::interruptCounterWrapper = nullptr;
 
@@ -46,15 +46,8 @@ void Apic::enable() {
     apicEnabled = true; // Now everything is ready for normal operation
     initializeCurrentLocalApic();
 
-    // Multiple I/O APICs are possible, but in the usual Intel consumer chipsets there is only one
-    if (ioApics.size() > 1) {
-        log.warn("Support for multiple I/O APICs is untested!");
-    }
-
-    // Initialize all I/O APICs
-    for (auto *ioApic : ioApics) {
-        ioApic->initialize();
-    }
+    // Initialize the I/O APIC
+    ioApic->initialize();
 
     // TODO: Remove This again, just for testing external interrupt redirection
     // Results:
@@ -72,7 +65,7 @@ void Apic::enable() {
     prepareInterruptCounters();
 
     // We only require one error handler, as every AP can only access its own local APIC's error register
-    errorHandler.plugin();       // Does not allow the interrupt!
+    errorHandler->plugin();      // Does not allow the interrupt!
     enableCurrentErrorHandler(); // Allows the interrupt for this AP
 
     // In contrast to the errorHandler, there are multiple timers in multicore systems, because they keep
@@ -98,9 +91,9 @@ void Apic::mountVirtualFilesystemNodes() {
 
     Util::String lapic, ioapic, lvt, redtbl, pic, irqs;
     printLocalApics(lapic);
-    printIoApics(ioapic);
+    printIoApic(ioapic);
     LocalApic::printLvt(lvt);
-    (*ioApics.begin())->printRedtbl(redtbl);
+    ioApic->printRedtbl(redtbl);
     Pic::printStatus(pic);
     printInterrupts(irqs);
 
@@ -187,25 +180,21 @@ void Apic::populateIoApics() {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any I/O APIC(s)!");
     }
 
-    // Create IoApic instances
-    for (const auto *ioInfo : acpiIoApics) {
-        auto *ioApic = new IoApic(ioInfo->ioApicId, ioInfo->ioApicAddress,
-                                  static_cast<Kernel::GlobalSystemInterrupt>(ioInfo->globalSystemInterruptBase));
+    // Multiple I/O APICs are possible, but in the usual Intel consumer chipsets there is only one
+    if (acpiIoApics.size() > 1) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Multiple I/O APICs are unsupported!");
+    }
 
-        // Add all NMIs that belong to this I/O APIC
-        const uint32_t maxGsi = getIoApicMaxGsi(*ioInfo, acpiIoApics);
-        for (const auto *nmi : acpiNmiSources) {
-            if (maxGsi == ioInfo->globalSystemInterruptBase
-                || (nmi->globalSystemInterrupt >= ioInfo->globalSystemInterruptBase
-                    && nmi->globalSystemInterrupt <= maxGsi)) {
-                // The first condition is valid for a single I/O APIC
-                ioApic->addNonMaskableInterrupt(static_cast<Kernel::GlobalSystemInterrupt>(nmi->globalSystemInterrupt),
-                                                nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
-                                                nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL);
-            }
-        }
+    const auto *ioInfo = *acpiIoApics.begin();
 
-        ioApics.add(ioApic);
+    ioApic = new IoApic(ioInfo->ioApicId, ioInfo->ioApicAddress,
+                        static_cast<Kernel::GlobalSystemInterrupt>(ioInfo->globalSystemInterruptBase));
+
+    // Add all NMIs that belong to this I/O APIC
+    for (const auto *nmi : acpiNmiSources) {
+        ioApic->addNonMaskableInterrupt(static_cast<Kernel::GlobalSystemInterrupt>(nmi->globalSystemInterrupt),
+                                        nmi->flags & Acpi::IntiFlag::ACTIVE_HIGH ? REDTBLEntry::PinPolarity::HIGH : REDTBLEntry::PinPolarity::LOW,
+                                        nmi->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? REDTBLEntry::TriggerMode::EDGE : REDTBLEntry::TriggerMode::LEVEL);
     }
 
     // TODO: I could store them inside an IrqOverride[16] array (inside IoApic) and improve the getOverride function
@@ -250,35 +239,6 @@ void Apic::prepareInterruptCounters() {
     }
 }
 
-IoApic &Apic::getIoApic(Kernel::GlobalSystemInterrupt gsi) {
-    for (uint32_t i = 0; i < ioApics.size(); ++i) {
-        IoApic &ioApic = *ioApics.get(i);
-        if (gsi >= ioApic.gsiBase && gsi <= ioApic.gsiMax) {
-            return ioApic;
-        }
-    }
-
-    Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "No I/O APIC found for the supplied GSI!");
-}
-
-// TODO: Replace this with simpler function using a sorted list
-Kernel::GlobalSystemInterrupt Apic::getIoApicMaxGsi(const Acpi::IoApic &ioInfo,
-                                                    const Util::ArrayList<const Acpi::IoApic *> &acpiIoApics) {
-    if (acpiIoApics.size() == 1) {
-        return static_cast<Kernel::GlobalSystemInterrupt>(acpiIoApics.get(0)->globalSystemInterruptBase);
-    }
-
-    // Find the maximum GSI of ioInfo by finding the next larger GSI base
-    const Acpi::IoApic *nextIoInfo = acpiIoApics.get(1);
-    for (const auto *nIoInfo : acpiIoApics) {
-        if (nIoInfo->globalSystemInterruptBase > ioInfo.globalSystemInterruptBase
-            && nIoInfo->globalSystemInterruptBase <= nextIoInfo->globalSystemInterruptBase) {
-            nextIoInfo = nIoInfo;
-        }
-    }
-    return static_cast<Kernel::GlobalSystemInterrupt>(nextIoInfo->globalSystemInterruptBase - 1);
-}
-
 void Apic::printLocalApics(Util::String &string) {
     string += Util::String::format("Local APIC supported modes: [%s%s] (Current mode: [xApic])\n",
                                    LocalApic::supportsXApic() ? "xApic" : "None",
@@ -300,28 +260,25 @@ void Apic::printLocalApics(Util::String &string) {
     }
 }
 
-void Apic::printIoApics(Util::String &string) {
+void Apic::printIoApic(Util::String &string) {
     string += Util::String::format("I/O APIC version: [0x%x]\n",
-                                   (*ioApics.begin())->getVersion());
+                                   ioApic->getVersion());
     string += Util::String::format("Supports directed EOI: [%d]\n",
-                                   static_cast<int>((*ioApics.begin())->getVersion() >= 0x20));
+                                   static_cast<int>(ioApic->getVersion() >= 0x20));
 
-    string += "\nI/O APICs:\n";
-    for (uint32_t i = 0; i < ioApics.size(); ++i) {
-        const IoApic &ioApic = *ioApics.get(i);
-        string += Util::String::format("Id: [%d], GSI: [%d] - [%d], MMIO: [0x%x] (phys) -> [0x%x] (virt)\n",
-                                       ioApic.ioId,
-                                       static_cast<uint32_t>(ioApic.gsiBase),
-                                       static_cast<uint32_t>(ioApic.gsiMax),
-                                       ioApic.baseAddress,
-                                       ioApic.mmioAddress);
-        for (uint32_t j = 0; j < ioApic.nmiSources.size(); ++j) {
-            const IoApic::NmiSource &nmi = *ioApic.nmiSources.get(j);
-            string += Util::String::format("  NMI: (GSI: [%d], Polarity: [%s], Trigger: [%s])\n",
-                                           static_cast<uint32_t>(nmi.source),
-                                           nmi.polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-                                           nmi.trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
-        }
+    string += "\nI/O APIC:\n";
+    string += Util::String::format("Id: [%d], GSI: [%d] - [%d], MMIO: [0x%x] (phys) -> [0x%x] (virt)\n",
+                                   ioApic->ioId,
+                                   static_cast<uint32_t>(ioApic->gsiBase),
+                                   static_cast<uint32_t>(ioApic->gsiMax),
+                                   ioApic->baseAddress,
+                                   ioApic->mmioAddress);
+    for (uint32_t j = 0; j < ioApic->nmiSources.size(); ++j) {
+        const IoApic::NmiSource &nmi = *ioApic->nmiSources.get(j);
+        string += Util::String::format("NMI: (GSI: [%d], Polarity: [%s], Trigger: [%s])\n",
+                                       static_cast<uint32_t>(nmi.source),
+                                       nmi.polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+                                       nmi.trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
     }
 
     string += ("\nI/O APIC IRQ overrides:\n");
@@ -362,4 +319,4 @@ void Apic::printInterrupts(Util::String &string) {
     }
 }
 
-}
+} // namespace Device

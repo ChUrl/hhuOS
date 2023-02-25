@@ -78,38 +78,26 @@ void Apic::enableCurrentErrorHandler() {
 
 void Apic::allow(InterruptRequest interruptRequest) {
     ensureApic();
-    const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
-    const Kernel::GlobalSystemInterrupt gsi = override == nullptr
-                                              ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
-                                              : override->target;
-    IoApic &ioApic = getIoApic(gsi); // Select responsible I/O APIC
-    if (ioApic.isNonMaskableInterrupt(gsi)) {
+    const Kernel::GlobalSystemInterrupt gsi = mapInterruptRequest(interruptRequest);
+    if (ioApic->isNonMaskableInterrupt(gsi)) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI is non-maskable!");
     }
-    ioApic.allow(gsi);
+    ioApic->allow(gsi);
 }
 
 void Apic::forbid(InterruptRequest interruptRequest) {
     ensureApic();
-    const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
-    const Kernel::GlobalSystemInterrupt gsi = override == nullptr
-                                              ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
-                                              : override->target;
-    IoApic &ioApic = getIoApic(gsi);
-    if (ioApic.isNonMaskableInterrupt(gsi)) {
+    const Kernel::GlobalSystemInterrupt gsi = mapInterruptRequest(interruptRequest);
+    if (ioApic->isNonMaskableInterrupt(gsi)) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "GSI is non-maskable!");
     }
-    ioApic.forbid(gsi);
+    ioApic->forbid(gsi);
 }
 
 bool Apic::status(InterruptRequest interruptRequest) {
     ensureApic();
-    const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
-    const Kernel::GlobalSystemInterrupt gsi = override == nullptr
-                                              ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest)
-                                              : override->target;
-    IoApic &ioApic = getIoApic(gsi);
-    return ioApic.status(gsi);
+    const Kernel::GlobalSystemInterrupt gsi = mapInterruptRequest(interruptRequest);
+    return ioApic->status(gsi);
 }
 
 void Apic::sendEndOfInterrupt(Kernel::InterruptVector vector) {
@@ -144,6 +132,11 @@ void Apic::countInterrupt(Kernel::InterruptVector vector) {
     if (interruptCounter != nullptr && interruptCounterWrapper != nullptr) {
         (*(*interruptCounterWrapper)[vector])[LocalApic::getId()]->inc();
     }
+}
+
+Kernel::GlobalSystemInterrupt Apic::mapInterruptRequest(InterruptRequest interruptRequest) {
+    const IoApic::IrqOverride *override = IoApic::getOverride(interruptRequest);
+    return override == nullptr ? static_cast<Kernel::GlobalSystemInterrupt>(interruptRequest) : override->target;
 }
 
 } // namespace Device

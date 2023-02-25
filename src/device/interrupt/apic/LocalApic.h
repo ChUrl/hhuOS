@@ -17,8 +17,8 @@ namespace Device {
  * Using this class means interacting with the local APIC of the current CPU core.
  */
 class LocalApic {
-    friend class Apic;             // Apic exposes this class' functionality to the OS
-    friend class ApicTimer;        // ApicTimer is configured by using LApic registers
+    friend class Apic;           // Apic exposes this class' functionality to the OS
+    friend class ApicTimer;      // ApicTimer is configured by using LApic registers
     friend class LocalApicError; // ApicErrorInterruptHandler uses the ERR register
     friend class IoApic;
 
