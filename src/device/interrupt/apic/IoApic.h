@@ -115,8 +115,6 @@ private:
      */
     void initializeREDTBL();
 
-    void printRedtbl(Util::String &string);
-
     /**
      * @brief Check if an interrupt is non-maskable.
      */

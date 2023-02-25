@@ -97,21 +97,6 @@ void IoApic::initializeREDTBL() {
     }
 }
 
-void IoApic::printRedtbl(Util::String &string) {
-    string += Util::String::format("Redirection Table [%d]:\n", ioId);
-    for (uint32_t gsi = gsiBase; gsi < gsiMax; ++gsi) {
-        const REDTBLEntry redtblEntry = readREDTBL(static_cast<Kernel::GlobalSystemInterrupt>(gsi));
-        string += Util::String::format(
-          "Vector: [0x%x], Masked: [%d], Destination: [%d], Polarity: [%s], Trigger: [%s] (IRQ %d)\n",
-          static_cast<uint8_t>(redtblEntry.vector),
-          static_cast<uint8_t>(redtblEntry.isMasked),
-          redtblEntry.destination,
-          redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-          redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL",
-          gsi);
-    }
-}
-
 bool IoApic::isNonMaskableInterrupt(Kernel::GlobalSystemInterrupt interrupt) {
     for (uint32_t i = 0; i < nmiSources.size(); ++i) {
         const NmiSource &nmi = *nmiSources.get(i);

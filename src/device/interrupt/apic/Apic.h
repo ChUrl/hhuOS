@@ -194,7 +194,11 @@ private:
 
     static void printLocalApics(Util::String &string);
 
+    static void printLvt(Util::String &string);
+
     static void printIoApic(Util::String &string);
+
+    static void printRedtbl(Util::String &string);
 
     static void printInterrupts(Util::String &string);
 

@@ -209,8 +209,6 @@ private:
      */
     static void initializeLVT();
 
-    static void printLvt(Util::String &string);
-
     // Reading and writing local APIC's registers parses the read/written values to/from
     // types from ApicRegisterInterface. Only registers of the current CPU will be affected.
 

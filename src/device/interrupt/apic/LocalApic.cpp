@@ -227,22 +227,6 @@ void LocalApic::initializeLVT() {
     writeLVT(ERROR, lvtEntry);
 }
 
-void LocalApic::printLvt(Util::String &string) {
-    const Util::Array<const char *> lintNames = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
-
-    string += Util::String::format("Local Vector Table [%d]:\n", getId());
-    for (uint8_t lint = CMCI; lint <= ERROR; ++lint) {
-        const LVTEntry lvtEntry = readLVT(static_cast<LocalInterrupt>(lint));
-        string += Util::String::format(
-          "Vector: [0x%x], Masked: [%d], Polarity: [%s], Trigger: [%s] (%s)\n",
-          static_cast<uint8_t>(lvtEntry.vector),
-          static_cast<uint8_t>(lvtEntry.isMasked),
-          lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
-          lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL",
-          lintNames[lint]);
-    }
-}
-
 BaseMSREntry LocalApic::readBaseMSR() {
     return static_cast<BaseMSREntry>(ia32ApicBaseMsr.readQuadWord()); // Atomic read
 }

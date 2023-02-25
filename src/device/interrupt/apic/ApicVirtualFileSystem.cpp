@@ -19,11 +19,8 @@ void Apic::mountVirtualFilesystemNodes() {
 
     auto *localApicNode = new Filesystem::Memory::ApicFileNode("lapic", Apic::printLocalApics);
     auto *ioApicNode = new Filesystem::Memory::ApicFileNode("ioapic", Apic::printIoApic);
-    auto *lvtNode = new Filesystem::Memory::ApicFileNode("lvt", LocalApic::printLvt);
-    auto *redtblNode = new Filesystem::Memory::ApicFileNode("redtbl", [](Util::String &string){
-        // Capture the ioApic instance, because we can't pass the pointer to the member function.
-        ioApic->printRedtbl(string);
-    });
+    auto *lvtNode = new Filesystem::Memory::ApicFileNode("lvt", Apic::printLvt);
+    auto *redtblNode = new Filesystem::Memory::ApicFileNode("redtbl", Apic::printRedtbl);
     auto *picNode = new Filesystem::Memory::ApicFileNode("pic", Pic::printStatus);
     auto *irqsNode = new Filesystem::Memory::ApicFileNode("irqs", Apic::printInterrupts);
 
@@ -62,6 +59,22 @@ void Apic::printLocalApics(Util::String &string) {
     }
 }
 
+void Apic::printLvt(Util::String &string) {
+    const Util::Array<const char *> lintNames = {"CMCI", "TIMER", "THERMAL", "PERFORMANCE", "LINT0", "LINT1", "ERROR"};
+
+    string += Util::String::format("Local Vector Table [%d]:\n", LocalApic::getId());
+    for (uint8_t lint = LocalApic::TIMER; lint <= LocalApic::ERROR; ++lint) {
+        const LVTEntry lvtEntry = LocalApic::readLVT(static_cast<LocalApic::LocalInterrupt>(lint));
+        string += Util::String::format(
+          "Vector: [0x%x], Masked: [%d], Polarity: [%s], Trigger: [%s] (%s)\n",
+          static_cast<uint8_t>(lvtEntry.vector),
+          static_cast<uint8_t>(lvtEntry.isMasked),
+          lvtEntry.pinPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+          lvtEntry.triggerMode == LVTEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL",
+          lintNames[lint]);
+    }
+}
+
 void Apic::printIoApic(Util::String &string) {
     string += Util::String::format("I/O APIC version: [0x%x]\n",
                                    ioApic->getVersion());
@@ -91,6 +104,21 @@ void Apic::printIoApic(Util::String &string) {
                                        static_cast<uint32_t>(override.target),
                                        override.polarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
                                        override.trigger == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL");
+    }
+}
+
+void Apic::printRedtbl(Util::String &string) {
+    string += Util::String::format("Redirection Table [%d]:\n", ioApic->ioId);
+    for (uint32_t gsi = ioApic->gsiBase; gsi < ioApic->gsiMax; ++gsi) {
+        const REDTBLEntry redtblEntry = ioApic->readREDTBL(static_cast<Kernel::GlobalSystemInterrupt>(gsi));
+        string += Util::String::format(
+          "Vector: [0x%x], Masked: [%d], Destination: [%d], Polarity: [%s], Trigger: [%s] (IRQ %d)\n",
+          static_cast<uint8_t>(redtblEntry.vector),
+          static_cast<uint8_t>(redtblEntry.isMasked),
+          redtblEntry.destination,
+          redtblEntry.pinPolarity == REDTBLEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
+          redtblEntry.triggerMode == REDTBLEntry::TriggerMode::EDGE ? "EDGE" : "LEVEL",
+          gsi);
     }
 }
 
