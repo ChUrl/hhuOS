@@ -77,15 +77,35 @@ void LocalApic::initialize() {
     svrEntry.suppressEoiBroadcasting = false; // EOI level triggered external interrupts through the local APIC
     writeSVR(svrEntry);
 
-    // Clear outstanding stuff
-    clearErrors();
+    // Clear outstanding stuff. Errors are not cleared here, because this would arm the error interrupt.
+    // This is done when plugging in the error interrupt instead.
     sendEndOfInterrupt();
+
+    // Synchronize the arbitration IDs (IA-32, sec. 3.11.7)
+    // Multiple APICs communicate with each other. To select which message is handled first when multiple
+    // messages occur at a similar time, an arbitration mechanism is used, which uses an arbitration ID based
+    // on the local APIC ID. In P6 family processors, the arbitration IDs can be synchronized with the APIC IDs
+    // by sending the INIT-level-deassert IPI to all APICs.
+    synchronizeArbitrationIds();
 
     // Allow all interrupts to be forwarded to the CPU by setting the Task-Priority Class and Sub Class thresholds to 0
     // This should be 0 after power-up, but it doesn't hurt to set it again
     writeDoubleWord(TPR, 0);
 
     initialized = true;
+}
+
+void LocalApic::synchronizeArbitrationIds() {
+    ICREntry icrEntry{};
+    icrEntry.vector = static_cast<Kernel::InterruptVector>(0);
+    icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT;
+    icrEntry.destinationMode = ICREntry::DestinationMode::PHYSICAL;
+    icrEntry.level = ICREntry::Level::DEASSERT;
+    icrEntry.triggerMode = ICREntry::TriggerMode::LEVEL;
+    icrEntry.destinationShorthand = ICREntry::DestinationShorthand::ALL;
+    icrEntry.destination = 0;
+    writeICR(icrEntry);
+    waitForIpiDispatch();
 }
 
 void LocalApic::enableXApicMode() {
@@ -112,13 +132,13 @@ void LocalApic::enableXApicMode() {
     mmioAddress = reinterpret_cast<uint32_t>(virtAddress) + pageOffset;
 
     // This implementation only supports xApic mode. Because the local APIC starts with xApic mode and every AP uses
-    // the same address space, memory allocation only has to be done once and the IA32_APIC_BASE_MSR does not
+    // the same address space, memory allocation only has to be done once and the IA32_APIC_BASE MSR does not
     // have to be written at all. To enable x2Apic mode, every AP would have to set the x2Apic-enable flag in its
-    // IA32_APIC_BASE_MSR, without requiring the MMIO region.
+    // IA32_APIC_BASE MSR, without requiring the MMIO region.
     log.info("Running in xApic mode.");
 }
 
-void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
+void LocalApic::sendInitIpi(uint8_t id, ICREntry::Level level) {
     ICREntry icrEntry{};
     icrEntry.vector = static_cast<Kernel::InterruptVector>(0); // INIT should have vector number 0
     icrEntry.deliveryMode = ICREntry::DeliveryMode::INIT;
@@ -130,7 +150,7 @@ void LocalApic::sendIpiInit(uint8_t id, ICREntry::Level level) {
     writeICR(icrEntry); // Writing ICR issues IPI
 }
 
-void LocalApic::sendIpiStartup(uint8_t id, uint32_t startupCodeAddress) {
+void LocalApic::sendStartupIpi(uint8_t id, uint32_t startupCodeAddress) {
     ICREntry icrEntry{};
     icrEntry.vector = static_cast<Kernel::InterruptVector>(startupCodeAddress >> 12); // Startup code physical page
     icrEntry.deliveryMode = ICREntry::DeliveryMode::STARTUP;
@@ -192,8 +212,8 @@ void LocalApic::initializeLVT() {
     lvtEntry.isMasked = true;
 
     // Set all the vector numbers
-    lvtEntry.vector = Kernel::InterruptVector::CMCI;
-    writeLVT(CMCI, lvtEntry); // The CMCI might not exist
+    // lvtEntry.vector = Kernel::InterruptVector::CMCI;
+    // writeLVT(CMCI, lvtEntry); // The CMCI only exists on modern CPUs
     lvtEntry.vector = Kernel::InterruptVector::APICTIMER;
     writeLVT(TIMER, lvtEntry);
     lvtEntry.vector = Kernel::InterruptVector::THERMAL;

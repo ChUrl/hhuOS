@@ -126,6 +126,8 @@ private:
      */
     void initialize();
 
+    static void synchronizeArbitrationIds();
+
     /**
      * @brief Prepare the BSP for local APIC initialization.
      *
@@ -143,7 +145,7 @@ private:
      * @param id The local APIC id/CPU id of the AP to enable
      * @param level Assert or deassert
      */
-    static void sendIpiInit(uint8_t id, ICREntry::Level level);
+    static void sendInitIpi(uint8_t id, ICREntry::Level level);
 
     /**
      * @brief Send an STARTUP IPI (SIPI) to an AP.
@@ -154,7 +156,7 @@ private:
      * @param id The local APIC id/CPU id of the AP to boot
      * @param startupCodeAddress The page on which the startup routine is located in physical memory
      */
-    static void sendIpiStartup(uint8_t id, uint32_t startupCodeAddress);
+    static void sendStartupIpi(uint8_t id, uint32_t startupCodeAddress);
 
     /**
      * @brief Poll the ICR until the delivery status bit is unset.
