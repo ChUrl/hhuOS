@@ -13,19 +13,8 @@ Kernel::Logger ApicTimer::log = Kernel::Logger::get("ApicTimer");
 
 ApicTimer::ApicTimer(uint32_t timerInterval, uint32_t yieldInterval)
   : cpuId(LocalApic::getId()), timerInterval(timerInterval), yieldInterval(yieldInterval) {
-    if (ticksIn1ms == 0) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "APIC timer not calibrated!");
-    }
-    if (timerInterval == 0) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "APIC timer interval can't be 0!");
-    }
-    if (yieldInterval == 0) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "APIC timer yield interval can't be 0!");
-    }
-
     const uint32_t counter = ticksIn1ms * timerInterval;
-    log.info("Setting APIC timer interval for CPU [%d] to [%ums] (Initial count: [%u])",
-             cpuId, timerInterval, counter);
+    log.info("Setting APIC timer [%d] interval to [%ums] (Initial count: [%u])", cpuId, timerInterval, counter);
 
     // Recommended order: Divide -> LVT -> Initial Count (OSDev)
     LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, divider); // BY_1 is the highest resolution (overkill)
@@ -71,11 +60,13 @@ Util::Time::Timestamp ApicTimer::getTime() {
 }
 
 void ApicTimer::calibrate() {
-    // The calibration works by waiting the desired interval and measuring how many ticks the timer does.
+    // Prepare calibration
     LocalApic::writeDoubleWord(LocalApic::TIMER_DIVIDE, divider);
     LVTEntry lvtEntry = LocalApic::readLVT(LocalApic::TIMER);
-    lvtEntry.timerMode = LVTEntry::TimerMode::PERIODIC;
+    lvtEntry.timerMode = LVTEntry::TimerMode::ONESHOT;
     LocalApic::writeLVT(LocalApic::TIMER, lvtEntry);
+
+    // The calibration works by waiting the desired interval and measuring how many ticks the timer does.
     LocalApic::writeDoubleWord(LocalApic::TIMER_INITIAL, 0xFFFFFFFF);                     // Max initial counter, writing starts timer
     Pit::earlyDelay(10'000);                                                              // Wait 10 ms
     ticksIn1ms = (0xFFFFFFFF - LocalApic::readDoubleWord(LocalApic::TIMER_CURRENT)) / 10; // Ticks in 1 ms

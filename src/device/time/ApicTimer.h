@@ -20,19 +20,9 @@ class ApicTimer : public Kernel::InterruptHandler, public TimeProvider {
     friend class Apic;
 
 public:
-    /**
-     * @brief Construct an ApicTimer instance.
-     *
-     * @param timerInterval The tick interval in milliseconds (10 milliseconds by default)
-     * @param yieldInterval The preemption interval in milliseconds (10 milliseconds by default)
-     */
-    explicit ApicTimer(uint32_t timerInterval = 10, uint32_t yieldInterval = 10);
-
     ApicTimer(const ApicTimer &copy) = delete;
 
     ApicTimer &operator=(const ApicTimer &other) = delete;
-
-    ~ApicTimer() override = default;
 
     /**
      * Overriding function from InterruptHandler.
@@ -72,6 +62,16 @@ private:
 
 private:
     /**
+     * @brief Construct an ApicTimer instance.
+     *
+     * @param timerInterval The tick interval in milliseconds (10 milliseconds by default)
+     * @param yieldInterval The preemption interval in milliseconds (10 milliseconds by default)
+     */
+    explicit ApicTimer(uint32_t timerInterval = 10, uint32_t yieldInterval = 10);
+
+    ~ApicTimer() override = default;
+
+    /**
      * @brief Calibrate the APIC timer using the PIT.
      *
      * Uses the PIT to measure how often the APIC timer ticks in 10ms. When constructing
@@ -80,9 +80,9 @@ private:
     static void calibrate();
 
 private:
-    uint8_t cpuId;              ///< @brief The id of the CPU that uses this timer.
-    uint32_t timerInterval;     ///< @brief The interrupt trigger interval in milliseconds.
-    uint32_t yieldInterval;     ///< @brief The preemption trigger interval in milliseconds.
+    uint8_t cpuId;          ///< @brief The id of the CPU that uses this timer.
+    uint32_t timerInterval; ///< @brief The interrupt trigger interval in milliseconds.
+    uint32_t yieldInterval; ///< @brief The preemption trigger interval in milliseconds.
 
     static uint32_t ticksIn1ms; ///< @brief The number of ticks the APIC timer does in 10 ms.
     static Divide divider;      ///< @brief The used divider, it has to be consistent to get consistent timings.
