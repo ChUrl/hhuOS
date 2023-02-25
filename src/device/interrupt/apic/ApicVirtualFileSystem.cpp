@@ -1,8 +1,8 @@
 
 #include "Apic.h"
+#include "device/interrupt/apic/ApicFileNode.h"
 #include "device/interrupt/Pic.h"
 #include "filesystem/memory/MemoryDriver.h"
-#include "filesystem/memory/MemoryFileNode.h"
 #include "kernel/service/FilesystemService.h"
 #include "kernel/system/System.h"
 
@@ -13,33 +13,19 @@ Util::Array<Util::Async::Atomic<uint32_t> *> *Apic::wrappers = nullptr;
 
 void Apic::mountVirtualFilesystemNodes() {
     ensureApic();
-    // TODO: Create some UpdateOnReadFileNode or sth. that executes a updateCallback function before read
-    //       to update these files lazily (wouldn't want to update the interrupts file on every interrupt...)
 
     auto &filesystemService = Kernel::System::getService<Kernel::FilesystemService>();
     auto &driver = filesystemService.getFilesystem().getVirtualDriver("/device");
 
-    auto *localApicNode = new Filesystem::Memory::MemoryFileNode("lapic");
-    auto *ioApicNode = new Filesystem::Memory::MemoryFileNode("ioapic");
-    auto *lvtNode = new Filesystem::Memory::MemoryFileNode("lvt");
-    auto *redtblNode = new Filesystem::Memory::MemoryFileNode("redtbl");
-    auto *picNode = new Filesystem::Memory::MemoryFileNode("pic");
-    auto *irqsNode = new Filesystem::Memory::MemoryFileNode("irqs");
-
-    Util::String lapic, ioapic, lvt, redtbl, pic, irqs;
-    printLocalApics(lapic);
-    printIoApic(ioapic);
-    LocalApic::printLvt(lvt);
-    ioApic->printRedtbl(redtbl);
-    Pic::printStatus(pic);
-    printInterrupts(irqs);
-
-    localApicNode->writeData(static_cast<const uint8_t *>(lapic), 0, lapic.length());
-    ioApicNode->writeData(static_cast<const uint8_t *>(ioapic), 0, ioapic.length());
-    lvtNode->writeData(static_cast<const uint8_t *>(lvt), 0, lvt.length());
-    redtblNode->writeData(static_cast<const uint8_t *>(redtbl), 0, redtbl.length());
-    picNode->writeData(static_cast<const uint8_t *>(pic), 0, pic.length());
-    irqsNode->writeData(static_cast<const uint8_t *>(irqs), 0, irqs.length());
+    auto *localApicNode = new Filesystem::Memory::ApicFileNode("lapic", Apic::printLocalApics);
+    auto *ioApicNode = new Filesystem::Memory::ApicFileNode("ioapic", Apic::printIoApic);
+    auto *lvtNode = new Filesystem::Memory::ApicFileNode("lvt", LocalApic::printLvt);
+    auto *redtblNode = new Filesystem::Memory::ApicFileNode("redtbl", [](Util::String &string){
+        // Capture the ioApic instance, because we can't pass the pointer to the member function.
+        ioApic->printRedtbl(string);
+    });
+    auto *picNode = new Filesystem::Memory::ApicFileNode("pic", Pic::printStatus);
+    auto *irqsNode = new Filesystem::Memory::ApicFileNode("irqs", Apic::printInterrupts);
 
     filesystemService.createDirectory("/device/apic");
     driver.addNode("/apic/", localApicNode);

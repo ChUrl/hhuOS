@@ -242,7 +242,7 @@ Cpu::Descriptor *Apic::allocateApGdt() {
 
     return new Cpu::Descriptor{
       .limit = 6 * 8,
-      .address = reinterpret_cast<uint64_t>(gdt) // + Kernel::MemoryLayout::KERNEL_START
+      .address = reinterpret_cast<uint32_t>(gdt) // + Kernel::MemoryLayout::KERNEL_START
     };
 }
 
