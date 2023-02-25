@@ -529,7 +529,7 @@ void *Apic::prepareApWarmReset() {
 
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
     const uint32_t wrvPhys = 0x40 << 4 | 0x67; // MPSpec, sec. B.4
-    void *warmResetVector = memoryService.mapIO(wrvPhys, Util::PAGESIZE);
+    void *warmResetVector = memoryService.mapIO(wrvPhys, 2, true); // WRV is DWORD
 
     // Account for possible misalignment, as mapIO returns a page-aligned pointer
     const uint32_t pageOffset = wrvPhys % Util::PAGESIZE;
