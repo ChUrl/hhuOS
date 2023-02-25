@@ -79,12 +79,6 @@ Util::Time::Timestamp Pit::getTime() {
 
 void Pit::earlyDelay(uint16_t us) {
     const uint32_t counter = (static_cast<double>(BASE_FREQUENCY) / 1'000'000) * us;
-    if (counter == 0) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "PIT: Interval too small!");
-    }
-    if (counter > static_cast<uint16_t>(-1)) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "PIT: Interval too large!");
-    }
 
     controlPort.writeByte(0b110000); // Channel 0, mode 0, low-/high byte access mode
     dataPort0.writeByte(static_cast<uint8_t>(counter & 0xFF)); // Low byte
