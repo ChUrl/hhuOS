@@ -1,19 +1,14 @@
 #ifndef SMPSTARTUP_H
 #define SMPSTARTUP_H
 
+#include "Cpu.h"
 #include <cstdint>
-
-// Descriptor for either GDT or IDT
-struct Descriptor {
-    uint16_t size;
-    uint64_t address;
-} __attribute__((packed));
 
 // Import from smp.asm
 extern "C" void boot_ap(void);
 extern const uint16_t boot_ap_size;
-extern Descriptor boot_ap_gdtr;
-extern Descriptor boot_ap_idtr;
+extern Device::Cpu::Descriptor boot_ap_gdtr;
+extern Device::Cpu::Descriptor boot_ap_idtr;
 extern uint32_t boot_ap_cr0;
 extern uint32_t boot_ap_cr3;
 extern uint32_t boot_ap_cr4;

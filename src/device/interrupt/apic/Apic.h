@@ -1,15 +1,15 @@
 #ifndef HHUOS_APIC_H
 #define HHUOS_APIC_H
 
-#include "device/cpu/smp_defs.h"
+#include "device/cpu/Cpu.h"
+#include "device/interrupt/apic/IoApic.h"
+#include "device/interrupt/apic/LocalApic.h"
+#include "device/interrupt/apic/LocalApicError.h"
+#include "device/interrupt/apic/LocalApicRegisters.h"
 #include "device/power/acpi/Acpi.h"
 #include "device/time/ApicTimer.h"
-#include "IoApic.h"
 #include "kernel/log/Logger.h"
 #include "lib/util/async/Atomic.h"
-#include "LocalApic.h"
-#include "LocalApicError.h"
-#include "LocalApicRegisters.h"
 
 namespace Device {
 
@@ -188,7 +188,7 @@ private:
      * This is basically a shorter and slightly modified version of System::InitializeGlobalDescriptorTables.
      * The main difference is that only a single GDT is used and its memory is allocated by this function.
      */
-    static Descriptor *allocateApGdt();
+    static Cpu::Descriptor *allocateApGdt();
 
     static Kernel::GlobalSystemInterrupt mapInterruptRequest(InterruptRequest interruptRequest);
 

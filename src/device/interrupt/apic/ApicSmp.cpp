@@ -1,5 +1,6 @@
 #include "Apic.h"
 #include "device/cpu/Cpu.h"
+#include "device/cpu/smp_defs.h"
 #include "device/time/Cmos.h"
 #include "device/time/Pit.h"
 #include "kernel/paging/Paging.h"
@@ -196,7 +197,7 @@ void *Apic::prepareApGdts() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
     // Allocate descriptor pointer array
-    auto **gdts = reinterpret_cast<Descriptor **>(new Descriptor *[localApics->length()]);
+    auto **gdts = reinterpret_cast<Cpu::Descriptor **>(new Cpu::Descriptor *[localApics->length()]);
     if (gdts == nullptr) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP GDTs memory!");
     }
@@ -215,7 +216,7 @@ void *Apic::prepareApGdts() {
     return reinterpret_cast<void *>(gdts);
 }
 
-Descriptor *Apic::allocateApGdt() {
+Cpu::Descriptor *Apic::allocateApGdt() {
     // Allocate memory for the GDT and TSS. This is never freed, as its used as long as the system runs.
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
@@ -248,7 +249,7 @@ Descriptor *Apic::allocateApGdt() {
     // TSS segment
     Kernel::System::createGlobalDescriptorTableEntry(gdt, 5, reinterpret_cast<uint32_t>(tss), tssSize, 0x89, 0x4);
 
-    return new Descriptor{
+    return new Cpu::Descriptor {
       .size = 6 * 8,                             // TODO: Why 6 * 8? Isn't it 24 * 4 (boot.asm gdt: "times (24) dw 0")?
       .address = reinterpret_cast<uint64_t>(gdt) // + Kernel::MemoryLayout::KERNEL_START
     };
