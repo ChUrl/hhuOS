@@ -8,6 +8,9 @@
 
 namespace Device {
 
+Util::Array<uint32_t> *Apic::counters = nullptr;
+Util::Array<Util::Async::Atomic<uint32_t> *> *Apic::wrappers = nullptr;
+
 void Apic::mountVirtualFilesystemNodes() {
     ensureApic();
     // TODO: Create some UpdateOnReadFileNode or sth. that executes a updateCallback function before read
@@ -57,8 +60,13 @@ void Apic::printLocalApics(Util::String &string) {
                                    LocalApic::mmioAddress);
 
     string += "\nLocal APICs:\n";
-    for (uint32_t i = 0; i < localApics.size(); ++i) {
-        const LocalApic &localApic = *localApics.get(i);
+    for (uint32_t i = 0; i < localApics->length(); ++i) {
+        if ((*localApics)[i] == nullptr) {
+            // Skip disabled processors
+            continue;
+        }
+
+        const LocalApic &localApic = *(*localApics)[i];
         string += Util::String::format("Id: [0x%x], Running: [%d], NMI: (LINT: [%d], Polarity: [%s], Trigger: [%s])\n",
                                        localApic.cpuId,
                                        localApic.initialized,
@@ -103,8 +111,13 @@ void Apic::printIoApic(Util::String &string) {
 void Apic::printInterrupts(Util::String &string) {
     // Print the header
     string += "vector";
-    for (uint32_t i = 0; i < getCpuCount(); ++i) {
-        string += Util::String::format(",cpu%d", i);
+    for (uint32_t i = 0; i < localApics->length(); ++i) {
+        if ((*localApics)[i] == nullptr) {
+            // Skip disabled processors
+            continue;
+        }
+
+        string += Util::String::format(",cpu%d", (*localApics)[i]->cpuId);
     }
     string += "\n";
 
@@ -112,7 +125,7 @@ void Apic::printInterrupts(Util::String &string) {
     Util::String line;
     bool occured = false;
     for (uint32_t i = 0; i < counters->length(); ++i) {
-        if (i % getCpuCount() == 0) {
+        if (i % localApics->length() == 0) {
             // We are on a new line
             if (occured) {
                 // Append the last line unless its all 0s
@@ -120,7 +133,7 @@ void Apic::printInterrupts(Util::String &string) {
                 string += "\n";
             }
 
-            line = Util::String::format("%d", i / getCpuCount());
+            line = Util::String::format("%d", i / localApics->length());
             occured = false;
         }
 

@@ -36,29 +36,17 @@ void Apic::initializeCurrentLocalApic() {
 
 uint8_t Apic::getCpuCount() {
     ensureApic();
-    return localApics.size();
+    return usableProcessors;
 }
 
 LocalApic &Apic::getCurrentLocalApic() {
-    for (uint32_t i = 0; i < localApics.size(); ++i) {
-        LocalApic &localApic = *localApics.get(i);
-        if (localApic.cpuId == LocalApic::getId()) {
-            return localApic;
-        }
-    }
-
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find local APIC for current CPU!");
+    ensureApic();
+    return *(*localApics)[LocalApic::getId()];
 }
 
 bool Apic::isCurrentTimerRunning() {
-    for (uint32_t i = 0; i < timers.size(); ++i) {
-        const ApicTimer &timer = *timers.get(i);
-        if (timer.cpuId == LocalApic::getId()) {
-            return true;
-        }
-    }
-
-    return false;
+    ensureApic();
+    return (*localTimers)[LocalApic::getId()] != nullptr;
 }
 
 void Apic::startCurrentTimer() {
@@ -70,18 +58,16 @@ void Apic::startCurrentTimer() {
     // We use multiple instances because each timer has its own timestamp
     auto *apicTimer = new Device::ApicTimer();
     apicTimer->plugin(); // Multiple invocations register multiple handlers to the APICTIMER vector
-    timers.add(apicTimer);
+    (*localTimers)[LocalApic::getId()] = apicTimer;
 }
 
 ApicTimer &Apic::getCurrentTimer() {
-    for (uint32_t i = 0; i < timers.size(); ++i) {
-        ApicTimer &timer = *timers.get(i);
-        if (timer.cpuId == LocalApic::getId()) {
-            return timer;
-        }
+    ensureApic();
+    if (!isCurrentTimerRunning()) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find timer for current CPU!");
     }
 
-    Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find timer for current CPU!");
+    return *(*localTimers)[LocalApic::getId()];
 }
 
 void Apic::enableCurrentErrorHandler() {
@@ -146,7 +132,7 @@ void Apic::countInterrupt(Kernel::InterruptVector vector) {
     // Do not throw here, just don't count if it's an early interrupt
     if (counters != nullptr && wrappers != nullptr) {
         // Array width * row + col
-        (*wrappers)[getCpuCount() * vector + LocalApic::getId()]->inc();
+        (*wrappers)[localApics->length() * vector + LocalApic::getId()]->inc();
     }
 }
 

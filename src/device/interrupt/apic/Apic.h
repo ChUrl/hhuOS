@@ -41,6 +41,9 @@ public:
      */
     static bool isEnabled();
 
+    /**
+     * @brief Throws if APIC not enabled.
+     */
     static void ensureApic();
 
     /**
@@ -75,9 +78,14 @@ public:
     static void initializeCurrentLocalApic();
 
     /**
-     * @brief Get the total CPU count.
+     * @brief Get the total count of usable CPUs.
      */
     static uint8_t getCpuCount();
+
+    /**
+     * @brief Get the LocalApic instance that belongs to the current CPU.
+     */
+    static LocalApic &getCurrentLocalApic();
 
     /**
      * @brief Check if this core's local APIC timer has been initialized.
@@ -182,11 +190,6 @@ private:
      */
     static Descriptor *allocateApGdt();
 
-    /**
-     * @brief Get the LocalApic instance that belongs to the current CPU.
-     */
-    static LocalApic &getCurrentLocalApic();
-
     static Kernel::GlobalSystemInterrupt mapInterruptRequest(InterruptRequest interruptRequest);
 
     static void printLocalApics(Util::String &string);
@@ -196,16 +199,17 @@ private:
     static void printInterrupts(Util::String &string);
 
 private:
-    static bool apicEnabled; ///< @brief Indicates if Apic::enable() has been called.
-    static bool smpEnabled;  ///< @brief Indicates if Apic::startupSmp() has been called.
+    static bool apicEnabled;          ///< @brief Indicates if Apic::enable() has been called.
+    static uint32_t usableProcessors; ///< @brief The amount of CPUs usable by the system.
+    static bool smpEnabled;           ///< @brief Indicates if Apic::startupSmp() has been called.
 
     // Memory allocated for or by instances contained in these lists is never freed,
     // this implementation doesn't support disabling the APIC at all.
     // Once the switch from PIC to APIC is done, it can't be switched back.
-    static Util::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
-    static Util::ArrayList<ApicTimer *> timers;     ///< @brief All ApicTimer instances.
-    static IoApic *ioApic;                          ///< @brief The IoApic instance responsible for the external interrupts.
-    static LocalApicError *errorHandler;            ///< @brief The interrupt handler that gets triggered on an internal APIC error.
+    static Util::Array<LocalApic *> *localApics;  ///< @brief All LocalApic instances.
+    static Util::Array<ApicTimer *> *localTimers; ///< @brief All ApicTimer instances.
+    static IoApic *ioApic;                        ///< @brief The IoApic instance responsible for the external interrupts.
+    static LocalApicError *errorHandler;          ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
     static Util::Array<uint32_t> *counters;
     static Util::Array<Util::Async::Atomic<uint32_t> *> *wrappers;

@@ -14,7 +14,8 @@ namespace Device {
 bool Apic::smpEnabled = false;
 
 bool Apic::isSmpSupported() {
-    return getCpuCount() > 1;
+    ensureApic();
+    return usableProcessors > 1;
 }
 
 void Device::Apic::startupSmp() {
@@ -22,7 +23,7 @@ void Device::Apic::startupSmp() {
     if (smpEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");
     }
-    if (getCpuCount() > 64) {
+    if (localApics->length() > 64) {
         // This limit is pretty arbitrary, but the runningAPs bitmap currently only has 64 bits (in Smp.h).
         // Technically xApic supports 8-bit CPU ids though, x2Apic even more (32-bit CPU ids).
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "CPUs with more than 64 cores are not supported!");
@@ -39,10 +40,10 @@ void Device::Apic::startupSmp() {
     Cmos::disableNmi();
 
     // Call the startup code on each AP using the SIPI
-    for (uint32_t i = 0; i < getCpuCount(); ++i) {
-        const LocalApic &localApic = *localApics.get(i);
-        if (localApic.cpuId == LocalApic::getId()) {
-            // Skip this AP if it's the BSP (disabled processors won't even show up in this list)
+    for (uint32_t i = 0; i < localApics->length(); ++i) {
+        const LocalApic *localApic = (*localApics)[i];
+        if (localApic == nullptr || localApic->cpuId == LocalApic::getId()) {
+            // Skip this AP if it's the BSP or disabled
             continue;
         }
 
@@ -53,16 +54,16 @@ void Device::Apic::startupSmp() {
         // This is unused for xApic. The INIT IPI is still issued though, to follow the IA-32 manual's
         // "INIT-SIPI-SIPI" sequence and the "universal startup algorithm" (MPSpec, sec. B.4):
         LocalApic::clearErrors();
-        LocalApic::sendInitIpi(localApic.cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
-        LocalApic::waitForIpiDispatch();                                    // xv6 waits 200 us instead.
-        LocalApic::sendInitIpi(localApic.cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
-        LocalApic::waitForIpiDispatch();                                    // Not necessary with 10ms delay
-        Pit::earlyDelay(10'000);                                            // 10 ms, xv6 waits 100 us instead.
+        LocalApic::sendInitIpi(localApic->cpuId, ICREntry::Level::ASSERT);   // Level-triggered, needs to be...
+        LocalApic::waitForIpiDispatch();                                     // xv6 waits 200 us instead.
+        LocalApic::sendInitIpi(localApic->cpuId, ICREntry::Level::DEASSERT); // ...deasserted manually
+        LocalApic::waitForIpiDispatch();                                     // Not necessary with 10ms delay
+        Pit::earlyDelay(10'000);                                             // 10 ms, xv6 waits 100 us instead.
 
         // Issue the SIPI twice (for xApic):
         for (uint8_t j = 0; j < 2; ++j) {
             LocalApic::clearErrors();
-            LocalApic::sendStartupIpi(localApic.cpuId, apStartupAddress);
+            LocalApic::sendStartupIpi(localApic->cpuId, apStartupAddress);
             LocalApic::waitForIpiDispatch();
             Pit::earlyDelay(200); // 200 us
         }
@@ -73,7 +74,7 @@ void Device::Apic::startupSmp() {
         // the same will happen if the SIPI does not reach its target. That's why we abort.
         // Because the systemtime is not yet functional, we delay to measure the ~ time.
         uint32_t readCount = 0;
-        while (!(runningAPs & (1 << localApic.cpuId))) {
+        while (!(runningAPs & (1 << localApic->cpuId))) {
             if (readCount > 10) {
                 // Waited 10 * 10 ms = 0.1 s in total (pretty arbitrarily chosen by me)
                 log.error("CPU [%d] didn't phone home, it could be in undefined state!", i);
@@ -103,16 +104,15 @@ void *Apic::prepareApStacks() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
     // Allocate the stackpointer array
-    auto **apStacks = reinterpret_cast<uint32_t **>(memoryService.allocateKernelMemory(sizeof(uint32_t *) * getCpuCount()));
+    auto **apStacks = reinterpret_cast<uint32_t **>(memoryService.allocateKernelMemory(sizeof(uint32_t *) * localApics->length()));
     if (apStacks == nullptr) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP stack memory!");
     }
 
-    // TODO: This does not account for disabled CPUs: If a CPU is disabled, the IDs are no longer sequential
     // Allocate the stacks, just iterates from 0 to cpuCount - 1 because ids are contiguous (we assume)
-    for (uint32_t i = 0; i < getCpuCount(); ++i) {
-        if (i == LocalApic::getId()) {
-            // The BSP already has a stack, we need this entry to keep the AP stacks addressible by their ids
+    for (uint32_t i = 0; i < localApics->length(); ++i) {
+        if (i == LocalApic::getId() || (*localApics)[i] == nullptr) {
+            // Skip BSP or disabled processors
             apStacks[i] = nullptr;
             continue;
         }
@@ -192,19 +192,18 @@ void *Apic::prepareApWarmReset() {
     return reinterpret_cast<void *>(wrvVirt);
 }
 
-// TODO: When using an array, the disabled CPUs have to be marked as nullptr
 void *Apic::prepareApGdts() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
     // Allocate descriptor pointer array
-    auto **apGdts = reinterpret_cast<Descriptor **>(memoryService.allocateKernelMemory(sizeof(Descriptor *) * getCpuCount()));
+    auto **apGdts = reinterpret_cast<Descriptor **>(memoryService.allocateKernelMemory(sizeof(Descriptor *) * localApics->length()));
     if (apGdts == nullptr) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP GDTs memory!");
     }
 
-    for (uint32_t i = 0; i < getCpuCount(); ++i) {
-        if (i == LocalApic::getId()) {
-            // The BSP already has a GDT, we need this entry to keep the AP GDTs addressible by their ids
+    for (uint32_t i = 0; i < localApics->length(); ++i) {
+        if (i == LocalApic::getId() || (*localApics)[i] == nullptr) {
+            // Skip BSP or disabled processors
             apGdts[i] = nullptr;
             continue;
         }

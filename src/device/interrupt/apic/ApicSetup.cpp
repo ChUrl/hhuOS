@@ -6,13 +6,11 @@
 namespace Device {
 
 bool Apic::apicEnabled = false;
-Util::ArrayList<LocalApic *> Apic::localApics;
-Util::ArrayList<ApicTimer *> Apic::timers;
+uint32_t Apic::usableProcessors = 0;
+Util::Array<LocalApic *> *Apic::localApics = nullptr;
+Util::Array<ApicTimer *> *Apic::localTimers = nullptr;
 IoApic *Apic::ioApic = nullptr;
-LocalApicError *Apic::errorHandler = new LocalApicError();
-
-Util::Array<uint32_t> *Apic::counters = nullptr;
-Util::Array<Util::Async::Atomic<uint32_t> *> *Apic::wrappers = nullptr;
+LocalApicError *Apic::errorHandler = nullptr;
 
 void Apic::enable() {
     if (apicEnabled) {
@@ -52,17 +50,22 @@ void Apic::enable() {
     prepareInterruptCounters();
 
     // We only require one error handler, as every AP can only access its own local APIC's error register
+    errorHandler = new LocalApicError();
     errorHandler->plugin();      // Does not allow the interrupt!
     enableCurrentErrorHandler(); // Allows the interrupt for this AP
 
     // In contrast to the errorHandler, there are multiple timers in multicore systems, because they keep
     // track of the "core-local" time.
+    localTimers = new Util::Array<ApicTimer *>(localApics->length());
+    for (uint32_t i = 0; i < localApics->length(); ++i) {
+        (*localTimers)[i] = nullptr;
+    }
     ApicTimer::calibrate();
     startCurrentTimer();
 }
 
-// TODO: Sort these lists beforehand, this way the getIoApic etc. functions can just use ioApics.get(id) in O(1)
-// TODO: This requires sequential ids
+// NOTE: The instances are stored inside an array, indexed by the APIC ID.
+// NOTE: This requires sequential IDs, I think (?) they should be sequential (MPSPec, sec. B.4)
 void Apic::populateLocalApics() {
     // Get our required information from ACPI
     const auto *madt = Acpi::getTable<Acpi::Madt>("APIC");
@@ -75,12 +78,14 @@ void Apic::populateLocalApics() {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Didn't find any local APIC(s)!");
     }
 
+    localApics = new Util::Array<LocalApic *>(acpiProcessorLocalApics.size());
+
     // Create LocalApic instances
     for (const auto *localInfo : acpiProcessorLocalApics) {
         if (!(localInfo->flags & 0x1)) {
-            // TODO: When using an array, the disabled CPUs have to be marked as nullptr
             // When ACPI reports this local APIC as disabled, it may not be used by the OS.
             // ACPI 1.0 specification, sec. 5.2.8.1
+            (*localApics)[localInfo->apicId] = nullptr;
             continue;
         }
 
@@ -97,13 +102,20 @@ void Apic::populateLocalApics() {
             Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Couldn't find NMI for local APIC!");
         }
 
-        localApics.add(new LocalApic(localInfo->apicId, madt->localApicAddress,
-                                     nmiInfo->localApicLint == 0 ? LocalApic::LINT0 : LocalApic::LINT1,
-                                     nmiInfo->flags & Acpi::IntiFlag::ACTIVE_HIGH ? LVTEntry::PinPolarity::HIGH : LVTEntry::PinPolarity::LOW,
-                                     nmiInfo->flags & Acpi::IntiFlag::EDGE_TRIGGERED ? LVTEntry::TriggerMode::EDGE : LVTEntry::TriggerMode::LEVEL));
+        usableProcessors++;
+        (*localApics)[localInfo->apicId] = new LocalApic(localInfo->apicId, madt->localApicAddress,
+                                                         nmiInfo->localApicLint == 0
+                                                           ? LocalApic::LINT0
+                                                           : LocalApic::LINT1,
+                                                         nmiInfo->flags & Acpi::IntiFlag::ACTIVE_HIGH
+                                                           ? LVTEntry::PinPolarity::HIGH
+                                                           : LVTEntry::PinPolarity::LOW,
+                                                         nmiInfo->flags & Acpi::IntiFlag::EDGE_TRIGGERED
+                                                           ? LVTEntry::TriggerMode::EDGE
+                                                           : LVTEntry::TriggerMode::LEVEL);
     }
 
-    log.info("Found [%d] CPUs of which [%d] are usable.", acpiProcessorLocalApics.size(), localApics.size());
+    log.info("Found [%d] CPUs of which [%d] are usable.", localApics->length(), usableProcessors);
 }
 
 void Apic::populateIoApic() {
@@ -162,8 +174,8 @@ void Apic::populateIoApic() {
 }
 
 void Apic::prepareInterruptCounters() {
-    // 256 vector numbers for n cpus
-    const uint32_t entries = 256 * getCpuCount();
+    // 256 vector numbers for n CPUs. Allocates space also for disabled CPUs, to allow for indexing using the ID.
+    const uint32_t entries = 256 * localApics->length();
 
     counters = new Util::Array<uint32_t>(entries);
     wrappers = new Util::Array<Util::Async::Atomic<uint32_t> *>(entries);
