@@ -1,5 +1,4 @@
 #include "device/interrupt/apic/Apic.h"
-#include "device/time/Cmos.h"
 #include "smp_defs.h"
 
 namespace Device {
@@ -19,8 +18,7 @@ Kernel::Logger log = Kernel::Logger::get("SMP");
     runningAPs |= (1 << apicid); // Mark that this AP is running
 
     // Enable interrupts for this AP (usually results in a crash)
-    // asm volatile ("sti"); // Can't use the CPU class, as it's only for singlecore
-    // Device::Cmos::enableNmi(); // TODO: I don't know if this is core-local
+    // asm volatile ("sti");
 
     // Bore the AP to death. Sadly we can't do anything here, as the paging is not
     // designed to work with multiple CPUs.
