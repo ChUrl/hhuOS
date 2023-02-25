@@ -51,8 +51,8 @@ public:
 
     // Descriptor for either GDT or IDT
     struct Descriptor {
-        uint16_t size;
-        uint64_t address;
+        uint16_t limit;
+        uint32_t address;
     } __attribute__((packed));
 
     /**

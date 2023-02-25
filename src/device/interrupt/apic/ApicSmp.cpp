@@ -1,5 +1,4 @@
 #include "Apic.h"
-#include "device/cpu/Cpu.h"
 #include "device/cpu/smp_defs.h"
 #include "device/time/Cmos.h"
 #include "device/time/Pit.h"
@@ -30,10 +29,10 @@ void Device::Apic::startupSmp() {
         Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "CPUs with more than 64 cores are not supported!");
     }
 
-    void *apGdts = prepareApGdts();
-    void *apStacks = prepareApStacks();
-    void *apStartupCode = prepareApStartupCode(apGdts, apStacks);
-    void *apWarmReset = prepareApWarmReset(); // This is technically only required for discrete APIC, see below
+    void *gdtPointers = prepareApGdts();
+    void *stackPointers = prepareApStacks();
+    void *startupCodeRegion = prepareApStartupCode(gdtPointers, stackPointers);
+    void *warmResetVectorRegion = prepareApWarmReset(); // This is technically only required for discrete APIC, see below
 
     // Universal Startup Algorithm requires all interrupts disabled (they should be disabled anyway,
     // but disabling them a second time is twice as good)
@@ -89,14 +88,12 @@ void Device::Apic::startupSmp() {
     Cmos::enableNmi();
     Cpu::enableInterrupts();
 
-    // TODO: We're deleting void * here, but I think this is safe, because no destructors or similar C++ stuff
-    //       is involved? Otherwise, cast to uint32_t * or some other primitive pointer type?
     // Free the startup routine page, stackpointer array, gdts array and warm-reset vector memory,
     // now that all APs are running. Keep the stacks though, they are not temporary!
-    delete apGdts;
-    delete apStacks;
-    delete apStartupCode;
-    delete apWarmReset;
+    delete reinterpret_cast<uint8_t *>(gdtPointers);
+    delete reinterpret_cast<uint8_t *>(stackPointers);
+    delete reinterpret_cast<uint8_t *>(startupCodeRegion);
+    delete reinterpret_cast<uint8_t *>(warmResetVectorRegion);
 
     smpEnabled = true;
 }
@@ -140,13 +137,7 @@ void *Apic::prepareApStartupCode(void *apGdts, void *apStacks) {
     // Identity map the allocated physical memory to the kernel address space
     // (Seems to be required to switch to protected mode with enabled paging)
     memoryService.unmap(reinterpret_cast<uint32_t>(startupCodeMemory));
-    memoryService.mapPhysicalAddress(apStartupAddress, apStartupAddress,
-                                     Kernel::Paging::PRESENT | Kernel::Paging::READ_WRITE);
-
-    // Sanity check because am dumb
-    if (reinterpret_cast<uint32_t>(memoryService.getPhysicalAddress(reinterpret_cast<void *>(apStartupAddress))) != apStartupAddress) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Failed to identity map startup code memory!");
-    }
+    memoryService.mapPhysicalAddress(apStartupAddress, apStartupAddress, Kernel::Paging::PRESENT | Kernel::Paging::READ_WRITE);
 
     // Virtual addresses
     const Util::Address<uint32_t> startupCode = Util::Address<uint32_t>(reinterpret_cast<uint32_t>(&boot_ap));
@@ -249,8 +240,8 @@ Cpu::Descriptor *Apic::allocateApGdt() {
     // TSS segment
     Kernel::System::createGlobalDescriptorTableEntry(gdt, 5, reinterpret_cast<uint32_t>(tss), tssSize, 0x89, 0x4);
 
-    return new Cpu::Descriptor {
-      .size = 6 * 8,                             // TODO: Why 6 * 8? Isn't it 24 * 4 (boot.asm gdt: "times (24) dw 0")?
+    return new Cpu::Descriptor{
+      .limit = 6 * 8,
       .address = reinterpret_cast<uint64_t>(gdt) // + Kernel::MemoryLayout::KERNEL_START
     };
 }

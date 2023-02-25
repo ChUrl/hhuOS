@@ -21,6 +21,12 @@ global boot_ap_entry
 %define startup_address 0x8000
 %define stack_size 0x1000
 
+; I keep mixing them up:
+; db - define byte (1 byte)
+; dw - define word (2 bytes)
+; dd - define double word (4 bytes)
+; THE FIRST d DOES NOT MEAN DOUBLE FFS
+
 [SECTION .text]
 align 8
 bits 16
@@ -91,22 +97,22 @@ boot_ap_idtr:
     dd 0x0
 align 8
 boot_ap_cr0:
-    dw 0x0
+    dd 0x0
 align 8
 boot_ap_cr3:
-    dw 0x0
+    dd 0x0
 align 8
 boot_ap_cr4:
-    dw 0x0
+    dd 0x0
 align 8
 boot_ap_gdts:
-    dw 0x0
+    dd 0x0
 align 8
 boot_ap_stacks:
-    dw 0x0
+    dd 0x0
 align 8
 boot_ap_entry:
-    dw 0x0
+    dd 0x0
 
 ; =================================================================================================
 
@@ -165,4 +171,4 @@ boot_ap_finish:
 [SECTION .data]
 align 8
 boot_ap_size:
-    db boot_ap_finish - boot_ap + 1 ; Also include the last jmp $
+    dw boot_ap_finish - boot_ap + 1 ; Also include the last jmp $
