@@ -1,17 +1,15 @@
 #ifndef HHUOS_APIC_H
 #define HHUOS_APIC_H
 
-#include "ApicErrorHandler.h"
-#include "ApicRegisters.h"
-#include "device/cpu/Smp.h"
+#include "device/cpu/smp_defs.h"
 #include "device/power/acpi/Acpi.h"
 #include "device/time/ApicTimer.h"
 #include "IoApic.h"
 #include "kernel/log/Logger.h"
 #include "lib/util/async/Atomic.h"
 #include "LocalApic.h"
-
-// TODO: Replace the duplicated checks by ensureSth...
+#include "LocalApicError.h"
+#include "LocalApicRegisters.h"
 
 namespace Device {
 
@@ -222,7 +220,7 @@ private:
     static Util::ArrayList<LocalApic *> localApics; ///< @brief All LocalApic instances.
     static Util::ArrayList<IoApic *> ioApics;       ///< @brief All IoApic instances.
     static Util::ArrayList<ApicTimer *> timers;     ///< @brief All ApicTimer instances.
-    static ApicErrorHandler errorHandler;           ///< @brief The interrupt handler that gets triggered on an internal APIC error.
+    static LocalApicError errorHandler;           ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
     // TODO: Just use one dimension but BIG
     // Funky <<<O_o>>>

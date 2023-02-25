@@ -1,20 +1,20 @@
-#ifndef HHUOS_APICERRORHANDLER_H
-#define HHUOS_APICERRORHANDLER_H
+#ifndef HHUOS_LOCALAPICERROR_H
+#define HHUOS_LOCALAPICERROR_H
 
 #include "kernel/interrupt/InterruptHandler.h"
 #include "kernel/log/Logger.h"
 
 namespace Device {
 
-class ApicErrorHandler : public Kernel::InterruptHandler {
+class LocalApicError : public Kernel::InterruptHandler {
 public:
-    ApicErrorHandler() = default;
+    LocalApicError() = default;
 
-    ApicErrorHandler(const ApicErrorHandler &copy) = delete;
+    LocalApicError(const LocalApicError &copy) = delete;
 
-    ApicErrorHandler &operator=(const ApicErrorHandler &other) = delete;
+    LocalApicError &operator=(const LocalApicError &other) = delete;
 
-    ~ApicErrorHandler() override = default;
+    ~LocalApicError() override = default;
 
     /**
      * Overriding function from InterruptHandler.
@@ -32,4 +32,4 @@ private:
 
 } // namespace Device
 
-#endif //HHUOS_APICERRORHANDLER_H
+#endif //HHUOS_LOCALAPICERROR_H

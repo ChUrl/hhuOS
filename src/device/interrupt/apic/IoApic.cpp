@@ -1,4 +1,5 @@
 #include "IoApic.h"
+#include "device/interrupt/apic/LocalApic.h"
 #include "kernel/paging/Paging.h"
 #include "kernel/service/MemoryService.h"
 #include "kernel/system/System.h"

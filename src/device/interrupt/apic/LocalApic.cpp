@@ -1,5 +1,4 @@
 #include "LocalApic.h"
-#include "Apic.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
 #include "lib/util/base/Constants.h"

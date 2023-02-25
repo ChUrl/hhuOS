@@ -1,10 +1,11 @@
 #ifndef __IOAPIC_include__
 #define __IOAPIC_include__
 
+#include "device/interrupt/apic/IoApicRegisters.h"
 #include "device/interrupt/InterruptRequest.h"
 #include "kernel/interrupt/GlobalSystemInterrupt.h"
+#include "kernel/log/Logger.h"
 #include "lib/util/collection/ArrayList.h"
-#include "LocalApic.h"
 
 namespace Device {
 

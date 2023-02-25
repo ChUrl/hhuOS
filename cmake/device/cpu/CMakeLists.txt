@@ -21,5 +21,5 @@ target_sources(device PUBLIC
         ${HHUOS_SRC_DIR}/device/cpu/Fpu.cpp
         ${HHUOS_SRC_DIR}/device/cpu/IoPort.cpp
         ${HHUOS_SRC_DIR}/device/cpu/ModelSpecificRegister.cpp
-        ${HHUOS_SRC_DIR}/device/cpu/smp.asm
-        ${HHUOS_SRC_DIR}/device/cpu/Smp.cpp)
+        ${HHUOS_SRC_DIR}/device/cpu/smp_boot.asm
+        ${HHUOS_SRC_DIR}/device/cpu/smp_entry.cpp)

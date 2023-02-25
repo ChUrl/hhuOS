@@ -1,6 +1,6 @@
-#include "Smp.h"
 #include "device/interrupt/apic/Apic.h"
 #include "device/time/Cmos.h"
+#include "smp_defs.h"
 
 namespace Device {
 

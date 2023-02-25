@@ -1,18 +1,18 @@
-#include "ApicErrorHandler.h"
 #include "kernel/service/InterruptService.h"
 #include "kernel/system/System.h"
 #include "LocalApic.h"
+#include "LocalApicError.h"
 
 namespace Device {
 
-Kernel::Logger ApicErrorHandler::log = Kernel::Logger::get("Apic Error Handler");
+Kernel::Logger LocalApicError::log = Kernel::Logger::get("Apic Error Handler");
 
-void ApicErrorHandler::plugin() {
+void LocalApicError::plugin() {
     auto &interruptService = Kernel::System::getService<Kernel::InterruptService>();
     interruptService.assignInterrupt(Kernel::InterruptVector::ERROR, *this);
 }
 
-void ApicErrorHandler::trigger(const Kernel::InterruptFrame &frame) {
+void LocalApicError::trigger(const Kernel::InterruptFrame &frame) {
     // This works for multiple cores because the core that handles the interrupt calls this function
     // and thus reaches the correct local APIC
 

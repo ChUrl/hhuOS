@@ -1,9 +1,9 @@
 #ifndef __LAPIC_include__
 #define __LAPIC_include__
 
-#include "ApicRegisters.h"
 #include "device/cpu/IoPort.h"
 #include "device/cpu/ModelSpecificRegister.h"
+#include "device/interrupt/apic/LocalApicRegisters.h"
 #include "kernel/log/Logger.h"
 
 namespace Device {
@@ -19,7 +19,7 @@ namespace Device {
 class LocalApic {
     friend class Apic;             // Apic exposes this class' functionality to the OS
     friend class ApicTimer;        // ApicTimer is configured by using LApic registers
-    friend class ApicErrorHandler; // ApicErrorInterruptHandler uses the ERR register
+    friend class LocalApicError; // ApicErrorInterruptHandler uses the ERR register
     friend class IoApic;
 
 public:
