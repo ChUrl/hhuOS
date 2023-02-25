@@ -41,6 +41,8 @@ public:
      */
     static bool isEnabled();
 
+    static void ensureApic();
+
     /**
      * @brief Initialize the BSP's local APIC and all I/O APICs.
      *
@@ -134,8 +136,6 @@ public:
     static void countInterrupt(Kernel::InterruptVector vector);
 
 private:
-    static void ensureApic();
-
     /**
      * @brief Read information from ACPI's MADT and create an instance for each local APIC found.
      */
@@ -207,10 +207,8 @@ private:
     static IoApic *ioApic;                          ///< @brief The IoApic instance responsible for the external interrupts.
     static LocalApicError *errorHandler;            ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
-    // TODO: Use 1D array
-    // Used to count occured interrupts, funky <<<O_o>>>
-    static Util::Array<Util::Array<uint32_t> *> *interruptCounter;
-    static Util::Array<Util::Array<Util::Async::Atomic<uint32_t> *> *> *interruptCounterWrapper;
+    static Util::Array<uint32_t> *counters;
+    static Util::Array<Util::Async::Atomic<uint32_t> *> *wrappers;
 
     static Kernel::Logger log;
 };

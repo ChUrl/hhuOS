@@ -7,6 +7,21 @@ namespace Device {
 
 Kernel::Logger Apic::log = Kernel::Logger::get("Apic");
 
+bool Apic::isSupported() {
+    // Only supports ACPI 1.0 fully, there are changes in later versions, but it should still work, so don't force.
+    return LocalApic::supportsXApic() && Acpi::isAvailable(); // && Acpi::getRsdp().revision == 0;
+}
+
+bool Apic::isEnabled() {
+    return apicEnabled;
+}
+
+void Apic::ensureApic() {
+    if (!apicEnabled) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
+    }
+}
+
 void Apic::initializeCurrentLocalApic() {
     ensureApic();
     LocalApic &localApic = getCurrentLocalApic();
@@ -128,9 +143,10 @@ bool Apic::isExternalInterrupt(Kernel::InterruptVector vector) {
 }
 
 void Apic::countInterrupt(Kernel::InterruptVector vector) {
-    // Do not throw here, just do nothing if it's an early interrupt
-    if (interruptCounter != nullptr && interruptCounterWrapper != nullptr) {
-        (*(*interruptCounterWrapper)[vector])[LocalApic::getId()]->inc();
+    // Do not throw here, just don't count if it's an early interrupt
+    if (counters != nullptr && wrappers != nullptr) {
+        // Array width * row + col
+        (*wrappers)[getCpuCount() * vector + LocalApic::getId()]->inc();
     }
 }
 
