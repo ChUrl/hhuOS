@@ -104,8 +104,8 @@ void *Apic::prepareApStacks() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
     // Allocate the stackpointer array
-    auto **apStacks = reinterpret_cast<uint32_t **>(memoryService.allocateKernelMemory(sizeof(uint32_t *) * localApics->length()));
-    if (apStacks == nullptr) {
+    auto **stacks = reinterpret_cast<uint32_t **>(new uint8_t *[localApics->length()]);
+    if (stacks == nullptr) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP stack memory!");
     }
 
@@ -113,18 +113,18 @@ void *Apic::prepareApStacks() {
     for (uint32_t i = 0; i < localApics->length(); ++i) {
         if (i == LocalApic::getId() || (*localApics)[i] == nullptr) {
             // Skip BSP or disabled processors
-            apStacks[i] = nullptr;
+            stacks[i] = nullptr;
             continue;
         }
 
-        apStacks[i] = reinterpret_cast<uint32_t *>(memoryService.allocateKernelMemory(apStackSize));
-        if (apStacks[i] == nullptr) {
+        stacks[i] = reinterpret_cast<uint32_t *>(new uint8_t[apStackSize]);
+        if (stacks[i] == nullptr) {
             Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP stack memory!");
         }
     }
 
     // Return the address for later cleanup
-    return reinterpret_cast<void *>(apStacks);
+    return reinterpret_cast<void *>(stacks);
 }
 
 void *Apic::prepareApStartupCode(void *apGdts, void *apStacks) {
@@ -196,23 +196,23 @@ void *Apic::prepareApGdts() {
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
 
     // Allocate descriptor pointer array
-    auto **apGdts = reinterpret_cast<Descriptor **>(memoryService.allocateKernelMemory(sizeof(Descriptor *) * localApics->length()));
-    if (apGdts == nullptr) {
+    auto **gdts = reinterpret_cast<Descriptor **>(new Descriptor *[localApics->length()]);
+    if (gdts == nullptr) {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP GDTs memory!");
     }
 
     for (uint32_t i = 0; i < localApics->length(); ++i) {
         if (i == LocalApic::getId() || (*localApics)[i] == nullptr) {
             // Skip BSP or disabled processors
-            apGdts[i] = nullptr;
+            gdts[i] = nullptr;
             continue;
         }
 
-        apGdts[i] = allocateApGdt();
+        gdts[i] = allocateApGdt();
     }
 
     // Return the address for later cleanup
-    return reinterpret_cast<void *>(apGdts);
+    return reinterpret_cast<void *>(gdts);
 }
 
 Descriptor *Apic::allocateApGdt() {
