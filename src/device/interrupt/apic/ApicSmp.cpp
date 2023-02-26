@@ -39,7 +39,7 @@ void Device::Apic::startupSmp() {
     Cpu::disableInterrupts();
     Cmos::disableNmi();
 
-    // Call the startup code on each AP using the SIPI
+    // Call the startup code on each AP using the INIT-SIPI-SIPI Universal Startup Algorithm
     for (uint32_t i = 0; i < localApics->length(); ++i) {
         const LocalApic *localApic = (*localApics)[i];
         if (localApic == nullptr || localApic->cpuId == LocalApic::getId()) {
@@ -90,8 +90,8 @@ void Device::Apic::startupSmp() {
 
     // Free the startup routine page, stackpointer array, gdts array and warm-reset vector memory,
     // now that all APs are running. Keep the stacks though, they are not temporary!
-    delete reinterpret_cast<uint8_t *>(gdtPointers);
-    delete reinterpret_cast<uint8_t *>(stackPointers);
+    delete[] reinterpret_cast<uint8_t *>(gdtPointers);
+    delete[] reinterpret_cast<uint8_t *>(stackPointers);
     delete reinterpret_cast<uint8_t *>(startupCodeRegion);
     delete reinterpret_cast<uint8_t *>(warmResetVectorRegion);
 
@@ -130,40 +130,36 @@ void *Apic::prepareApStartupCode(void *apGdts, void *apStacks) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Startup code does not fit into one page!");
     }
 
+    // Prepare the empty variables in the startup routine at their original location
+    asm volatile("sidt %0"
+      : "=m"(boot_ap_idtr));
+    asm volatile("mov %%cr0, %%eax;"
+      : "=a"(boot_ap_cr0));
+    asm volatile("mov %%cr3, %%eax;"
+      : "=a"(boot_ap_cr3));
+    asm volatile("mov %%cr4, %%eax;"
+      : "=a"(boot_ap_cr4));
+    boot_ap_gdts = reinterpret_cast<uint32_t>(apGdts);
+    boot_ap_stacks = reinterpret_cast<uint32_t>(apStacks);
+    boot_ap_entry = reinterpret_cast<uint32_t>(&smpEntry);
+
     // Allocate physical memory for copying the startup routine
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();
     void *startupCodeMemory = memoryService.mapIO(apStartupAddress, Util::PAGESIZE);
 
     // Identity map the allocated physical memory to the kernel address space
-    // (Seems to be required to switch to protected mode with enabled paging)
+    // (So addresses don't change after enabling paging)
     memoryService.unmap(reinterpret_cast<uint32_t>(startupCodeMemory));
-    memoryService.mapPhysicalAddress(apStartupAddress, apStartupAddress, Kernel::Paging::PRESENT | Kernel::Paging::READ_WRITE);
-
-    // Virtual addresses
-    const Util::Address<uint32_t> startupCode = Util::Address<uint32_t>(reinterpret_cast<uint32_t>(&boot_ap));
-    const Util::Address<uint32_t> destination = Util::Address<uint32_t>(apStartupAddress);
-
-    // Prepare the empty variables in the startup routine at their original location
-    asm volatile("sgdt %0"
-                 : "=m"(boot_ap_gdtr));
-    asm volatile("sidt %0"
-                 : "=m"(boot_ap_idtr));
-    asm volatile("mov %%cr0, %%eax;"
-                 : "=a"(boot_ap_cr0));
-    asm volatile("mov %%cr3, %%eax;"
-                 : "=a"(boot_ap_cr3));
-    asm volatile("mov %%cr4, %%eax;"
-                 : "=a"(boot_ap_cr4));
-    boot_ap_gdts = reinterpret_cast<uint32_t>(apGdts);
-    boot_ap_stacks = reinterpret_cast<uint32_t>(apStacks);
-    boot_ap_entry = reinterpret_cast<uint32_t>(&smpEntry);
+    memoryService.mapPhysicalAddress(apStartupAddress, apStartupAddress,
+                                     Kernel::Paging::PRESENT | Kernel::Paging::READ_WRITE);
 
     // Copy the startup routine and prepared variables to the identity mapped page
-    // log.info("Copying AP startup routine from [0x%x] (virt) to [0x%x] (phys)", reinterpret_cast<uint32_t>(&boot_ap), apStartupAddress);
+    const auto startupCode = Util::Address<uint32_t>(reinterpret_cast<uint32_t>(&boot_ap));
+    const auto destination = Util::Address<uint32_t>(apStartupAddress);
     destination.copyRange(startupCode, boot_ap_size);
 
     // Return the address for later cleanup
-    return reinterpret_cast<void *>(apStartupAddress);
+    return reinterpret_cast<void *>(destination.get());
 }
 
 // NOTE: Booting APs using this method was never tested, as QEMU only has xApic or x2Apic which uses the SIPI
@@ -207,6 +203,7 @@ void *Apic::prepareApGdts() {
     return reinterpret_cast<void *>(gdts);
 }
 
+// TODO: Is the GDT + TSS location arbitrary?
 Cpu::Descriptor *Apic::allocateApGdt() {
     // Allocate memory for the GDT and TSS. This is never freed, as its used as long as the system runs.
     auto &memoryService = Kernel::System::getService<Kernel::MemoryService>();

@@ -166,24 +166,20 @@ void IoApic::writeIndirectRegister(IndirectRegister reg, uint32_t val) {
 }
 
 REDTBLEntry IoApic::readREDTBL(Kernel::GlobalSystemInterrupt gsi) {
-    auto interruptInput = static_cast<uint8_t>(gsi - gsiBase);
-
     // The first register is the low DW, the second register is the high DW
     redtblLock.acquire(); // This needs to be synchronized in case multiple APs access the REDTBL
-    const uint32_t low = readIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput));
-    const uint64_t high = readIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1));
+    const uint32_t low = readIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * gsi));
+    const uint64_t high = readIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * gsi + 1));
     redtblLock.release();
     return static_cast<REDTBLEntry>(low | high << 32);
 }
 
 void IoApic::writeREDTBL(Kernel::GlobalSystemInterrupt gsi, const REDTBLEntry &redtbl) {
-    auto interruptInput = static_cast<uint8_t>(gsi - gsiBase);
-
     // The first register is the low DW, the second register is the high DW
     auto val = static_cast<uint64_t>(redtbl);
     redtblLock.acquire(); // This needs to be synchronized in case multiple APs access the REDTBL
-    writeIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput), val & 0xFFFFFFFF);
-    writeIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * interruptInput + 1), val >> 32);
+    writeIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * gsi), val & 0xFFFFFFFF);
+    writeIndirectRegister(static_cast<IndirectRegister>(REDTBL + 2 * gsi + 1), val >> 32);
     redtblLock.release();
 }
 

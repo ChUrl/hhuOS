@@ -35,17 +35,21 @@ void Apic::enable() {
     ioApic->initialize();
 
     // TODO: Remove This again, just for testing external interrupt redirection
-    // Results:
+    // Observations:
     // - When the AP has interrupts disabled, the keyboard interrupt (33) is registered in the
     //   local APIC's IRR (of CPU 1) correctly
     // - When the AP has interrupts enabled, the keyboard interrupt will be handled.
     //   This only happens rarely though, as the OS usually crashes beforehand
     // - When trying often enough with GDB and a breakpoint on Keyboard::trigger, it can be
     //   verified that the interrupt handler is indeed called from the AP (QEMU thread2)
+    // - When using this on the T60s, the keyboard was functional and the OS crashed a lot later,
+    //   so the /device/apic/irqs file could actually be read to confirm that IRQ1 was registered
+    //   on processor 1 instead of the BSP
     // REDTBLEntry keyboard = ioApic->readREDTBL(static_cast<Kernel::GlobalSystemInterrupt>(1));
     // keyboard.destination = 1;
     // ioApic->writeREDTBL(static_cast<Kernel::GlobalSystemInterrupt>(1), keyboard);
 
+    // Keep track of occurred interrupts
     prepareInterruptCounters();
 
     // We only require one error handler, as every AP can only access its own local APIC's error register

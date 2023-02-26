@@ -9,7 +9,6 @@
 ; Export
 global boot_ap
 global boot_ap_size
-global boot_ap_gdtr
 global boot_ap_idtr
 global boot_ap_cr0
 global boot_ap_cr3
@@ -88,10 +87,6 @@ tmp_gdt_desc:
 
 ; The following is set at runtime by Apic.cpp
 align 8
-boot_ap_gdtr: ; TODO: This will be obsolete in the future
-    dw 0x0
-    dd 0x0
-align 8
 boot_ap_idtr:
     dw 0x0
     dd 0x0
@@ -139,27 +134,14 @@ boot_ap_32:
     shr ebx, 0x18
     mov edi, ebx ; Now the ID is in EDI
 
-    ; Load the prepared AP GDT
+    ; Load the AP's prepared GDT and TSS
     mov ebx, [boot_ap_gdts - boot_ap + startup_address] ; GDT descriptor array
     mov eax, [ebx + edi * 0x4] ; Choose correct GDT, each boot_ap_gdts entry is a 4 byte pointer to a descriptor
     lgdt [eax]
-
-    ; Load the TSS
     mov ax, 0x28
     ltr ax
 
-    ; TODO: Do I have to set up the segment registers again here?
-    ; Setup the segments for new GDT
-    ; mov ax, 0x10
-    ; mov ds, ax ; Data segment register
-    ; mov es, ax ; Extra segment register
-    ; mov ss, ax ; Stack segment register
-    ; mov fs, ax ; General purpose segment register
-    ; mov gs, ax ; General purpose segment register
-    ; jmp dword 0x8:boot_ap_finalize - boot_ap + startup_address ; Code segment register
-
-; boot_ap_finalize:
-    ; Load the correct stack for this AP (allocated by Apic::allocateSmpStacks)
+    ; Load the correct stack for this AP
     mov ebx, [boot_ap_stacks - boot_ap + startup_address] ; Stackpointer array
     mov esp, [ebx + edi * 0x4] ; Choose correct stack, each boot_ap_stacks entry is a 4 byte pointer to a stack
     add esp, stack_size ; Stack starts at the bottom
