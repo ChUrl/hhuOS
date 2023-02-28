@@ -215,6 +215,7 @@ private:
     static IoApic *ioApic;                        ///< @brief The IoApic instance responsible for the external interrupts.
     static LocalApicError *errorHandler;          ///< @brief The interrupt handler that gets triggered on an internal APIC error.
 
+    // The PIT counter will overflow after a while...
     static Util::Array<uint32_t> *counters;
     static Util::Array<Util::Async::Atomic<uint32_t> *> *wrappers;
 

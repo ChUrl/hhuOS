@@ -65,7 +65,7 @@ void InterruptDispatcher::dispatch(const InterruptFrame &frame) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "No handler registered!");
     }
 
-    // Track what vectors were called how often, but only after the APIC is enabled
+    // Track what vectors were called how often
     Device::Apic::countInterrupt(slot);
 
     interruptDepthWrapper.inc();

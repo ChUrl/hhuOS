@@ -107,7 +107,7 @@ void *Apic::prepareApStacks() {
         Util::Exception::throwException(Util::Exception::NULL_POINTER, "Failed to allocate AP stack memory!");
     }
 
-    // Allocate the stacks, just iterates from 0 to cpuCount - 1 because ids are contiguous (we assume)
+    // Allocate the stacks
     for (uint32_t i = 0; i < localApics->length(); ++i) {
         if (i == LocalApic::getId() || (*localApics)[i] == nullptr) {
             // Skip BSP or disabled processors

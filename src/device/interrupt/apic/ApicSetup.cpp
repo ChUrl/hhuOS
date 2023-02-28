@@ -12,6 +12,9 @@ Util::Array<ApicTimer *> *Apic::localTimers = nullptr;
 IoApic *Apic::ioApic = nullptr;
 LocalApicError *Apic::errorHandler = nullptr;
 
+Util::Array<uint32_t> *Apic::counters = nullptr;
+Util::Array<Util::Async::Atomic<uint32_t> *> *Apic::wrappers = nullptr;
+
 void Apic::enable() {
     if (apicEnabled) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Already initialized!");

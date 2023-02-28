@@ -8,9 +8,6 @@
 
 namespace Device {
 
-Util::Array<uint32_t> *Apic::counters = nullptr;
-Util::Array<Util::Async::Atomic<uint32_t> *> *Apic::wrappers = nullptr;
-
 void Apic::mountVirtualFilesystemNodes() {
     ensureApic();
 
@@ -45,13 +42,12 @@ void Apic::printLocalApics(Util::String &string) {
     string += "\nLocal APICs:\n";
     for (uint32_t i = 0; i < localApics->length(); ++i) {
         if ((*localApics)[i] == nullptr) {
-            // Skip disabled processors
-            continue;
+            string += Util::String::format("Id: [0x%d] (Disabled)\n", i);
         }
 
         const LocalApic &localApic = *(*localApics)[i];
         string += Util::String::format("Id: [0x%x], Running: [%d], NMI: (LINT: [%d], Polarity: [%s], Trigger: [%s])\n",
-                                       localApic.cpuId,
+                                       i,
                                        localApic.initialized,
                                        localApic.nmiLint - LocalApic::LINT0,
                                        localApic.nmiPolarity == LVTEntry::PinPolarity::HIGH ? "HIGH" : "LOW",
