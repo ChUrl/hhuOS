@@ -19,6 +19,7 @@ cmake_minimum_required(VERSION 3.14)
 project(asciimation)
 message(STATUS "Project " ${PROJECT_NAME})
 
+
 if ($ENV{HHUOS_REDISTRIBUTABLE_BUILD})
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/asciimation/"
         COMMAND COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/")
