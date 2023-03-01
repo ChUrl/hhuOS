@@ -10,6 +10,9 @@ namespace Device {
 
 void Apic::mountVirtualFilesystemNodes() {
     ensureApic();
+    if (!Kernel::System::isServiceRegistered(Kernel::FilesystemService::SERVICE_ID)) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Filesystem not available!");
+    }
 
     auto &filesystemService = Kernel::System::getService<Kernel::FilesystemService>();
     auto &driver = filesystemService.getFilesystem().getVirtualDriver("/device");
