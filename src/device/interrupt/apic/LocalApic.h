@@ -23,6 +23,11 @@ class LocalApic {
     friend class IoApic;
 
 public:
+    LocalApic(const LocalApic &copy) = delete;
+
+    LocalApic &operator=(const LocalApic &copy) = delete;
+
+private:
     /**
      * @brief Lists the local APIC's local interrupts.
      *
@@ -39,12 +44,6 @@ public:
         ERROR = 6  ///< @brief The APIC error interrupt
     };
 
-public:
-    LocalApic(const LocalApic &copy) = delete;
-
-    LocalApic &operator=(const LocalApic &copy) = delete;
-
-private:
     /**
      * @brief Lists the offsets, relative to the APIC base address, for MMIO register access.
      *

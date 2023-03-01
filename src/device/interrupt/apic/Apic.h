@@ -42,23 +42,11 @@ public:
     static bool isEnabled();
 
     /**
-     * @brief Throws if APIC not enabled.
-     */
-    static void ensureApic();
-
-    /**
      * @brief Initialize the BSP's local APIC and all I/O APICs.
      *
      * Includes APIC timer and APIC error handler.
      */
     static void enable();
-
-    /**
-     * @brief Mount info nodes to /device/apic/.
-     *
-     * Those do not get updated if something changes during runtime.
-     */
-    static void mountVirtualFilesystemNodes();
 
     /**
      * @brief Check if the system supports symmetric multiprocessing mode with multiple processors.
@@ -141,9 +129,19 @@ public:
      */
     static bool isExternalInterrupt(Kernel::InterruptVector vector);
 
+    /**
+     * @brief Mount info nodes to /device/apic/.
+     */
+    static void mountVirtualFilesystemNodes();
+
     static void countInterrupt(Kernel::InterruptVector vector);
 
 private:
+    /**
+     * @brief Throws if APIC not enabled.
+     */
+    static void ensureApic();
+
     /**
      * @brief Read information from ACPI's MADT and create an instance for each local APIC found.
      */

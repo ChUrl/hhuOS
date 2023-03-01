@@ -16,12 +16,6 @@ bool Apic::isEnabled() {
     return apicEnabled;
 }
 
-void Apic::ensureApic() {
-    if (!apicEnabled) {
-        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
-    }
-}
-
 void Apic::initializeCurrentLocalApic() {
     ensureApic();
     LocalApic &localApic = getCurrentLocalApic();
@@ -133,6 +127,12 @@ void Apic::countInterrupt(Kernel::InterruptVector vector) {
     if (counters != nullptr && wrappers != nullptr) {
         // Array width * row + col
         (*wrappers)[localApics->length() * vector + LocalApic::getId()]->inc();
+    }
+}
+
+void Apic::ensureApic() {
+    if (!apicEnabled) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "APIC not initialized!");
     }
 }
 
