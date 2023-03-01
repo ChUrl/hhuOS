@@ -15,8 +15,9 @@ uint64_t ApicFileNode::getLength() {
     // possible read, but the FileInputStream calls it.
     Util::String string;
     updateCallback(string);
-    writeData(static_cast<const uint8_t *>(string), 0, string.length());
 
+    // Always overwrite the whole file, update length in case it gets shorter
+    length = writeData(static_cast<const uint8_t *>(string), 0, string.length());
     return length;
 }
 
