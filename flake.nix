@@ -92,37 +92,6 @@
               command = "clion &>/dev/null ./ &";
             }
             {
-              name = "clean";
-              help = "Remove hhuOS buildfiles";
-              command = "./build.sh --clean";
-            }
-            {
-              name = "build";
-              help = "Build hhuOS target grub using build.sh";
-              # NIX_CC required because of nixpkgs bug: https://github.com/NixOS/nixpkgs/pull/192943
-              command = "NIX_CC=$(which gcc) ./build.sh --type \"Debug\" --target \"grub\"";
-            }
-            {
-              name = "run";
-              help = "Run hhuOS in quemu using grub";
-              command = "./run.sh --bios \"true\" --file \"hhuOS.iso\"";
-            }
-            {
-              name = "run-kvm";
-              help = "Run hhuOS in quemu using grub";
-              command = "./run.sh --bios \"true\" --file \"hhuOS.iso\" --machine \"pc-kvm\"";
-            }
-            {
-              name = "run-gdb";
-              help = "Run hhuOS in quemu and wait for gdb connection";
-              command = "./run.sh --bios \"true\" --file \"hhuOS.iso\" --debug 1234";
-            }
-            {
-              name = "connect-gdb";
-              help = "Run hhuOS in quemu and wait for gdb connection";
-              command = "./run.sh --gdb 1234";
-            }
-            {
               name = "cpuinfo";
               help = "Show qemu i386 architecture information";
               command = "qemu-system-i386 -cpu help";
