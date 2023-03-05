@@ -33,6 +33,7 @@ add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hdd0.img"
         COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:date>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/date"
         COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:dino>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/dino"
         COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/echo"
+        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:edit>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/edit"
         COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:head>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/head"
         COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:hexdump>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/hexdump"
         COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ip>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ip"
@@ -59,6 +60,6 @@ add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hdd0.img"
         COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/asciimation" "${HHUOS_ROOT_DIR}/hdd0/img/user"
         COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/books" "${HHUOS_ROOT_DIR}/hdd0/img/user"
         WORKING_DIRECTORY ${HHUOS_ROOT_DIR}/hdd0 COMMAND ${HHUOS_ROOT_DIR}/hdd0/build.sh
-        DEPENDS asciimation music books shell ant beep cat color cp cube date dino echo head hexdump ip kill ls lvgl_demo membench mkdir mount mouse ping polygon ps pwd rm rmdir shutdown touch tree uecho unmount uptime)
+        DEPENDS asciimation music books shell ant beep cat color cp cube date dino echo edit head hexdump ip kill ls lvgl_demo membench mkdir mount mouse ping polygon ps pwd rm rmdir shutdown touch tree uecho unmount uptime)
 
-add_custom_target(${PROJECT_NAME} DEPENDS asciimation music books shell ant beep cat color cp cube date dino echo head hexdump ip kill ls lvgl_demo membench mkdir mount mouse ping polygon ps  pwd rm rmdir shutdown touch tree uecho unmount uptime "${HHUOS_ROOT_DIR}/hdd0.img")
+add_custom_target(${PROJECT_NAME} DEPENDS asciimation music books shell ant beep cat color cp cube date dino echo edit head hexdump ip kill ls lvgl_demo membench mkdir mount mouse ping polygon ps  pwd rm rmdir shutdown touch tree uecho unmount uptime "${HHUOS_ROOT_DIR}/hdd0.img")
