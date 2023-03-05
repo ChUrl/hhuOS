@@ -3,8 +3,8 @@
 //
 
 #include "Edit.h"
+#include "application/edit/event/EditEvent.h"
 #include "lib/util/base/System.h"
-#include "lib/util/io/stream/PrintStream.h"
 
 Edit::Edit(const Util::String &path) : file(CursorBuffer(path)) {}
 

@@ -5,12 +5,16 @@
 #ifndef HHUOS_EDIT_H
 #define HHUOS_EDIT_H
 
-#include "lib/util/async/Runnable.h"
-#include "lib/util/base/String.h"
-#include "lib/util/io/file/File.h"
-#include "lib/util/graphic/Ansi.h"
+#include <cstdint>
 #include "application/edit/CursorBuffer.h"
-#include "application/edit/event/EditEvent.h"
+#include "lib/util/async/Runnable.h"
+
+namespace Util {
+class String;
+
+template<typename T>
+class ArrayList;
+}
 
 class Edit : public Util::Async::Runnable {
 public:

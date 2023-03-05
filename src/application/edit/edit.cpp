@@ -4,10 +4,10 @@
 
 #include <cstdint>
 
+#include "Edit.h"
 #include "lib/util/base/ArgumentParser.h"
 #include "lib/util/base/System.h"
-#include "lib/util/io/stream/PrintStream.h"
-#include "Edit.h"
+#include "lib/util/io/file/File.h"
 
 int32_t main(int32_t argc, char *argv[]) {
     auto argumentParser = Util::ArgumentParser();

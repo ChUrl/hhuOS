@@ -5,11 +5,16 @@
 #ifndef HHUOS_FILEBUFFER_H
 #define HHUOS_FILEBUFFER_H
 
-#include "lib/util/graphic/Ansi.h"
-#include "lib/util/base/Constants.h"
-#include "lib/util/base/Address.h"
+#include <cstdint>
 #include "lib/util/collection/ArrayList.h"
 #include "lib/util/collection/Pair.h"
+
+namespace Util {
+class String;
+
+template<typename T>
+class Iterator;
+}
 
 #define ENABLE_EDIT_DEBUG 0
 #define DEBUG_EXCEPTION(msg) Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, msg)

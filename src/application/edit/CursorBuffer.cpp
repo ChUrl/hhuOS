@@ -6,7 +6,8 @@
 #include "application/edit/event/InsertCharEvent.h"
 #include "application/edit/event/DeleteCharEvent.h"
 
-CursorBuffer::CursorBuffer(const Util::String &path) : FileBuffer(path) {}
+CursorBuffer::CursorBuffer(const Util::String &path)
+        : FileBuffer(path), viewSize(Util::Graphic::Ansi::getCursorLimits().row + 1) {}
 
 auto CursorBuffer::cursorUp() -> bool {
     const auto [rowindex, row] = getRowByChar(cursor);

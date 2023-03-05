@@ -5,7 +5,7 @@
 #ifndef HHUOS_CURSORBUFFER_H
 #define HHUOS_CURSORBUFFER_H
 
-#include "FileBuffer.h"
+#include "application/edit/FileBuffer.h"
 #include "lib/util/graphic/Ansi.h"
 
 class EditEvent;
@@ -43,7 +43,7 @@ private:
     uint32_t cursor = 0;
 
     uint32_t viewAnchor = 0; // TODO: Horizontal scrolling
-    uint32_t viewSize = Util::Graphic::Ansi::getCursorLimits().row + 1;
+    uint32_t viewSize;
 };
 
 #endif //HHUOS_CURSORBUFFER_H
