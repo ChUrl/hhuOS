@@ -4,10 +4,7 @@
 
 #include "EditBuffer.h"
 #include "lib/interface.h"
-#include "lib/util/io/stream/FileInputStream.h"
-#include "lib/util/io/stream/PrintStream.h"
 #include "lib/util/base/Address.h"
-#include "lib/util/io/stream/FileOutputStream.h"
 
 EditBuffer::EditBuffer(const Util::String &path) : path(path), fileBuffer(new FileBuffer) {}
 
@@ -125,12 +122,19 @@ Util::Graphic::Ansi::CursorPosition EditBuffer::getFileCursor() const {
 }
 
 void EditBuffer::loadFromFile() {
-    auto inputStream = Util::Io::FileInputStream(path);
-    Util::String line = inputStream.readLine();
-    while (!line.isEmpty()) {
+    int32_t fileDescriptor = openFile(path);
+    uint32_t fileLength = getFileLength(fileDescriptor);
+    auto *fileContentsBuffer = new uint8_t[fileLength];
+    readFile(fileDescriptor, fileContentsBuffer, 0, fileLength);
+
+    auto fileContents = Util::String(fileContentsBuffer, fileLength);
+    delete[] fileContentsBuffer;
+    // TODO: This doesn't read multiple contiguous newlines
+    for (const auto &line : fileContents.split("\n")) {
         fileBuffer->appendRow(line);
-        line = inputStream.readLine();
     }
+
+    closeFile(fileDescriptor);
 }
 
 void EditBuffer::saveToFile() {
@@ -145,9 +149,9 @@ void EditBuffer::saveToFile() {
             fileContents += '\n';
         }
 
-        auto outputStream = Util::Io::FileOutputStream(path);
-        outputStream.write(static_cast<const uint8_t *>(fileContents), 0, fileContents.length());
-        outputStream.flush();
+        int32_t fileDescriptor = openFile(path);
+        writeFile(fileDescriptor, static_cast<const uint8_t *>(fileContents), 0, fileContents.length());
+        closeFile(fileDescriptor);
 
         modified = false;
     }

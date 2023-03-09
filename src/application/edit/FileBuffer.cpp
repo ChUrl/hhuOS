@@ -13,6 +13,7 @@ FileBuffer::FileBuffer() : capacity(INITIAL_ROWS), rows(new FileBufferRow *[capa
 }
 
 FileBuffer::FileBuffer(const Util::String &string) : FileBuffer() {
+    // TODO: This doesn't read multiple contiguous newlines
     for (const auto &row : string.split("\n")) {
         appendRow(row);
     }
