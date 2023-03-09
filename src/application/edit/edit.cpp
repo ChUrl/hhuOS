@@ -34,7 +34,8 @@ int32_t main(int32_t argc, char *argv[]) {
     const auto &path = arguments[0];
     auto file = Util::Io::File(path);
     if (!file.exists() && !file.create(Util::Io::File::REGULAR)) {
-        Util::System::error << "touch: Failed to create file '" << path << "'!" << Util::Io::PrintStream::endl << Util::Io::PrintStream::flush;
+        Util::System::error << "edit: Failed to create file '" << path << "'!" << Util::Io::PrintStream::endl << Util::Io::PrintStream::flush;
+        return -1;
     }
 
     Edit edit = Edit(path);

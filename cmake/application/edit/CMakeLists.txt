@@ -12,7 +12,11 @@ include_directories(${HHUOS_SRC_DIR})
 # Set source files
 set(SOURCE_FILES
         ${HHUOS_SRC_DIR}/application/edit/edit.cpp
-        ${HHUOS_SRC_DIR}/application/edit/Edit.cpp)
+        ${HHUOS_SRC_DIR}/application/edit/Edit.cpp
+        ${HHUOS_SRC_DIR}/application/edit/EditBuffer.cpp
+        ${HHUOS_SRC_DIR}/application/edit/EditBufferView.cpp
+        ${HHUOS_SRC_DIR}/application/edit/FileBuffer.cpp
+        ${HHUOS_SRC_DIR}/application/edit/FileBufferRow.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
