@@ -21,21 +21,21 @@ message(STATUS "Project " ${PROJECT_NAME})
 
 if ($ENV{HHUOS_REDISTRIBUTABLE_BUILD})
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/books/"
-        COMMAND COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/books/")
+        COMMAND COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/books/")
 
     add_custom_target(${PROJECT_NAME} DEPENDS
             "${CMAKE_BINARY_DIR}/books/")
 else()
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/books/alice.txt"
-            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
+            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
             COMMAND wget https://www.gutenberg.org/files/11/11-0.txt -O "${CMAKE_BINARY_DIR}/books/alice.txt")
 
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/books/peter_pan.txt"
-            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
+            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
             COMMAND wget https://www.gutenberg.org/files/16/16-0.txt -O "${CMAKE_BINARY_DIR}/books/peter_pan.txt")
 
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/books/sleepy_hollow.txt"
-            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
+            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
             COMMAND wget https://www.gutenberg.org/files/41/41-0.txt -O "${CMAKE_BINARY_DIR}/books/sleepy_hollow.txt")
 
     add_custom_target(${PROJECT_NAME} DEPENDS

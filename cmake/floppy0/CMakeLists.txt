@@ -20,9 +20,9 @@ project(floppy0)
 message(STATUS "Project " ${PROJECT_NAME})
 
 add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/floppy0.img"
-        COMMAND /run/current-system/sw/bin/mkdir -p "${HHUOS_ROOT_DIR}/floppy0/img/bin"
-        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/floppy0/img/bin/echo"
-        COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/books" "${HHUOS_ROOT_DIR}/floppy0/img/"
+        COMMAND /bin/mkdir -p "${HHUOS_ROOT_DIR}/floppy0/img/bin"
+        COMMAND /bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/floppy0/img/bin/echo"
+        COMMAND /bin/cp -r "${CMAKE_BINARY_DIR}/books" "${HHUOS_ROOT_DIR}/floppy0/img/"
         WORKING_DIRECTORY ${HHUOS_ROOT_DIR}/floppy0 COMMAND ${HHUOS_ROOT_DIR}/floppy0/build.sh
         DEPENDS echo)
 
