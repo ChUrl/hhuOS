@@ -19,30 +19,69 @@ void EditBuffer::insertCharacterAtCursor(char character) {
 }
 
 void EditBuffer::deleteCharacterBeforeCursor() {
+    if (fileBuffer->size() == 0) {
+        return;
+    }
+
+    modified = true;
     if (fileCursor.column == 0 && fileCursor.row != 0) {
         // Merge current with previous line
         const Util::String rest = fileBuffer->rowContent(fileCursor.row);
         const uint16_t length = fileBuffer->rowSize(fileCursor.row - 1);
 
-        fileBuffer->insertString(fileCursor.row - 1, length, rest);
+        if (!rest.isEmpty()) {
+            fileBuffer->insertString(fileCursor.row - 1, length, rest);
+        }
         fileBuffer->deleteRow(fileCursor.row);
         moveCursorUp();
         moveCursorRight(length);
-        modified = true;
-        return;
+    } else if (fileCursor.column != 0) {
+        fileBuffer->deleteCharacter(fileCursor.row, fileCursor.column - 1);
+        moveCursorLeft();
     }
-
-    fileBuffer->deleteCharacter(fileCursor.row, fileCursor.column - 1);
-    moveCursorLeft();
-    modified = true;
 }
 
 void EditBuffer::deleteCharacterAtCursor() {
-    // TODO
+    if (fileBuffer->size() == 0) {
+        return;
+    }
+
+    modified = true;
+    if (fileCursor.column == fileBuffer->rowSize(fileCursor.row) && fileCursor.row != fileBuffer->size() - 1) {
+        // Merge next with current line
+        const Util::String rest = fileBuffer->rowContent(fileCursor.row + 1);
+        const uint16_t length = fileBuffer->rowSize(fileCursor.row);
+
+        if (!rest.isEmpty()) {
+            fileBuffer->insertString(fileCursor.row, length, rest);
+        }
+        fileBuffer->deleteRow(fileCursor.row + 1);
+    } else if (fileCursor.column != fileBuffer->rowSize(fileCursor.row)) {
+        fileBuffer->deleteCharacter(fileCursor.row, fileCursor.column);
+    }
+}
+
+// TODO: Split line (just newline when at end)
+void EditBuffer::insertRowAtCursor() {
+    modified = true;
+    if (fileBuffer->size() == 0 || fileCursor.column == fileBuffer->rowSize(fileCursor.row)) {
+        // Create empty newline
+        fileBuffer->insertRow(fileCursor.row + 1);
+    } else {
+        // Split line
+        const Util::String row = static_cast<Util::String>(fileBuffer->rowContent(fileCursor.row));
+        fileBuffer->deleteRow(fileCursor.row);
+        fileBuffer->insertRow(fileCursor.row, row.substring(fileCursor.column)); // New line
+        fileBuffer->insertRow(fileCursor.row, row.substring(0, fileCursor.column)); // Old line
+        moveCursorStart();
+    }
+    moveCursorDown();
 }
 
 void EditBuffer::insertRowBeforeCursor() {
-    // TODO
+    moveCursorStart();
+    fileBuffer->insertRow(fileCursor.row);
+    modified = true;
 }
 
 void EditBuffer::insertRowAfterCursor() {
@@ -53,7 +92,20 @@ void EditBuffer::insertRowAfterCursor() {
 }
 
 void EditBuffer::deleteRowAtCursor() {
-    // TODO
+    if (fileBuffer->size() == 0) {
+        return;
+    }
+
+    Util::Graphic::Ansi::CursorPosition newCursor = {0, static_cast<uint16_t>(fileCursor.row - 1)};
+    if (fileCursor.row != fileBuffer->size() - 1) {
+        // Cursor at the end of the file
+        newCursor = {getValidCursor(fileCursor.row + 1).column, fileCursor.row};
+    } else if (fileCursor.row == 0) {
+        // Cursor at the beginning of the file
+        newCursor = {0, 0};
+    }
+    fileBuffer->deleteRow(fileCursor.row);
+    fileCursor = newCursor;
 }
 
 void EditBuffer::moveCursorUp(uint16_t repeat) {
@@ -133,6 +185,7 @@ void EditBuffer::loadFromFile() {
     for (const auto &line : fileContents.split("\n")) {
         fileBuffer->appendRow(line);
     }
+    fileBuffer->appendRow(); // Have at least one row
 
     closeFile(fileDescriptor);
 }

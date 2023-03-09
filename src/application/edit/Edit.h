@@ -27,8 +27,6 @@ private:
     // UI related ===============================
     void handleUserInput();
 
-    void handleTextInput(char input);
-
     void updateView();
 
 private:

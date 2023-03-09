@@ -32,6 +32,8 @@ public:
 
     void deleteCharacterBeforeCursor();
 
+    void insertRowAtCursor();
+
     void insertRowAfterCursor();
 
     void insertRowBeforeCursor();

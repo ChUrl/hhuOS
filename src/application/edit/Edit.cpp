@@ -55,27 +55,29 @@ void Edit::handleUserInput() {
         case 'Q':
             running = false;
             break;
+        case 'R':
+            buffer.insertRowBeforeCursor();
+            break;
+        case 'C':
+            buffer.deleteCharacterAtCursor();
+            break;
+        case 'D':
+            buffer.deleteRowAtCursor();
+            break;
+        case '\n':
+            buffer.insertRowAtCursor();
+            break;
         case 0x08:
             // Backspace
             buffer.deleteCharacterBeforeCursor();
             break;
         default:
             // Write text
-            handleTextInput(static_cast<char>(input));
+            buffer.insertCharacterAtCursor(static_cast<char>(input));
     }
 
     // Need to be in canonical mode for printing
     Util::Graphic::Ansi::enableCanonicalMode();
-}
-
-void Edit::handleTextInput(char input) {
-    switch (input) {
-        case '\n':
-            buffer.insertRowAfterCursor();
-            break;
-        default:
-            buffer.insertCharacterAtCursor(input);
-    }
 }
 
 // TODO: Do not refresh the whole screen on text input, just print single char?
