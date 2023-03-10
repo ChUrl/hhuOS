@@ -198,7 +198,7 @@ void EditBuffer::saveToFile() {
         writeFile(fileDescriptor, static_cast<const uint8_t *>(fileContents), 0, fileContents.length());
         closeFile(fileDescriptor);
 
-        // TODO: Save using FileBuffer::getRows(...)
+        // TODO: Save using FileBuffer::getRows(...) and String::join(...)
 
         modified = false;
     }

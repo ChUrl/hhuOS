@@ -8,8 +8,6 @@
 #include <cstdint>
 #include "lib/util/base/String.h"
 
-constexpr uint16_t INITIAL_COLS = 64; ///< @brief Initial number of characters in a row.
-
 /**
  * @brief This class is the in-memory representation of a single text line.
  *
@@ -20,7 +18,7 @@ public:
     /**
      * @brief Default constructor.
      */
-    FileBufferRow();
+    FileBufferRow() = default;
 
     /**
      * @brief Construct a FileBufferRow with content.
@@ -31,11 +29,9 @@ public:
     explicit FileBufferRow(const Util::String &row);
 
     /**
-     * @brief Destructor.
-     *
-     * Frees the content buffer.
+     * @brief Default destructor.
      */
-    ~FileBufferRow();
+    ~FileBufferRow() = default;
 
     /**
      * @brief Insert a character into the FileBufferRow.
@@ -95,44 +91,9 @@ private:
     /**
      * @brief Throw if the colIndex is not in the buffer or not the first line after the buffer.
      */
-    void ensureAdjacentToBuffer(uint16_t colIndex) const;
+    void ensureAdjacentOrInBuffer(uint16_t colIndex) const;
 
-    /**
-     * @brief Make sure that the allocated buffer is large enough.
-     *
-     * If the allocated memory is too small, the buffer capacity will be doubled.
-     *
-     * @param insertSize The amount of space that needs to be available in the buffer
-     */
-    void ensureCapacity(uint16_t insertSize = 1);
-
-    // TODO: Should I implement buffer shrinking or is this unnecessary?
-
-    /**
-     * @brief Create an empty character "slot" in the FileBufferRow.
-     *
-     * A slot is created by moving each element (starting at colIndex) to the right.
-     * The length will be increased by this function.
-     * After making space, the element at colIndex is invalid and has to be initialized afterwards.
-     *
-     * @param colIndex The position where the character "slot" will be created
-     * @param insertSize The amount of space that needs to be made
-     */
-    void makeSpace(uint16_t colIndex, uint16_t insertSize = 1);
-
-    /**
-     * @brief Remove a character "slot" from the FileBufferRow.
-     *
-     * A slot is removed by moving each element (starting after colIndex) to the left.
-     * The length will be decreased by this function.
-     *
-     * @param colIndex The position of the character "slot" that will be removed
-     */
-    void removeSpace(uint16_t colIndex);
-
-    uint16_t length = 0; ///< @brief The length of the string contained in the FileBufferRow.
-    uint16_t capacity; ///< @brief The capacity of the allocated buffer.
-    char *columns; ///< @brief The buffer that stores the String/character data.
+    Util::String columns;
 };
 
 #endif //HHUOS_FILEBUFFERROW_H

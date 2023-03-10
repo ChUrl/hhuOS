@@ -5,130 +5,67 @@
 #include "FileBufferRow.h"
 #include "lib/util/base/Address.h"
 
-FileBufferRow::FileBufferRow() : capacity(INITIAL_COLS), columns(new char[capacity]) {
-    for (uint16_t i = 0; i < capacity; ++i) {
-        columns[i] = '\0';
-    }
-}
+// TODO: All the stitching using String::join(...) requires multiple memory allocations,
+//       does that matter to me?
 
 // TODO: Check string for \n
 FileBufferRow::FileBufferRow(const Util::String &row) : FileBufferRow() {
-    ensureCapacity(row.length());
-
-    auto sourceAddress = Util::Address(reinterpret_cast<uint32_t>(static_cast<const char *>(row)));
-    auto targetAddress = Util::Address(reinterpret_cast<uint32_t>(columns));
-    targetAddress.copyRange(sourceAddress, row.length());
-
-    length = row.length();
-}
-
-FileBufferRow::~FileBufferRow() {
-    delete[] columns;
+    columns = Util::String(row);
 }
 
 void FileBufferRow::insertCharacter(uint16_t colIndex, char character) {
-    ensureAdjacentToBuffer(colIndex);
+    ensureAdjacentOrInBuffer(colIndex);
 
-    makeSpace(colIndex); // Increases length and ensures capacity
-    columns[colIndex] = character;
+    columns = Util::String::join("", Util::Array<Util::String>({columns.substring(0, colIndex),
+                                                                character,
+                                                                columns.substring(colIndex)}));
 }
 
 void FileBufferRow::appendCharacter(char character) {
-    insertCharacter(length, character);
+    columns += character;
 }
 
 // TODO: Check string for \n
 void FileBufferRow::insertString(uint16_t colIndex, const Util::String &string) {
-    ensureAdjacentToBuffer(colIndex);
+    ensureAdjacentOrInBuffer(colIndex);
 
-    makeSpace(colIndex, string.length());
-    auto source = Util::Address(reinterpret_cast<uint32_t>(static_cast<const char*>(string)));
-    auto target = Util::Address(reinterpret_cast<uint32_t>(&columns[colIndex]));
-    target.copyRange(source, string.length());
+    columns = Util::String::join("", Util::Array<Util::String>({columns.substring(0, colIndex),
+                                                                string,
+                                                                columns.substring(colIndex)}));
 }
 
 void FileBufferRow::appendString(const Util::String &string) {
-    insertString(length, string);
+    columns += string;
 }
 
 void FileBufferRow::deleteCharacter(uint16_t colIndex) {
     ensureInBuffer(colIndex);
-    removeSpace(colIndex); // Decreases length
+
+    columns = Util::String::join("", Util::Array<Util::String>({columns.substring(0, colIndex),
+                                                                columns.substring(colIndex + 1)}));
 }
 
 uint16_t FileBufferRow::size() const {
-    return length;
+    return columns.length();
 }
 
 bool FileBufferRow::isLastColumn(uint16_t colIndex) const {
-    ensureAdjacentToBuffer(colIndex);
-    return colIndex == length;
+    ensureAdjacentOrInBuffer(colIndex);
+    return colIndex == columns.length();
 }
 
 FileBufferRow::operator Util::String() const {
-    return Util::String(reinterpret_cast<const uint8_t *>(columns), length);
+    return columns;
 }
 
 void FileBufferRow::ensureInBuffer(uint16_t colIndex) const {
-    if (colIndex >= length) {
+    if (colIndex >= columns.length()) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
     }
 }
 
-void FileBufferRow::ensureAdjacentToBuffer(uint16_t colIndex) const {
-    if (colIndex > length) {
+void FileBufferRow::ensureAdjacentOrInBuffer(uint16_t colIndex) const {
+    if (colIndex > columns.length()) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
     }
-}
-
-void FileBufferRow::ensureCapacity(uint16_t insertSize) {
-    if (capacity <= length + insertSize) {
-        // Reallocate on larger size requirement
-        while (capacity <= length + insertSize) {
-            capacity *= 2;
-        }
-        auto *newColumns = new char[capacity];
-        for (uint16_t i = 0; i < capacity; ++i) {
-            newColumns[i] = '\0';
-        }
-
-        // Copy contents from the old buffer
-        auto sourceAddress = Util::Address(reinterpret_cast<uint32_t>(columns));
-        auto targetAddress = Util::Address(reinterpret_cast<uint32_t>(newColumns));
-        targetAddress.copyRange(sourceAddress, length);
-
-        delete[] columns;
-        columns = newColumns;
-    }
-}
-
-void FileBufferRow::makeSpace(uint16_t colIndex, uint16_t insertSize) {
-    ensureAdjacentToBuffer(colIndex);
-    if (insertSize == 0) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Can't make space for zero elements!");
-    }
-
-    ensureCapacity(insertSize);
-    if (length == 0) {
-        // Nothing to do without elements
-        length += insertSize;
-        return;
-    }
-    // Use signed integer to allow decrementing after 0
-    for (int32_t pos = length - 1; pos >= colIndex; --pos) {
-        columns[pos + insertSize] = columns[pos];
-    }
-    length += insertSize;
-}
-
-void FileBufferRow::removeSpace(uint16_t colIndex) {
-    ensureInBuffer(colIndex);
-
-    if (length == 0) {
-        return;
-    }
-    for (uint16_t pos = colIndex; pos < length; ++pos) {
-        columns[pos] = columns[pos + 1];
-    }
-    length--;
 }
