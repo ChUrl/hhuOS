@@ -7,8 +7,7 @@
 
 #include "FileBufferRow.h"
 #include "lib/util/graphic/Ansi.h"
-
-constexpr uint16_t INITIAL_ROWS = 32; ///< @brief Initial number of rows in a buffer.
+#include "lib/util/collection/ArrayList.h"
 
 /**
  * @brief This class is the in-memory representation of a file opened for editing.
@@ -21,21 +20,12 @@ public:
     /**
      * @brief Default constructor.
      */
-    FileBuffer();
+    FileBuffer() = default;
 
     /**
-     * @brief Construct a FileBuffer with content.
-     *
-     * @param string The content string
+     * @brief Default destructor.
      */
-    explicit FileBuffer(const Util::String &string);
-
-    /**
-     * @brief Destructor.
-     *
-     * Frees the row buffer.
-     */
-    ~FileBuffer();
+    ~FileBuffer() = default;
 
     /**
      * @brief Insert a character into the FileBuffer (in an existing line).
@@ -104,7 +94,7 @@ public:
 
     [[nodiscard]] bool isLastRow(Util::Graphic::Ansi::CursorPosition cursor) const;
 
-    [[nodiscard]] bool isEof(Util::Graphic::Ansi::CursorPosition cursor) const;
+    void getRows(Util::Array<Util::String> *rowStrings) const;
 
     /**
      * @brief Convert the FileBuffer to a hhuOS heap-allocated Util::String.
@@ -112,55 +102,7 @@ public:
     explicit operator Util::String() const;
 
 private:
-    /**
-     * @brief Throw if the rowIndex is not in the buffer.
-     *
-     * Used for example when removing a line, as only lines in the buffer can be removed.
-     */
-    void ensureInBuffer(uint16_t rowIndex) const;
-
-    /**
-     * @brief Throw if the rowIndex is not in the buffer or not the first line after the buffer.
-     *
-     * Used for example when inserting a line, as a line can be inserted after the last line.
-     */
-    void ensureAdjacentToBuffer(uint16_t rowIndex) const;
-
-    /**
-     * @brief Make sure that the allocated buffer is large enough.
-     *
-     * If the allocated memory is too small, the buffer capacity will be doubled.
-     *
-     * @param insertSize The amount of space that needs to be available in the buffer
-     */
-    void ensureCapacity(uint16_t insertSize = 1);
-
-    /**
-     * @brief Create an empty line "slot" in the FileBuffer.
-     *
-     * A slot is created by moving each element (starting at rowIndex) to the right.
-     * The length will be increased by this function.
-     * After making space, the element at rowIndex is invalid and has to be initialized afterwards.
-     *
-     * @param colIndex The position where the line "slot" will be created
-     */
-    void makeSpace(uint16_t rowIndex);
-
-    /**
-     * @brief Remove a line "slot" from the FileBuffer.
-     *
-     * A slot is removed by moving each element (starting after rowIndex) to the left.
-     * The length will be decreased by this function.
-     *
-     * @param colIndex The position of the line "slot" that will be removed
-     */
-    void removeSpace(uint16_t rowIndex);
-
-    // TODO: Just use an ArrayList for this, this is basically the same (heap-allocated,
-    //       dynamic resizable) but simple to use.
-    uint16_t length = 0;
-    uint16_t capacity;
-    FileBufferRow **rows; ///< @brief The array of pointers to the row data
+    Util::ArrayList<FileBufferRow *> rows;
 };
 
 #endif //HHUOS_FILEBUFFER_H
