@@ -79,12 +79,24 @@ public:
      */
     [[nodiscard]] uint16_t size() const;
 
+    [[nodiscard]] bool isLastColumn(uint16_t colIndex) const;
+
     /**
      * @brief Convert the FileBufferRow to a hhuOS heap-allocated Util::String.
      */
     explicit operator Util::String() const;
 
 private:
+    /**
+     * @brief Throw if the colIndex is not in the buffer.
+     */
+    void ensureInBuffer(uint16_t colIndex) const;
+
+    /**
+     * @brief Throw if the colIndex is not in the buffer or not the first line after the buffer.
+     */
+    void ensureAdjacentToBuffer(uint16_t colIndex) const;
+
     /**
      * @brief Make sure that the allocated buffer is large enough.
      *
@@ -119,7 +131,7 @@ private:
     void removeSpace(uint16_t colIndex);
 
     uint16_t length = 0; ///< @brief The length of the string contained in the FileBufferRow.
-    uint16_t capacity = 0; ///< @brief The capacity of the allocated buffer.
+    uint16_t capacity; ///< @brief The capacity of the allocated buffer.
     char *columns; ///< @brief The buffer that stores the String/character data.
 };
 

@@ -14,99 +14,108 @@ FileBuffer::FileBuffer() : capacity(INITIAL_ROWS), rows(new FileBufferRow *[capa
 
 FileBuffer::FileBuffer(const Util::String &string) : FileBuffer() {
     // TODO: This doesn't read multiple contiguous newlines
-    for (const auto &row : string.split("\n")) {
-        appendRow(row);
-    }
+    // for (const auto &row : string.split("\n")) {
+    //     appendRow(row);
+    // }
+    Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, "Not implemented");
 }
 
 FileBuffer::~FileBuffer() {
     delete[] rows;
 }
 
-void FileBuffer::insertCharacter(uint16_t rowIndex, uint16_t colIndex, char character) {
-    if (rowIndex > length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
+void FileBuffer::insertCharacter(Util::Graphic::Ansi::CursorPosition cursor, char character) {
+    ensureAdjacentToBuffer(cursor.row);
+    if (rows[cursor.row] == nullptr) {
+        insertRow(cursor);
     }
-
-    if (rows[rowIndex] == nullptr) {
-        insertRow(rowIndex);
-    }
-
-    rows[rowIndex]->insertCharacter(colIndex, character);
+    rows[cursor.row]->insertCharacter(cursor.column, character);
 }
 
-void FileBuffer::insertString(uint16_t rowIndex, uint16_t colIndex, const Util::String &string) {
-    if (rowIndex > length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
+void FileBuffer::insertString(Util::Graphic::Ansi::CursorPosition cursor, const Util::String &string) {
+    ensureAdjacentToBuffer(cursor.row);
+    if (rows[cursor.row] == nullptr) {
+        insertRow(cursor);
     }
-
-    if (rows[rowIndex] == nullptr) {
-        insertRow(rowIndex);
-    }
-
-    rows[rowIndex]->insertString(colIndex, string);
+    rows[cursor.row]->insertString(cursor.column, string);
 }
 
-void FileBuffer::deleteCharacter(uint16_t rowIndex, uint16_t colIndex) {
-    if (rowIndex >= length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
-    }
-
-    rows[rowIndex]->deleteCharacter(colIndex);
+void FileBuffer::deleteCharacter(Util::Graphic::Ansi::CursorPosition cursor) {
+    ensureInBuffer(cursor.row);
+    rows[cursor.row]->deleteCharacter(cursor.column);
 }
 
-void FileBuffer::insertRow(uint16_t rowIndex, const Util::String &row) {
-    if (rowIndex > length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
-    }
-
-    makeSpace(rowIndex); // Increases length and ensures capacity
-    rows[rowIndex] = new FileBufferRow(row); // Clear out previous row
+void FileBuffer::insertRow(Util::Graphic::Ansi::CursorPosition cursor, const Util::String &row) {
+    ensureAdjacentToBuffer(cursor.row);
+    makeSpace(cursor.row); // Increases length and ensures capacity
+    rows[cursor.row] = new FileBufferRow(row); // Clear out previous row
 }
 
 void FileBuffer::appendRow(const Util::String &row) {
-    insertRow(length, row);
+    insertRow({0, length}, row);
 }
 
-void FileBuffer::deleteRow(uint16_t rowIndex) {
-    if (rowIndex >= length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
+// TODO: Allow removing the last line?
+void FileBuffer::deleteRow(Util::Graphic::Ansi::CursorPosition cursor) {
+    ensureInBuffer(cursor.row);
+    if (length == 1) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Can't remove last line!");
     }
-
-    removeSpace(rowIndex); // Decreases length
+    removeSpace(cursor.row); // Decreases length
 }
 
-uint16_t FileBuffer::rowSize(uint16_t rowIndex) const {
-    if (rowIndex >= length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
-    }
-
-    return rows[rowIndex]->size();
+// Note: This does not work for the EOF row!
+uint16_t FileBuffer::rowSize(Util::Graphic::Ansi::CursorPosition cursor) const {
+    ensureInBuffer(cursor.row);
+    return rows[cursor.row]->size();
 }
 
-Util::String FileBuffer::rowContent(uint16_t rowIndex) const {
-    if (rowIndex >= length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
+Util::String FileBuffer::rowContent(Util::Graphic::Ansi::CursorPosition cursor) const {
+    ensureInBuffer(cursor.row);
+    if (rows[cursor.row] == nullptr) {
+        Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, static_cast<const char *>(Util::String::format("Row [%d] not initialized!", cursor.row)));
     }
-
-    return static_cast<Util::String>(*rows[rowIndex]);
+    return static_cast<Util::String>(*rows[cursor.row]);
 }
 
 uint16_t FileBuffer::size() const {
     return length;
 }
 
+bool FileBuffer::isLastColumn(Util::Graphic::Ansi::CursorPosition cursor) const {
+    ensureInBuffer(cursor.row);
+    return rows[cursor.row]->isLastColumn(cursor.column);
+}
+
+bool FileBuffer::isLastRow(Util::Graphic::Ansi::CursorPosition cursor) const {
+    ensureInBuffer(cursor.row);
+    return cursor.row + 1 == length;
+}
+
+bool FileBuffer::isEof(Util::Graphic::Ansi::CursorPosition cursor) const {
+    ensureAdjacentToBuffer(cursor.row);
+    return cursor.row == length;
+}
+
 FileBuffer::operator Util::String() const {
-    auto string = Util::String();
+    Util::String string = "";
     for (uint16_t row = 0; row < length; ++row) {
         string += static_cast<Util::String>(*rows[row]);
-        if (row + 1 < length) {
-            // Skip last line
-            string += "\n";
-        }
+        string += "\n";
     }
-
     return string;
+}
+
+void FileBuffer::ensureInBuffer(uint16_t rowIndex) const {
+    if (rowIndex >= length) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
+    }
+}
+
+void FileBuffer::ensureAdjacentToBuffer(uint16_t rowIndex) const {
+    if (rowIndex > length) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
+    }
 }
 
 void FileBuffer::ensureCapacity(uint16_t insertSize) {
@@ -114,7 +123,7 @@ void FileBuffer::ensureCapacity(uint16_t insertSize) {
         while (capacity <= length + insertSize) {
             capacity *= 2;
         }
-        auto *newRows = new FileBufferRow *[capacity];
+        auto **newRows = new FileBufferRow *[capacity]; // TODO: Why NullPointerException?
         for (uint16_t i = 0; i < capacity; ++i) {
             newRows[i] = nullptr;
         }
@@ -130,31 +139,22 @@ void FileBuffer::ensureCapacity(uint16_t insertSize) {
 }
 
 void FileBuffer::makeSpace(uint16_t rowIndex) {
-    if (rowIndex > length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
-    }
+    ensureAdjacentToBuffer(rowIndex);
+
+    // The length should never be 0
 
     ensureCapacity();
-    if (length == 0) {
-        // Nothing to do without elements
-        length++;
-        return;
-    }
     // Use signed integer to allow decrementing after 0
     for (int32_t pos = length - 1; pos >= rowIndex; --pos) {
         rows[pos + 1] = rows[pos];
     }
+    rows[rowIndex] = nullptr;
     length++;
 }
 
 void FileBuffer::removeSpace(uint16_t rowIndex) {
-    if (rowIndex >= length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Row out of bounds!");
-    }
+    ensureInBuffer(rowIndex);
 
-    if (length == 0) {
-        return;
-    }
     delete rows[rowIndex];
     for (uint16_t pos = rowIndex; pos < length; ++pos) {
         rows[pos] = rows[pos + 1];

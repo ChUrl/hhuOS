@@ -31,6 +31,7 @@ int32_t main(int32_t argc, char *argv[]) {
         return -1;
     }
 
+    // TODO: Only create file on saving
     const auto &path = arguments[0];
     auto file = Util::Io::File(path);
     if (!file.exists() && !file.create(Util::Io::File::REGULAR)) {

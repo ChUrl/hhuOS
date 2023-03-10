@@ -6,6 +6,7 @@
 #define HHUOS_FILEBUFFER_H
 
 #include "FileBufferRow.h"
+#include "lib/util/graphic/Ansi.h"
 
 constexpr uint16_t INITIAL_ROWS = 32; ///< @brief Initial number of rows in a buffer.
 
@@ -40,10 +41,10 @@ public:
      * @brief Insert a character into the FileBuffer (in an existing line).
      *
      * @param rowIndex The line where the character will be inserted
-     * @param colIndex The position where the character will be inserted into the line
+     * @param cursor The position where the character will be inserted into the line
      * @param character The character that will be inserted
      */
-    void insertCharacter(uint16_t rowIndex, uint16_t colIndex, char character);
+    void insertCharacter(Util::Graphic::Ansi::CursorPosition cursor, char character);
 
     /**
      * @brief Insert a string of characters into the FileBuffer (in an existing line).
@@ -52,23 +53,23 @@ public:
      * @param colIndex The starting position where the characters will be inserted
      * @param string The characters to insert
      */
-    void insertString(uint16_t rowIndex, uint16_t colIndex, const Util::String &string);
+    void insertString(Util::Graphic::Ansi::CursorPosition cursor, const Util::String &string);
 
     /**
      * @brief Delete a character from the FileBuffer.
      *
      * @param rowIndex The line from which the character should be deleted
-     * @param colIndex The position where the character will be deleted from the line
+     * @param cursor The position where the character will be deleted from the line
      */
-    void deleteCharacter(uint16_t rowIndex, uint16_t colIndex);
+    void deleteCharacter(Util::Graphic::Ansi::CursorPosition cursor);
 
     /**
      * @brief Insert a line into the FileBuffer.
      *
-     * @param rowIndex The position where the line should be inserted
+     * @param cursor The position where the line should be inserted
      * @param row The contents of the new line
      */
-    void insertRow(uint16_t rowIndex, const Util::String &row = "");
+    void insertRow(Util::Graphic::Ansi::CursorPosition cursor, const Util::String &row = "");
 
     /**
      * @brief Append a line to the end of the FileBuffer.
@@ -80,24 +81,30 @@ public:
     /**
      * @brief Remove a line from the FileBuffer.
      *
-     * @param rowIndex The position of the line that should be removed
+     * @param cursor The position of the line that should be removed
      */
-    void deleteRow(uint16_t rowIndex);
+    void deleteRow(Util::Graphic::Ansi::CursorPosition cursor);
 
     /**
      * @brief Determine the length of a line.
      */
-    [[nodiscard]] uint16_t rowSize(uint16_t rowIndex) const;
+    [[nodiscard]] uint16_t rowSize(Util::Graphic::Ansi::CursorPosition cursor) const;
 
     /**
      * @brief Determine the contents of a row.
      */
-    [[nodiscard]] Util::String rowContent(uint16_t rowIndex) const;
+    [[nodiscard]] Util::String rowContent(Util::Graphic::Ansi::CursorPosition cursor) const;
 
     /**
      * @brief Determine the number of lines contained in the FileBuffer.
      */
     [[nodiscard]] uint16_t size() const;
+
+    [[nodiscard]] bool isLastColumn(Util::Graphic::Ansi::CursorPosition cursor) const;
+
+    [[nodiscard]] bool isLastRow(Util::Graphic::Ansi::CursorPosition cursor) const;
+
+    [[nodiscard]] bool isEof(Util::Graphic::Ansi::CursorPosition cursor) const;
 
     /**
      * @brief Convert the FileBuffer to a hhuOS heap-allocated Util::String.
@@ -105,6 +112,20 @@ public:
     explicit operator Util::String() const;
 
 private:
+    /**
+     * @brief Throw if the rowIndex is not in the buffer.
+     *
+     * Used for example when removing a line, as only lines in the buffer can be removed.
+     */
+    void ensureInBuffer(uint16_t rowIndex) const;
+
+    /**
+     * @brief Throw if the rowIndex is not in the buffer or not the first line after the buffer.
+     *
+     * Used for example when inserting a line, as a line can be inserted after the last line.
+     */
+    void ensureAdjacentToBuffer(uint16_t rowIndex) const;
+
     /**
      * @brief Make sure that the allocated buffer is large enough.
      *
@@ -135,8 +156,10 @@ private:
      */
     void removeSpace(uint16_t rowIndex);
 
+    // TODO: Just use an ArrayList for this, this is basically the same (heap-allocated,
+    //       dynamic resizable) but simple to use.
     uint16_t length = 0;
-    uint16_t capacity = 0;
+    uint16_t capacity;
     FileBufferRow **rows; ///< @brief The array of pointers to the row data
 };
 

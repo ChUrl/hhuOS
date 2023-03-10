@@ -12,10 +12,6 @@ Edit::Edit(const Util::String &path) : buffer(EditBuffer(path)), view(EditBuffer
 void Edit::run() {
     buffer.loadFromFile();
 
-    // TODO: Remove this once the cursor is movable
-    buffer.moveCursorBottom();
-    buffer.moveCursorEnd();
-
     // Main edit loop
     while (running) {
         updateView();
@@ -49,20 +45,25 @@ void Edit::handleUserInput() {
         case Util::Graphic::Ansi::KEY_RIGHT:
             buffer.moveCursorRight();
             break;
+        case 'H':
+            break; // TODO
+            view.moveViewLeft();
+            break;
+        case 'J':
+            view.moveViewDown();
+            break;
+        case 'K':
+            view.moveViewUp();
+            break;
+        case 'L':
+            break; // TODO
+            view.moveViewRight();
+            break;
         case 'S':
             buffer.saveToFile();
             break;
         case 'Q':
             running = false;
-            break;
-        case 'R':
-            buffer.insertRowBeforeCursor();
-            break;
-        case 'C':
-            buffer.deleteCharacterAtCursor();
-            break;
-        case 'D':
-            buffer.deleteRowAtCursor();
             break;
         case '\n':
             buffer.insertRowAtCursor();
@@ -80,12 +81,14 @@ void Edit::handleUserInput() {
     Util::Graphic::Ansi::enableCanonicalMode();
 }
 
-// TODO: Do not refresh the whole screen on text input, just print single char?
 void Edit::updateView() {
-    Util::Graphic::Ansi::clearScreen();
-    Util::Graphic::Ansi::setPosition({0, 0});
+    if (buffer.requiresRedraw()) {
+        Util::Graphic::Ansi::clearScreen();
+        Util::Graphic::Ansi::setPosition({0, 0});
 
-    Util::System::out << static_cast<const Util::String>(view) << Util::Io::PrintStream::flush;
+        Util::System::out << static_cast<Util::String>(view) << Util::Io::PrintStream::flush;
+        buffer.drew();
+    }
 
     Util::Graphic::Ansi::setPosition(view.getScreenCursor());
 }

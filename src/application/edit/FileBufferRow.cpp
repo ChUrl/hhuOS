@@ -27,9 +27,7 @@ FileBufferRow::~FileBufferRow() {
 }
 
 void FileBufferRow::insertCharacter(uint16_t colIndex, char character) {
-    if (colIndex > length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
-    }
+    ensureAdjacentToBuffer(colIndex);
 
     makeSpace(colIndex); // Increases length and ensures capacity
     columns[colIndex] = character;
@@ -41,9 +39,7 @@ void FileBufferRow::appendCharacter(char character) {
 
 // TODO: Check string for \n
 void FileBufferRow::insertString(uint16_t colIndex, const Util::String &string) {
-    if (colIndex > length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
-    }
+    ensureAdjacentToBuffer(colIndex);
 
     makeSpace(colIndex, string.length());
     auto source = Util::Address(reinterpret_cast<uint32_t>(static_cast<const char*>(string)));
@@ -56,10 +52,7 @@ void FileBufferRow::appendString(const Util::String &string) {
 }
 
 void FileBufferRow::deleteCharacter(uint16_t colIndex) {
-    if (colIndex >= length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
-    }
-
+    ensureInBuffer(colIndex);
     removeSpace(colIndex); // Decreases length
 }
 
@@ -67,8 +60,25 @@ uint16_t FileBufferRow::size() const {
     return length;
 }
 
+bool FileBufferRow::isLastColumn(uint16_t colIndex) const {
+    ensureAdjacentToBuffer(colIndex);
+    return colIndex == length;
+}
+
 FileBufferRow::operator Util::String() const {
-    return {reinterpret_cast<const uint8_t *>(columns), length};
+    return Util::String(reinterpret_cast<const uint8_t *>(columns), length);
+}
+
+void FileBufferRow::ensureInBuffer(uint16_t colIndex) const {
+    if (colIndex >= length) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
+    }
+}
+
+void FileBufferRow::ensureAdjacentToBuffer(uint16_t colIndex) const {
+    if (colIndex > length) {
+        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
+    }
 }
 
 void FileBufferRow::ensureCapacity(uint16_t insertSize) {
@@ -93,9 +103,7 @@ void FileBufferRow::ensureCapacity(uint16_t insertSize) {
 }
 
 void FileBufferRow::makeSpace(uint16_t colIndex, uint16_t insertSize) {
-    if (colIndex > length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
-    }
+    ensureAdjacentToBuffer(colIndex);
     if (insertSize == 0) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Can't make space for zero elements!");
     }
@@ -114,9 +122,7 @@ void FileBufferRow::makeSpace(uint16_t colIndex, uint16_t insertSize) {
 }
 
 void FileBufferRow::removeSpace(uint16_t colIndex) {
-    if (colIndex >= length) {
-        Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Column out of bounds!");
-    }
+    ensureInBuffer(colIndex);
 
     if (length == 0) {
         return;
