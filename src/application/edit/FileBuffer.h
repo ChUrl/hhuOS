@@ -94,12 +94,7 @@ public:
 
     [[nodiscard]] bool isLastRow(Util::Graphic::Ansi::CursorPosition cursor) const;
 
-    void getRows(Util::Array<Util::String> *rowStrings) const;
-
-    /**
-     * @brief Convert the FileBuffer to a hhuOS heap-allocated Util::String.
-     */
-    explicit operator Util::String() const;
+    void getRows(Util::Array<Util::String> &rowStrings) const;
 
 private:
     Util::ArrayList<FileBufferRow *> rows;

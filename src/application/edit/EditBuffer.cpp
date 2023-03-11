@@ -13,9 +13,9 @@ EditBuffer::~EditBuffer() {
 }
 
 // Some Notes:
-//! I don't allow the file to be empty, so this doesn't have to be checked!
-//! The cursor column may be equal to the FileBufferRow length (the cursor can be after the last character)
-//! The cursor row may not be equal to the FileBuffer length (the cursor cannot be after the last line)
+// ! I don't allow the file to be empty, so this doesn't have to be checked!
+// ! The cursor column may be equal to the FileBufferRow length (the cursor can be after the last character)
+// ! The cursor row may not be equal to the FileBuffer length (the cursor cannot be after the last line)
 
 // No special cases
 void EditBuffer::insertCharacterAtCursor(char character) {
@@ -25,8 +25,8 @@ void EditBuffer::insertCharacterAtCursor(char character) {
 }
 
 // Special cases:
-//! The cursor is at column 0:
-//  Previous linebreak has to be removed, except if there is no line before
+// ! The cursor is at column 0:
+//   Previous linebreak has to be removed, except if there is no line before
 void EditBuffer::deleteCharacterBeforeCursor() {
     bufferModified();
     if (fileCursor.column == 0 && fileCursor.row != 0) {
@@ -48,8 +48,8 @@ void EditBuffer::deleteCharacterBeforeCursor() {
 }
 
 // Special cases:
-//! The cursor is at the end of the line:
-//  The next linebreak has to be removed, except if there is no line after
+// ! The cursor is at the end of the line:
+//   The next linebreak has to be removed, except if there is no line after
 void EditBuffer::deleteCharacterAtCursor() {
     bufferModified();
     if (fileBuffer->isLastColumn(fileCursor) && !fileBuffer->isLastRow(fileCursor)) {
@@ -67,20 +67,20 @@ void EditBuffer::deleteCharacterAtCursor() {
 }
 
 // Special cases:
-//! Cursor is at the line start:
-//  A line is inserted before the current line
-//! Cursor is at the line end:
-//  A line is inserted after the current line
-//! Cursor is in the middle of the line:
-//  The line is split, the part after the cursor is inserted after the current line.
-//  If the cursor is in the middle of the first line, this line can't be removed, so insert line first.
+// ! Cursor is at the line start:
+//   A line is inserted before the current line
+// ! Cursor is at the line end:
+//   A line is inserted after the current line
+// ! Cursor is in the middle of the line:
+//   The line is split, the part after the cursor is inserted after the current line.
+//   If the cursor is in the middle of the first line, this line can't be removed, so insert line first.
 void EditBuffer::insertRowAtCursor() {
     bufferModified();
     if (fileCursor.column == 0) {
         fileBuffer->insertRow(fileCursor);
     } else if (fileCursor.column == fileBuffer->rowSize(fileCursor)) {
         // Create empty newline
-        fileBuffer->insertRow(cursorDown()); // TODO: Can't move the cursor after last line
+        fileBuffer->insertRow({fileCursor.column, static_cast<uint16_t>(fileCursor.row + 1)});
     } else {
         // Split line
         const Util::String row = static_cast<Util::String>(fileBuffer->rowContent(fileCursor));
@@ -102,16 +102,16 @@ void EditBuffer::insertRowBeforeCursor() {
 // No special cases
 void EditBuffer::insertRowAfterCursor() {
     bufferModified();
-    fileCursor = cursorDown(); // TODO: Can't move the cursor after last line
-    insertRowBeforeCursor();
+    fileBuffer->insertRow({fileCursor.column, static_cast<uint16_t>(fileCursor.row + 1)});
+    fileCursor = cursorDown();
 }
 
 // TODO: Test this
 // Special cases:
-//! The cursor is in the last line
-//  The cursor is moved up after deletion, column should stay if possible
-//! The cursor is anywhere else
-//  The cursor doesn't move vertically after deletion, column should stay if possible
+// ! The cursor is in the last line
+//   The cursor is moved up after deletion, column should stay if possible
+// ! The cursor is anywhere else
+//   The cursor doesn't move vertically after deletion, column should stay if possible
 void EditBuffer::deleteRowAtCursor() {
     bufferModified();
     fileBuffer->deleteRow(fileCursor);
@@ -144,15 +144,11 @@ Util::Graphic::Ansi::CursorPosition EditBuffer::getFileCursor() const {
     return fileCursor;
 }
 
-// TODO: NullPointerException when loading a file
 void EditBuffer::loadFromFile() {
     int32_t fileDescriptor = openFile(path);
     uint32_t fileLength = getFileLength(fileDescriptor);
 
-    // TODO: Loading the "short" file does not work
-    //       Print using the correct window and check if that works
-    // TODO: I don't know how to do this efficiently
-    //       - At least load the file incrementally
+    // TODO: I don't know how to do this efficiently. Could load incrementally?
     if (fileLength == 0) {
         // Always start with at least a single line to remove the need
         // to handle the fileBuffer->size() == 0 case
@@ -192,13 +188,13 @@ void EditBuffer::saveToFile() {
             Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Failed to recreate file for saving!");
         }
 
-        const auto fileContents = static_cast<Util::String>(*fileBuffer);
+        Util::Array<Util::String> lines(fileBuffer->size());
+        fileBuffer->getRows(lines);
+        const auto fileContents = Util::String::join("\n", lines);
 
         int32_t fileDescriptor = openFile(path);
         writeFile(fileDescriptor, static_cast<const uint8_t *>(fileContents), 0, fileContents.length());
         closeFile(fileDescriptor);
-
-        // TODO: Save using FileBuffer::getRows(...) and String::join(...)
 
         modified = false;
     }
@@ -212,15 +208,10 @@ void EditBuffer::drew() {
     redraw = false;
 }
 
-void EditBuffer::bufferModified() {
-    modified = true;
-    redraw = true;
-}
-
 // TODO: This function should take a full CursorPosition as argument
 // Special cases:
-//! The cursor is behind the line end:
-//  Return the cursor at the end of the line
+// ! The cursor is behind the line end:
+//   Return the cursor at the end of the line
 Util::Graphic::Ansi::CursorPosition EditBuffer::getValidCursor(uint16_t rowIndex) const {
     if (rowIndex > fileBuffer->size()) {
         // Cursor can only move inside existing rows and the extra EOF row
@@ -235,7 +226,12 @@ Util::Graphic::Ansi::CursorPosition EditBuffer::getValidCursor(uint16_t rowIndex
     return newCursor;
 }
 
-//! Private functions =============================================================================
+// ! Private functions ============================================================================
+
+void EditBuffer::bufferModified() {
+    modified = true;
+    redraw = true;
+}
 
 Util::Graphic::Ansi::CursorPosition EditBuffer::cursorUp(uint16_t repeat) {
     Util::Graphic::Ansi::CursorPosition newCursor = fileCursor;

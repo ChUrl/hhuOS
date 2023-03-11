@@ -57,22 +57,13 @@ bool FileBuffer::isLastRow(Util::Graphic::Ansi::CursorPosition cursor) const {
     return cursor.row + 1 == rows.size();
 }
 
-void FileBuffer::getRows(Util::Array<Util::String> *rowStrings) const {
-    if (rowStrings->length() != rows.size()) {
+void FileBuffer::getRows(Util::Array<Util::String> &rowStrings) const {
+    if (rowStrings.length() != rows.size()) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Array length doesn't match FileBuffer length!");
     }
 
     for (uint16_t i = 0; i < rows.size(); ++i) {
         const FileBufferRow *row = rows.get(i);
-        (*rowStrings)[i] = static_cast<Util::String>(*row);
+        rowStrings[i] = static_cast<Util::String>(*row);
     }
-}
-
-FileBuffer::operator Util::String() const {
-    Util::String string = "";
-    for (const auto *row : rows) {
-        string += static_cast<Util::String>(*row);
-        string += "\n";
-    }
-    return string;
 }
