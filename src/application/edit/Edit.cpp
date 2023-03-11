@@ -45,20 +45,18 @@ void Edit::handleUserInput() {
         case Util::Graphic::Ansi::KEY_RIGHT:
             buffer.moveCursorRight();
             break;
-        case 'H':
-            break; // TODO
-            view.moveViewLeft();
-            break;
-        case 'J':
-            view.moveViewDown();
-            break;
-        case 'K':
-            view.moveViewUp();
-            break;
-        case 'L':
-            break; // TODO
-            view.moveViewRight();
-            break;
+        // case 'H':
+        //     view.moveViewLeft();
+        //     break;
+        // case 'J':
+        //     view.moveViewDown();
+        //     break;
+        // case 'K':
+        //     view.moveViewUp();
+        //     break;
+        // case 'L':
+        //     view.moveViewRight();
+        //     break;
         case 'S':
             buffer.saveToFile();
             break;
@@ -76,18 +74,20 @@ void Edit::handleUserInput() {
             // Write text
             buffer.insertCharacterAtCursor(static_cast<char>(input));
     }
+    view.fixView();
 
     // Need to be in canonical mode for printing
     Util::Graphic::Ansi::enableCanonicalMode();
 }
 
 void Edit::updateView() {
-    if (buffer.requiresRedraw()) {
+    if (buffer.requiresRedraw() || view.requiresRedraw()) {
         Util::Graphic::Ansi::clearScreen();
         Util::Graphic::Ansi::setPosition({0, 0});
 
         Util::System::out << static_cast<Util::String>(view) << Util::Io::PrintStream::flush;
         buffer.drew();
+        view.drew();
     }
 
     Util::Graphic::Ansi::setPosition(view.getScreenCursor());

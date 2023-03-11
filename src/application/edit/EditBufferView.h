@@ -25,10 +25,16 @@ public:
 
     void moveViewRight(uint16_t repeat = 1);
 
+    void fixView();
+
     /**
      * @brief Determine the screen cursor depending on the file cursor and the window position.
      */
     [[nodiscard]] Util::Graphic::Ansi::CursorPosition getScreenCursor() const;
+
+    [[nodiscard]] bool requiresRedraw() const;
+
+    void drew();
 
     /**
      * @brief Convert the FileBuffer contents inside the view window to a string.
@@ -36,8 +42,12 @@ public:
     explicit operator Util::String() const;
 
 private:
+    void viewModified();
+
     const FileBuffer *fileBuffer;
     const Util::Graphic::Ansi::CursorPosition *fileCursor;
+
+    bool redraw = true;
 
     Util::Graphic::Ansi::CursorPosition position = {0, 0}; // This is the top-left view coordinate
     Util::Graphic::Ansi::CursorPosition size = {0, 0}; // This is the view's width and height

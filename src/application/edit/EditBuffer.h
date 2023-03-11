@@ -64,8 +64,6 @@ public:
 
     void drew();
 
-    void bufferModified();
-
     /**
      * @brief Determine a valid cursor position for a line while moving the cursor as little as possible.
      *
@@ -75,6 +73,8 @@ public:
     [[nodiscard]] Util::Graphic::Ansi::CursorPosition getValidCursor(uint16_t rowIndex) const;
 
 private:
+    void bufferModified();
+
     [[nodiscard]] Util::Graphic::Ansi::CursorPosition cursorUp(uint16_t repeat = 1);
 
     [[nodiscard]] Util::Graphic::Ansi::CursorPosition cursorDown(uint16_t repeat = 1);
@@ -95,6 +95,8 @@ private:
     FileBuffer *fileBuffer = nullptr;
     bool modified = false; ///< @brief Indicates if the buffer has been modified since the last save.
     bool redraw = true; ///< @brief Indicates if the buffer has been modified since the last draw.
+
+    // TODO: Use my own EditCursor and move cursor moving there, to unclutter this thing?
     Util::Graphic::Ansi::CursorPosition fileCursor = {0, 0}; // This is the file-cursor
 };
 
