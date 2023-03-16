@@ -48,6 +48,7 @@ void EditBufferView::moveViewRight(uint16_t repeat) {
     viewModified();
 }
 
+// TODO: Implement horizontal scrolling
 void EditBufferView::fixView() {
     // Fix after cursor movement
     if (fileCursor->row < position.row) {
@@ -82,8 +83,11 @@ void EditBufferView::drew() {
     redraw = false;
 }
 
-EditBufferView::operator Util::String() const {
-    Util::String string = "";
+Util::Graphic::Ansi::CursorPosition EditBufferView::dimensions() const {
+    return size;
+}
+
+void EditBufferView::getWindow(Util::Array<Util::String> &window) const {
     uint16_t minRow = position.row; // Inclusive
     uint16_t maxRow = position.row + size.row; // Exclusive
     if (maxRow > fileBuffer->size()) {
@@ -91,13 +95,8 @@ EditBufferView::operator Util::String() const {
     }
 
     for (uint16_t row = minRow; row < maxRow; ++row) {
-        string += fileBuffer->rowContent({0, row}).substring(position.column, position.column + size.column);
-        if (row + 1 != maxRow) {
-            // Skip last line
-            string += '\n';
-        }
+        fileBuffer->rowContent({0, row}, position.column, position.column + size.column, window[row - minRow]);
     }
-    return string;
 }
 
 void EditBufferView::viewModified() {

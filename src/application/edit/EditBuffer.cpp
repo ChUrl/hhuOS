@@ -31,7 +31,8 @@ void EditBuffer::deleteCharacterBeforeCursor() {
     bufferModified();
     if (fileCursor.column == 0 && fileCursor.row != 0) {
         // Cursor is in column 0 after the first line: Merge current with the previous line
-        const Util::String rest = fileBuffer->rowContent(fileCursor);
+        Util::String rest;
+        fileBuffer->rowContent(fileCursor, rest);
 
         fileBuffer->deleteRow(fileCursor);
         fileCursor = cursorUp();
@@ -54,7 +55,8 @@ void EditBuffer::deleteCharacterAtCursor() {
     bufferModified();
     if (fileBuffer->isLastColumn(fileCursor) && !fileBuffer->isLastRow(fileCursor)) {
         // Merge next with current line
-        const Util::String rest = fileBuffer->rowContent(cursorDown());
+        Util::String rest;
+        fileBuffer->rowContent(cursorDown(), rest);
 
         if (!rest.isEmpty()) {
             // Cursor is at the insert position
@@ -83,7 +85,9 @@ void EditBuffer::insertRowAtCursor() {
         fileBuffer->insertRow({fileCursor.column, static_cast<uint16_t>(fileCursor.row + 1)});
     } else {
         // Split line
-        const Util::String row = static_cast<Util::String>(fileBuffer->rowContent(fileCursor));
+        Util::String row;
+        fileBuffer->rowContent(fileCursor, row);
+
         fileBuffer->insertRow(fileCursor, row.substring(fileCursor.column)); // New line
         fileBuffer->insertRow(fileCursor, row.substring(0, fileCursor.column)); // Old line
         fileBuffer->deleteRow(cursorDown(2)); // Remove the old line last
@@ -188,6 +192,7 @@ void EditBuffer::saveToFile() {
             Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Failed to recreate file for saving!");
         }
 
+        // TODO: I don't like using Util::String::join(...) for this
         Util::Array<Util::String> lines(fileBuffer->size());
         fileBuffer->getRows(lines);
         const auto fileContents = Util::String::join("\n", lines);

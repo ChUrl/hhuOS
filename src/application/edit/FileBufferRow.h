@@ -77,10 +77,8 @@ public:
 
     [[nodiscard]] bool isLastColumn(uint16_t colIndex) const;
 
-    /**
-     * @brief Convert the FileBufferRow to a hhuOS heap-allocated Util::String.
-     */
-    explicit operator Util::String() const;
+    void getColumns(uint16_t start, uint16_t end, Util::String &string) const;
+    void getColumns(Util::String &string) const;
 
 private:
     /**

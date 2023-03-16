@@ -36,10 +36,9 @@ public:
 
     void drew();
 
-    /**
-     * @brief Convert the FileBuffer contents inside the view window to a string.
-     */
-    explicit operator Util::String() const;
+    [[nodiscard]] Util::Graphic::Ansi::CursorPosition dimensions() const;
+
+    void getWindow(Util::Array<Util::String> &window) const;
 
 private:
     void viewModified();

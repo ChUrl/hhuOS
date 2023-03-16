@@ -54,8 +54,12 @@ bool FileBufferRow::isLastColumn(uint16_t colIndex) const {
     return colIndex == columns.length();
 }
 
-FileBufferRow::operator Util::String() const {
-    return columns;
+void FileBufferRow::getColumns(uint16_t start, uint16_t end, Util::String &string) const {
+    string = columns.substring(start, end); // Copies String
+}
+
+void FileBufferRow::getColumns(Util::String &string) const {
+    string = columns; // Copies String
 }
 
 void FileBufferRow::ensureInBuffer(uint16_t colIndex) const {

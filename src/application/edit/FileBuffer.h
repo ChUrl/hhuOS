@@ -83,7 +83,8 @@ public:
     /**
      * @brief Determine the contents of a row.
      */
-    [[nodiscard]] Util::String rowContent(Util::Graphic::Ansi::CursorPosition cursor) const;
+    void rowContent(Util::Graphic::Ansi::CursorPosition cursor, uint16_t start, uint16_t end, Util::String &string) const;
+    void rowContent(Util::Graphic::Ansi::CursorPosition cursor, Util::String &string) const;
 
     /**
      * @brief Determine the number of lines contained in the FileBuffer.

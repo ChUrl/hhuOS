@@ -7,7 +7,7 @@
 #include "lib/util/io/stream/PrintStream.h"
 #include "lib/util/base/Address.h"
 
-Edit::Edit(const Util::String &path) : buffer(EditBuffer(path)), view(EditBufferView(buffer)) {}
+Edit::Edit(const Util::String &path) : buffer(EditBuffer(path)), view(EditBufferView(buffer)), printWindow(view.dimensions().row) {}
 
 void Edit::run() {
     buffer.loadFromFile();
@@ -85,7 +85,10 @@ void Edit::updateView() {
         Util::Graphic::Ansi::clearScreen();
         Util::Graphic::Ansi::setPosition({0, 0});
 
-        Util::System::out << static_cast<Util::String>(view) << Util::Io::PrintStream::flush;
+        // TODO: I don't like using Util::String::join(...) for this
+        view.getWindow(printWindow);
+        Util::System::out << Util::String::join("\n", printWindow) << Util::Io::PrintStream::flush;
+
         buffer.drew();
         view.drew();
     }

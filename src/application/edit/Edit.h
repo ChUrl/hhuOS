@@ -34,6 +34,10 @@ private:
 
     EditBuffer buffer;
     EditBufferView view;
+
+    // TODO: Apparently it is not possible to use local statics (atexit), that's why this is defined
+    //       here once, awkwardly
+    Util::Array<Util::String> printWindow;
 };
 
 #endif //HHUOS_EDIT_H
