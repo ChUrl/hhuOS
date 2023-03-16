@@ -6,6 +6,7 @@
 #include "lib/util/base/System.h"
 #include "lib/util/io/stream/PrintStream.h"
 #include "lib/util/base/Address.h"
+#include "application/edit/buffer/EditBuffer.h"
 
 Edit::Edit(const Util::String &path) : buffer(EditBuffer(path)), view(EditBufferView(buffer)), printWindow(view.getDimensions().row) {}
 

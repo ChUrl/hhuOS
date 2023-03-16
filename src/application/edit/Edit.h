@@ -9,8 +9,8 @@
 #include "lib/util/base/String.h"
 #include "lib/util/io/file/File.h"
 #include "lib/util/graphic/Ansi.h"
-#include "EditBuffer.h"
-#include "EditBufferView.h"
+#include "application/edit/buffer/EditBuffer.h"
+#include "application/edit/buffer/EditBufferView.h"
 
 class Edit : public Util::Async::Runnable {
 public:
