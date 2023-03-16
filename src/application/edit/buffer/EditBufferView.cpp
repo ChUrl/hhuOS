@@ -97,6 +97,11 @@ void EditBufferView::print(Util::Array<Util::String> &window) const {
     for (uint16_t row = minRow; row < maxRow; ++row) {
         fileBuffer->printRow({0, row}, position.column, position.column + size.column, window[row - minRow]);
     }
+
+    // Clear out the rest of the array, as it is not recreated between prints
+    for (uint16_t row = maxRow; row < size.row; ++row) {
+        window[row] = '\0';
+    }
 }
 
 void EditBufferView::viewModified() {
