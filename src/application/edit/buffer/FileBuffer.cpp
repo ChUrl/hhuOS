@@ -29,12 +29,11 @@ void FileBuffer::appendRow(const Util::String &row) {
     rows.add(new FileBufferRow(row));
 }
 
-// TODO: Allow removing the last line?
 void FileBuffer::deleteRow(Util::Graphic::Ansi::CursorPosition cursor) {
     if (rows.size() == 1) {
         Util::Exception::throwException(Util::Exception::ILLEGAL_STATE, "Can't remove last line!");
     }
-    rows.removeIndex(cursor.row);
+    delete rows.removeIndex(cursor.row);
 }
 
 uint16_t FileBuffer::rowSize(Util::Graphic::Ansi::CursorPosition cursor) const {

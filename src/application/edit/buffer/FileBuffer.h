@@ -99,6 +99,19 @@ public:
     void print(Util::Array<Util::String> &rowStrings) const;
 
 private:
+    // TODO: I'm not really happy with this:
+    //       - ArrayList is probably not very suitable, because every line insertion (except at the end)
+    //         requires to copy the buffer
+    //       - Also, do I really need the split between "File" and "Row"? Do I need to store pointers here?
+    //         If the copying issue would be eliminated, the line buffer could be stored directly inside...
+    //       - For the event-based editing, deleting the lines correctly will be a pain with this:
+    //         - If a line is created, it is kept in the "create" event and the FileBuffer
+    //         - If this line is deleted, it is kept in the "create" and "delete" events
+    //         - If this event is undone, the line is kept in the "create" and "delete" events
+    //           and the FileBuffer
+    //         - When the EventList is full and the oldest event is overwritten, it is not clear
+    //           what can be deleted
+    //           - Determining this naively would require a search of the EventList
     Util::ArrayList<FileBufferRow *> rows;
 };
 
