@@ -11,7 +11,7 @@
         pkgs = import nixpkgs {
           inherit system;
           config.allowUnfree = true; # For clion
-          overlays = [ devshell.overlay ];
+          overlays = [ devshell.overlays.default ];
         };
 
         # bintools with multilib
