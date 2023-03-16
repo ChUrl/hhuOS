@@ -77,8 +77,9 @@ public:
 
     [[nodiscard]] bool isLastColumn(uint16_t colIndex) const;
 
-    void getColumns(uint16_t start, uint16_t end, Util::String &string) const;
-    void getColumns(Util::String &string) const;
+    void print(uint16_t start, uint16_t end, Util::String &string) const;
+
+    void print(Util::String &string) const;
 
 private:
     /**

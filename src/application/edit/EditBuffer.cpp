@@ -32,7 +32,7 @@ void EditBuffer::deleteCharacterBeforeCursor() {
     if (fileCursor.column == 0 && fileCursor.row != 0) {
         // Cursor is in column 0 after the first line: Merge current with the previous line
         Util::String rest;
-        fileBuffer->rowContent(fileCursor, rest);
+        fileBuffer->printRow(fileCursor, rest);
 
         fileBuffer->deleteRow(fileCursor);
         fileCursor = cursorUp();
@@ -56,7 +56,7 @@ void EditBuffer::deleteCharacterAtCursor() {
     if (fileBuffer->isLastColumn(fileCursor) && !fileBuffer->isLastRow(fileCursor)) {
         // Merge next with current line
         Util::String rest;
-        fileBuffer->rowContent(cursorDown(), rest);
+        fileBuffer->printRow(cursorDown(), rest);
 
         if (!rest.isEmpty()) {
             // Cursor is at the insert position
@@ -86,7 +86,7 @@ void EditBuffer::insertRowAtCursor() {
     } else {
         // Split line
         Util::String row;
-        fileBuffer->rowContent(fileCursor, row);
+        fileBuffer->printRow(fileCursor, row);
 
         fileBuffer->insertRow(fileCursor, row.substring(fileCursor.column)); // New line
         fileBuffer->insertRow(fileCursor, row.substring(0, fileCursor.column)); // Old line
@@ -194,7 +194,7 @@ void EditBuffer::saveToFile() {
 
         // TODO: I don't like using Util::String::join(...) for this
         Util::Array<Util::String> lines(fileBuffer->size());
-        fileBuffer->getRows(lines);
+        fileBuffer->print(lines);
         const auto fileContents = Util::String::join("\n", lines);
 
         int32_t fileDescriptor = openFile(path);

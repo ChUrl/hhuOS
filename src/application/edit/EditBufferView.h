@@ -36,9 +36,9 @@ public:
 
     void drew();
 
-    [[nodiscard]] Util::Graphic::Ansi::CursorPosition dimensions() const;
+    [[nodiscard]] Util::Graphic::Ansi::CursorPosition getDimensions() const;
 
-    void getWindow(Util::Array<Util::String> &window) const;
+    void print(Util::Array<Util::String> &window) const;
 
 private:
     void viewModified();

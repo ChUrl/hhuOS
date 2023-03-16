@@ -83,11 +83,11 @@ void EditBufferView::drew() {
     redraw = false;
 }
 
-Util::Graphic::Ansi::CursorPosition EditBufferView::dimensions() const {
+Util::Graphic::Ansi::CursorPosition EditBufferView::getDimensions() const {
     return size;
 }
 
-void EditBufferView::getWindow(Util::Array<Util::String> &window) const {
+void EditBufferView::print(Util::Array<Util::String> &window) const {
     uint16_t minRow = position.row; // Inclusive
     uint16_t maxRow = position.row + size.row; // Exclusive
     if (maxRow > fileBuffer->size()) {
@@ -95,7 +95,7 @@ void EditBufferView::getWindow(Util::Array<Util::String> &window) const {
     }
 
     for (uint16_t row = minRow; row < maxRow; ++row) {
-        fileBuffer->rowContent({0, row}, position.column, position.column + size.column, window[row - minRow]);
+        fileBuffer->printRow({0, row}, position.column, position.column + size.column, window[row - minRow]);
     }
 }
 

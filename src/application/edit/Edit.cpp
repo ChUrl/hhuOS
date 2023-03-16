@@ -86,7 +86,7 @@ void Edit::updateView() {
         Util::Graphic::Ansi::setPosition({0, 0});
 
         // TODO: I don't like using Util::String::join(...) for this
-        view.getWindow(printWindow);
+        view.print(printWindow);
         Util::System::out << Util::String::join("\n", printWindow) << Util::Io::PrintStream::flush;
 
         buffer.drew();

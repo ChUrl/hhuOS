@@ -83,8 +83,9 @@ public:
     /**
      * @brief Determine the contents of a row.
      */
-    void rowContent(Util::Graphic::Ansi::CursorPosition cursor, uint16_t start, uint16_t end, Util::String &string) const;
-    void rowContent(Util::Graphic::Ansi::CursorPosition cursor, Util::String &string) const;
+    void printRow(Util::Graphic::Ansi::CursorPosition cursor, uint16_t start, uint16_t end, Util::String &string) const;
+
+    void printRow(Util::Graphic::Ansi::CursorPosition cursor, Util::String &string) const;
 
     /**
      * @brief Determine the number of lines contained in the FileBuffer.
@@ -95,7 +96,7 @@ public:
 
     [[nodiscard]] bool isLastRow(Util::Graphic::Ansi::CursorPosition cursor) const;
 
-    void getRows(Util::Array<Util::String> &rowStrings) const;
+    void print(Util::Array<Util::String> &rowStrings) const;
 
 private:
     Util::ArrayList<FileBufferRow *> rows;

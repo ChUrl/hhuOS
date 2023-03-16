@@ -41,12 +41,12 @@ uint16_t FileBuffer::rowSize(Util::Graphic::Ansi::CursorPosition cursor) const {
     return rows.get(cursor.row)->size();
 }
 
-void FileBuffer::rowContent(Util::Graphic::Ansi::CursorPosition cursor, uint16_t start, uint16_t end, Util::String &string) const {
-    rows.get(cursor.row)->getColumns(start, end, string);
+void FileBuffer::printRow(Util::Graphic::Ansi::CursorPosition cursor, uint16_t start, uint16_t end, Util::String &string) const {
+    rows.get(cursor.row)->print(start, end, string);
 }
 
-void FileBuffer::rowContent(Util::Graphic::Ansi::CursorPosition cursor, Util::String &string) const {
-    rows.get(cursor.row)->getColumns(string);
+void FileBuffer::printRow(Util::Graphic::Ansi::CursorPosition cursor, Util::String &string) const {
+    rows.get(cursor.row)->print(string);
 }
 
 uint16_t FileBuffer::size() const {
@@ -61,12 +61,12 @@ bool FileBuffer::isLastRow(Util::Graphic::Ansi::CursorPosition cursor) const {
     return cursor.row + 1 == rows.size();
 }
 
-void FileBuffer::getRows(Util::Array<Util::String> &rowStrings) const {
+void FileBuffer::print(Util::Array<Util::String> &rowStrings) const {
     if (rowStrings.length() != rows.size()) {
         Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "Array length doesn't match FileBuffer length!");
     }
 
     for (uint16_t i = 0; i < rows.size(); ++i) {
-        rows.get(i)->getColumns(rowStrings[i]);
+        rows.get(i)->print(rowStrings[i]);
     }
 }
