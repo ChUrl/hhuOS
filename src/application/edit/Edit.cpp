@@ -7,7 +7,7 @@
 #include "lib/util/io/stream/PrintStream.h"
 #include "lib/util/base/Address.h"
 
-Edit::Edit(const Util::String &path) : buffer(EditBuffer(path)), view(EditBufferView(buffer)), printWindow(view.dimensions().row) {}
+Edit::Edit(const Util::String &path) : buffer(EditBuffer(path)), view(EditBufferView(buffer)), printWindow(view.getDimensions().row) {}
 
 void Edit::run() {
     buffer.loadFromFile();
