@@ -16,7 +16,8 @@ set(SOURCE_FILES
         ${HHUOS_SRC_DIR}/application/edit/buffer/EditBuffer.cpp
         ${HHUOS_SRC_DIR}/application/edit/buffer/EditBufferView.cpp
         ${HHUOS_SRC_DIR}/application/edit/buffer/FileBuffer.cpp
-        ${HHUOS_SRC_DIR}/application/edit/buffer/FileBufferRow.cpp)
+        ${HHUOS_SRC_DIR}/application/edit/buffer/FileBufferRow.cpp
+        ${HHUOS_SRC_DIR}/application/edit/event/EditEvent.cpp)
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
