@@ -9,8 +9,7 @@
 #include "lib/util/base/String.h"
 #include "lib/util/io/file/File.h"
 #include "lib/util/graphic/Ansi.h"
-#include "application/edit/buffer/EditBuffer.h"
-#include "application/edit/buffer/EditBufferView.h"
+#include "application/edit/CursorBuffer.h"
 
 class Edit : public Util::Async::Runnable {
 public:
@@ -24,20 +23,14 @@ public:
     void run() override;
 
 private:
-    // UI related ===============================
     void handleUserInput();
 
     void updateView();
 
 private:
+    CursorBuffer file; // The file open for editing. Only a single file possible.
+
     bool running = true;
-
-    EditBuffer buffer;
-    EditBufferView view;
-
-    // TODO: Apparently it is not possible to use local statics (atexit), that's why this is defined
-    //       here once, awkwardly
-    Util::Array<Util::String> printWindow;
 };
 
 #endif //HHUOS_EDIT_H

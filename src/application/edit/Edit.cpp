@@ -5,14 +5,10 @@
 #include "Edit.h"
 #include "lib/util/base/System.h"
 #include "lib/util/io/stream/PrintStream.h"
-#include "lib/util/base/Address.h"
-#include "application/edit/buffer/EditBuffer.h"
 
-Edit::Edit(const Util::String &path) : buffer(EditBuffer(path)), view(EditBufferView(buffer)), printWindow(view.getDimensions().row) {}
+Edit::Edit(const Util::String &path) : file(CursorBuffer(path)) {}
 
 void Edit::run() {
-    buffer.loadFromFile();
-
     // Main edit loop
     while (running) {
         updateView();
@@ -30,69 +26,69 @@ void Edit::handleUserInput() {
     Util::Graphic::Ansi::enableRawMode();
 
     // Handle user input
-    // TODO: ? for help
-    // TODO: How do CTRL keybindings work?
     const int16_t input = Util::Graphic::Ansi::readChar();
     switch (input) {
         case Util::Graphic::Ansi::KEY_UP:
-            buffer.moveCursorUp();
+            file.cursorUp();
             break;
         case Util::Graphic::Ansi::KEY_DOWN:
-            buffer.moveCursorDown();
+            file.cursorDown();
             break;
         case Util::Graphic::Ansi::KEY_LEFT:
-            buffer.moveCursorLeft();
+            file.cursorLeft();
             break;
         case Util::Graphic::Ansi::KEY_RIGHT:
-            buffer.moveCursorRight();
+            file.cursorRight();
             break;
-        // case 'H':
-        //     view.moveViewLeft();
-        //     break;
-        // case 'J':
-        //     view.moveViewDown();
-        //     break;
-        // case 'K':
-        //     view.moveViewUp();
-        //     break;
-        // case 'L':
-        //     view.moveViewRight();
-        //     break;
         case 'S':
-            buffer.saveToFile();
+            file.save();
             break;
         case 'Q':
             running = false;
             break;
-        case '\n':
-            buffer.insertRowAtCursor();
-            break;
         case 0x08:
             // Backspace
-            buffer.deleteCharacterBeforeCursor();
+            file.deleteBeforeCursor();
             break;
         default:
             // Write text
-            buffer.insertCharacterAtCursor(static_cast<char>(input));
+            file.insertAtCursor(static_cast<char>(input));
     }
-    view.fixView();
 
     // Need to be in canonical mode for printing
     Util::Graphic::Ansi::enableCanonicalMode();
 }
 
+// TODO: Only update if necessary
 void Edit::updateView() {
-    if (buffer.requiresRedraw() || view.requiresRedraw()) {
-        Util::Graphic::Ansi::clearScreen();
-        Util::Graphic::Ansi::setPosition({0, 0});
+    Util::Graphic::Ansi::clearScreen();
+    Util::Graphic::Ansi::setPosition({0, 0});
 
-        // TODO: I don't like using Util::String::join(...) for this
-        view.print(printWindow);
-        Util::System::out << Util::String::join("\n", printWindow) << Util::Io::PrintStream::flush;
+#define ENABLE_EDIT_DEBUG 0
 
-        buffer.drew();
-        view.drew();
+#if ENABLE_EDIT_DEBUG == 1
+    Util::System::out << "Line Based: ==============================\n";
+    for (uint32_t i = 0; i < file.getNumberOfRows(); ++i) {
+        const FileBuffer::Row row = file.getRow(i);
+        Util::System::out << Util::String::format("[%u, %u]: ", row.first, row.second);
+        const auto [begin, end] = file.getSingleRow(i);
+        for (auto it = begin; it != end; ++it) {
+            Util::System::out << *it;
+        }
+    }
+    Util::System::out << "Whole File: ==============================\n";
+#endif
+
+    const auto [begin, end] = file.getAllRows();
+    for (auto it = begin; it != end; ++it) {
+        Util::System::out << *it;
     }
 
-    Util::Graphic::Ansi::setPosition(view.getScreenCursor());
+    Util::System::out << Util::Io::PrintStream::endl << Util::Io::PrintStream::flush;
+
+#if ENABLE_EDIT_DEBUG == 1
+    Util::Graphic::Ansi::setPosition({file.getScreenCursor().column, static_cast<uint16_t>(file.getScreenCursor().row + file.rows.size() + 2)});
+#else
+    Util::Graphic::Ansi::setPosition(file.getScreenCursor());
+#endif
 }

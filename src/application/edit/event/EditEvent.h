@@ -7,7 +7,7 @@
 
 #include "lib/util/graphic/Ansi.h"
 #include "lib/util/time/Timestamp.h"
-#include "application/edit/buffer/FileBuffer.h"
+#include "application/edit/FileBuffer.h"
 
 class EditEvent {
 public:
