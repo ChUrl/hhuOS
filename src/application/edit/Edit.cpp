@@ -64,7 +64,6 @@ void Edit::updateView() {
     Util::Graphic::Ansi::clearScreen();
     Util::Graphic::Ansi::setPosition({0, 0});
 
-#define ENABLE_EDIT_DEBUG 0
 
 #if ENABLE_EDIT_DEBUG == 1
     Util::System::out << "Line Based: ==============================\n";

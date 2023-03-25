@@ -11,9 +11,12 @@
 #include "lib/util/collection/ArrayList.h"
 #include "lib/util/collection/Pair.h"
 
+#define ENABLE_EDIT_DEBUG 0
+
 class FileBuffer {
-    // TODO: Just for debugging
+#if ENABLE_EDIT_DEBUG == 1
     friend class Edit;
+#endif
 
 public:
     FileBuffer() = delete;
@@ -29,8 +32,6 @@ public:
 
     void save();
 
-    // TODO: Use enum types for charindex/rowindex?
-    //       I could rename getCharacterRow again and add an overload for the other index...
     void insertString(uint32_t charindex, const Util::String &string);
 
     void deleteString(uint32_t charindex, uint32_t length);

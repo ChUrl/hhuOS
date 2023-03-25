@@ -125,10 +125,8 @@ void FileBuffer::prepareRowsNewLine(uint32_t charindex) {
         rows.add(rowindex + 1, Row(charindex + 1, row.second + 1));
     }
 
-    // TODO: Replace this with FileBuffer::translateRows
     for (uint32_t i = rowindex + 2; i < rows.size(); ++i) {
         row = rows.get(i);
-        // TODO: Replace this with Row::translate
         rows.set(i, Row(row.first + 1, row.second + 1));
     }
 }
