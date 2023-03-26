@@ -20,6 +20,9 @@
 
 #include "lib/util/base/String.h"
 #include "List.h"
+#include "lib/util/base/Address.h"
+#include "lib/util/base/MmxAddress.h"
+#include "lib/util/base/SseAddress.h"
 
 namespace Util {
 
@@ -154,6 +157,12 @@ void ArrayList<T>::add(uint32_t index, const T &element) {
     for(uint32_t i = length; i > index; i--) {
         elements[i] = elements[i - 1];
     }
+
+    // NOTE: Instead of fiddling with this, I should change the data structure
+    // bool mmx;
+    // Util::Address<uint32_t> *target = Util::Address<uint32_t>::createAcceleratedAddress(reinterpret_cast<uint32_t>(&elements[index + 1]), mmx);
+    // Util::Address source = Util::Address(reinterpret_cast<uint32_t>(&elements[index]));
+    // target->moveRange(source, (length - index) * sizeof(T));
 
     elements[index] = element;
     length++;

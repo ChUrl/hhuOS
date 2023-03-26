@@ -110,6 +110,8 @@ auto FileBuffer::getAllRows() const -> Util::Pair<Util::Iterator<char>, Util::It
 void FileBuffer::prepareRowsNewCharacter(uint32_t charindex) {
     auto [rowindex, row] = getCharacterRow(charindex);
     rows.set(rowindex, Row(row.first, row.second + 1));
+
+    // Translate the following rows by 1
     for (uint32_t i = rowindex + 1; i < rows.size(); ++i) {
         row = rows.get(i);
         rows.set(i, Row(row.first + 1, row.second + 1));

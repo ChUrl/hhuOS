@@ -75,7 +75,9 @@ protected:
 
     // This approach is very simple to implement, in comparison to the line-based buffer approach
     // that I used before. Drawback: On each line manipulation, the whole part of the file after
-    // the cursor has to be moved in memory. We'll see how larger files handle...
+    // the cursor has to be moved in memory. When surpassing file sizes of 250kB, it's noticeably slower.
+    // If large files are of concern, it could probably be accelerated significantly by using
+    // some kind of tree (rope?)
     Util::ArrayList<char> buffer = Util::ArrayList<char>();
 
     Util::ArrayList<Row> rows = Util::ArrayList<Row>();
