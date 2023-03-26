@@ -88,47 +88,47 @@ Address<T> Address<T>::alignUp(T alignment) const {
 
 template<typename T>
 uint8_t Address<T>::getByte(T offset) const {
-    return *reinterpret_cast<uint8_t*>(address + offset);
+    return *reinterpret_cast<uint8_t *>(address + offset);
 }
 
 template<typename T>
 uint16_t Address<T>::getShort(T offset) const {
-    return *reinterpret_cast<uint16_t*>(address + offset);
+    return *reinterpret_cast<uint16_t *>(address + offset);
 }
 
 template<typename T>
 uint32_t Address<T>::getInt(T offset) const {
-    return *reinterpret_cast<uint32_t*>(address + offset);
+    return *reinterpret_cast<uint32_t *>(address + offset);
 }
 
 template<typename T>
 uint64_t Address<T>::getLong(T offset) const {
-    return *reinterpret_cast<uint64_t*>(address + offset);
+    return *reinterpret_cast<uint64_t *>(address + offset);
 }
 
 template<typename T>
 void Address<T>::setByte(uint8_t value, T offset) const {
-    *reinterpret_cast<uint8_t*>(address + offset) = value;
+    *reinterpret_cast<uint8_t *>(address + offset) = value;
 }
 
 template<typename T>
 void Address<T>::setShort(uint16_t value, T offset) const {
-   *reinterpret_cast<uint16_t*>(address + offset) = value;
+    *reinterpret_cast<uint16_t *>(address + offset) = value;
 }
 
 template<typename T>
 void Address<T>::setInt(uint32_t value, T offset) const {
-    *reinterpret_cast<uint32_t*>(address + offset) = value;
+    *reinterpret_cast<uint32_t *>(address + offset) = value;
 }
 
 template<typename T>
 void Address<T>::setLong(uint64_t value, T offset) const {
-    *reinterpret_cast<uint64_t*>(address + offset) = value;
+    *reinterpret_cast<uint64_t *>(address + offset) = value;
 }
 
 template<typename T>
 T Address<T>::stringLength() const {
-    auto *pointer = reinterpret_cast<uint8_t*>(address);
+    auto *pointer = reinterpret_cast<uint8_t *>(address);
 
     T i;
     for (i = 0; pointer[i] != 0; i++) {}
@@ -138,7 +138,7 @@ T Address<T>::stringLength() const {
 
 template<typename T>
 void Address<T>::setRange(uint8_t value, T length) const {
-    auto *target = reinterpret_cast<uint64_t*>(address);
+    auto *target = reinterpret_cast<uint64_t *>(address);
     auto longValue = static_cast<uint64_t>(value);
     longValue = longValue | longValue << 8 | longValue << 16 | longValue << 24 | longValue << 32 | longValue << 40 | longValue << 48 | longValue << 56;
 
@@ -147,7 +147,7 @@ void Address<T>::setRange(uint8_t value, T length) const {
         length -= sizeof(uint64_t);
     }
 
-    auto *rest = reinterpret_cast<uint8_t*>(target);
+    auto *rest = reinterpret_cast<uint8_t *>(target);
     while (length-- > 0) {
         *rest++ = value;
     }
@@ -155,8 +155,8 @@ void Address<T>::setRange(uint8_t value, T length) const {
 
 template<typename T>
 void Address<T>::copyRange(const Address<T> &sourceAddress, T length) const {
-    auto *target = reinterpret_cast<uint32_t*>(address);
-    auto *source = reinterpret_cast<uint32_t*>(sourceAddress.get());
+    auto *target = reinterpret_cast<uint32_t *>(address);
+    auto *source = reinterpret_cast<uint32_t *>(sourceAddress.get());
 
     while (length - 4 * sizeof(uint32_t) < length) {
         asm volatile (
@@ -178,17 +178,59 @@ void Address<T>::copyRange(const Address<T> &sourceAddress, T length) const {
         length -= 4 * sizeof(uint32_t);
     }
 
-    auto *targetRest = reinterpret_cast<uint8_t*>(target);
-    auto *sourceRest = reinterpret_cast<uint8_t*>(source);
+    auto *targetRest = reinterpret_cast<uint8_t *>(target);
+    auto *sourceRest = reinterpret_cast<uint8_t *>(source);
     while (length-- > 0) {
         *targetRest++ = *sourceRest++;
     }
 }
 
 template<typename T>
+void Address<T>::moveRange(const Address<T> &sourceAddress, T length) const {
+    // Memory doesn't overlap or copy from right to left => Use copyRange
+    if ((address > sourceAddress.get() && address - sourceAddress.get() >= length)
+        || (address < sourceAddress.get() && sourceAddress.get() - address >= length)
+        || sourceAddress.get() > address) {
+        copyRange(sourceAddress, length);
+    }
+
+    // Copy from left to right => Begin at the end of the target
+    else if (sourceAddress.get() < address) {
+        auto *target = reinterpret_cast<uint32_t *>(address + length);
+        auto *source = reinterpret_cast<uint32_t *>(sourceAddress.get() + length);
+
+        while (length - 4 * sizeof(uint32_t) < length) {
+            asm volatile (
+                    "mov -4(%0), %%eax;"
+                    "mov -8(%0), %%ebx;"
+                    "mov -12(%0), %%ecx;"
+                    "mov -16(%0), %%edx;"
+                    "mov %%eax, -4(%1);"
+                    "mov %%ebx, -8(%1);"
+                    "mov %%ecx, -12(%1);"
+                    "mov %%edx, -16(%1);"
+                    : :
+                    "r"(source),
+                    "r"(target)
+                    : "eax", "ebx", "ecx", "edx"
+                    );
+            source -= 4;
+            target -= 4;
+            length -= 4 * sizeof(uint32_t);
+        }
+
+        auto *targetRest = reinterpret_cast<uint8_t *>(target);
+        auto *sourceRest = reinterpret_cast<uint8_t *>(source);
+        while (length-- > 0) {
+            *--targetRest = *--sourceRest;
+        }
+    }
+}
+
+template<typename T>
 void Address<T>::copyString(const Address<T> &sourceAddress) const {
-    auto *target = reinterpret_cast<uint8_t*>(address);
-    auto *source = reinterpret_cast<uint8_t*>(sourceAddress.address);
+    auto *target = reinterpret_cast<uint8_t *>(address);
+    auto *source = reinterpret_cast<uint8_t *>(sourceAddress.address);
 
     T i;
     for (i = 0; source[i] != 0; i++) {
@@ -199,8 +241,8 @@ void Address<T>::copyString(const Address<T> &sourceAddress) const {
 
 template<typename T>
 void Address<T>::copyString(const Address<T> &sourceAddress, T maxBytes) const {
-    auto *target = reinterpret_cast<uint8_t*>(address);
-    auto *source = reinterpret_cast<uint8_t*>(sourceAddress.address);
+    auto *target = reinterpret_cast<uint8_t *>(address);
+    auto *source = reinterpret_cast<uint8_t *>(sourceAddress.address);
 
     T i;
     for (i = 0; source[i] != 0 && i < maxBytes; i++) {
@@ -215,22 +257,22 @@ void Address<T>::copyString(const Address<T> &sourceAddress, T maxBytes) const {
 
 template<typename T>
 int32_t Address<T>::compareRange(const Address<T> &otherAddress, T length) const {
-    auto *pointer = reinterpret_cast<uint8_t*>(address);
-    auto *other = reinterpret_cast<uint8_t*>(otherAddress.address);
+    auto *pointer = reinterpret_cast<uint8_t *>(address);
+    auto *other = reinterpret_cast<uint8_t *>(otherAddress.address);
 
     T i;
-    for (i = 0; i < length && pointer[i] == other[i]; i++){}
+    for (i = 0; i < length && pointer[i] == other[i]; i++) {}
     return i == length ? 0 : pointer[i] - other[i];
 }
 
 template<typename T>
 int32_t Address<T>::compareString(const Address<T> &otherAddress) const {
-    auto *pointer = reinterpret_cast<uint8_t*>(address);
-    auto *other = reinterpret_cast<uint8_t*>(otherAddress.address);
+    auto *pointer = reinterpret_cast<uint8_t *>(address);
+    auto *other = reinterpret_cast<uint8_t *>(otherAddress.address);
 
     T i;
-    for (i = 0; pointer[i] != 0 && other[i] != 0 && pointer[i] == other[i]; i++){}
-    return  pointer[i] - other[i];
+    for (i = 0; pointer[i] != 0 && other[i] != 0 && pointer[i] == other[i]; i++) {}
+    return pointer[i] - other[i];
 }
 
 template<>
@@ -240,7 +282,7 @@ int32_t Address<uint32_t>::compareString(const char *otherString) const {
 
 template<typename T>
 Address<T> Address<T>::searchCharacter(uint8_t character) const {
-    auto *pointer = reinterpret_cast<uint8_t*>(address);
+    auto *pointer = reinterpret_cast<uint8_t *>(address);
 
     T i;
     for (i = 0; pointer[i] != 0 && pointer[i] != character; i++) {}

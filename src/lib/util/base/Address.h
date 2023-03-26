@@ -89,6 +89,8 @@ public:
 
     virtual void copyRange(const Address<T> &sourceAddress, T length) const;
 
+    virtual void moveRange(const Address<T> &sourceAddress, T length) const;
+
     void copyString(const Address<T> &sourceAddress) const;
 
     void copyString(const Address<T> &sourceAddress, T maxBytes) const;
