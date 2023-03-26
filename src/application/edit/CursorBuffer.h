@@ -8,6 +8,8 @@
 #include "FileBuffer.h"
 #include "lib/util/graphic/Ansi.h"
 
+class EditEvent;
+
 class CursorBuffer : public FileBuffer {
 public:
     CursorBuffer() = delete;
@@ -24,9 +26,9 @@ public:
 
     void cursorRight();
 
-    void insertAtCursor(char character);
+    auto insertAtCursor(char character) -> EditEvent *;
 
-    void deleteBeforeCursor();
+    auto deleteBeforeCursor() -> EditEvent *;
 
     void deleteAtCursor();
 
@@ -39,7 +41,6 @@ public:
      */
     [[nodiscard]] auto getViewCursor() const -> Util::Graphic::Ansi::CursorPosition;
 
-private:
     void fixView();
 
 private:

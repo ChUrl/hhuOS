@@ -3,6 +3,8 @@
 //
 
 #include "CursorBuffer.h"
+#include "application/edit/event/InsertCharEvent.h"
+#include "application/edit/event/DeleteCharEvent.h"
 
 CursorBuffer::CursorBuffer(const Util::String &path) : FileBuffer(path) {}
 
@@ -43,8 +45,7 @@ void CursorBuffer::cursorDown() {
 }
 
 void CursorBuffer::cursorLeft() {
-    const auto [rowindex, row] = getCharacterRow(cursor);
-    if (cursor == row.first) {
+    if (cursor == 0) {
         return;
     }
 
@@ -53,8 +54,7 @@ void CursorBuffer::cursorLeft() {
 }
 
 void CursorBuffer::cursorRight() {
-    const auto [rowindex, row] = getCharacterRow(cursor);
-    if (cursor == row.second) {
+    if (cursor == buffer.size()) {
         return;
     }
 
@@ -62,18 +62,20 @@ void CursorBuffer::cursorRight() {
     fixView();
 }
 
-void CursorBuffer::insertAtCursor(char character) {
-    insertString(cursor++, character);
-    fixView();
+auto CursorBuffer::insertAtCursor(char character) -> EditEvent * {
+    EditEvent *event = new InsertCharEvent(cursor, character);
+    event->apply(*this);
+    return event;
 }
 
-void CursorBuffer::deleteBeforeCursor() {
+auto CursorBuffer::deleteBeforeCursor() -> EditEvent * {
     if (cursor == 0) {
-        return;
+        return nullptr;
     }
 
-    deleteString(--cursor, 1);
-    fixView();
+    EditEvent *event = new DeleteCharEvent(cursor - 1, buffer.get(cursor - 1));
+    event->apply(*this);
+    return event;
 }
 
 void CursorBuffer::deleteAtCursor() {
