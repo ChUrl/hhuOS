@@ -59,7 +59,7 @@ void Edit::handleUserInput() {
     Util::Graphic::Ansi::enableCanonicalMode();
 }
 
-// TODO: Only update if necessary
+// TODO: Only reprint if necessary (not on cursor change!)
 void Edit::updateView() {
     Util::Graphic::Ansi::clearScreen();
     Util::Graphic::Ansi::setPosition({0, 0});
@@ -78,16 +78,16 @@ void Edit::updateView() {
     Util::System::out << "Whole File: ==============================\n";
 #endif
 
-    const auto [begin, end] = file.getAllRows();
+    const auto [begin, end] = file.getView();
     for (auto it = begin; it != end; ++it) {
         Util::System::out << *it;
     }
 
-    Util::System::out << Util::Io::PrintStream::endl << Util::Io::PrintStream::flush;
+    Util::System::out << Util::Io::PrintStream::flush;
 
 #if ENABLE_EDIT_DEBUG == 1
     Util::Graphic::Ansi::setPosition({file.getScreenCursor().column, static_cast<uint16_t>(file.getScreenCursor().row + file.rows.size() + 2)});
 #else
-    Util::Graphic::Ansi::setPosition(file.getScreenCursor());
+    Util::Graphic::Ansi::setPosition(file.getViewCursor());
 #endif
 }

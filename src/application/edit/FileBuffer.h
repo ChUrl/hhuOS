@@ -14,6 +14,10 @@
 #define ENABLE_EDIT_DEBUG 0
 #define DEBUG_EXCEPTION(msg) Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, msg)
 
+// TODO: Explicit types for RowIndex/CharIndex
+//       Cursor: CharIndex
+//       WindowAnchor: RowIndex
+
 class FileBuffer {
 #if ENABLE_EDIT_DEBUG == 1
     friend class Edit;

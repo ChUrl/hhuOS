@@ -28,13 +28,25 @@ public:
 
     void deleteBeforeCursor();
 
+    void deleteAtCursor();
+
+    // [[nodiscard]] auto getRowsFromCursor(uint32_t length) const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
+
+    [[nodiscard]] auto getView() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
+
     /**
      * @brief Determine the two-dimensional representation of the current cursor.
      */
-    [[nodiscard]] auto getScreenCursor() const -> Util::Graphic::Ansi::CursorPosition;
+    [[nodiscard]] auto getViewCursor() const -> Util::Graphic::Ansi::CursorPosition;
+
+private:
+    void fixView();
 
 private:
     uint32_t cursor = 0;
+
+    uint32_t viewAnchor = 0; // TODO: Horizontal scrolling
+    uint32_t viewSize = Util::Graphic::Ansi::getCursorLimits().row + 1;
 };
 
 #endif //HHUOS_CURSORBUFFER_H
