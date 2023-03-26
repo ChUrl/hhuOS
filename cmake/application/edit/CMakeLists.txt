@@ -15,7 +15,12 @@ set(SOURCE_FILES
         ${HHUOS_SRC_DIR}/application/edit/Edit.cpp
         ${HHUOS_SRC_DIR}/application/edit/FileBuffer.cpp
         ${HHUOS_SRC_DIR}/application/edit/CursorBuffer.cpp
-        ${HHUOS_SRC_DIR}/application/edit/event/EditEvent.cpp)
+        ${HHUOS_SRC_DIR}/application/edit/event/EditEvent.cpp
+        ${HHUOS_SRC_DIR}/application/edit/event/InsertCharEvent.cpp
+        ${HHUOS_SRC_DIR}/application/edit/event/DeleteCharEvent.cpp
+        ${HHUOS_SRC_DIR}/application/edit/event/InsertStringEvent.cpp
+        ${HHUOS_SRC_DIR}/application/edit/event/DeleteStringEvent.cpp
+        )
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
