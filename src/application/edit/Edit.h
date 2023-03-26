@@ -26,11 +26,11 @@ public:
 private:
     void handleUserInput();
 
-    [[nodiscard]] auto saveEvent(EditEvent *event) -> bool;
+    void saveEvent(EditEvent *event);
 
-    [[nodiscard]] auto undoEvent() -> bool;
+    void undoEvent();
 
-    [[nodiscard]] auto redoEvent() -> bool;
+    void redoEvent();
 
     void updateView();
 
@@ -41,9 +41,9 @@ private:
     // TODO: Replace with RingBuffer
     Util::ArrayList<EditEvent *> events = Util::ArrayList<EditEvent *>();
     uint32_t lastEvent = -1;
-    uint32_t lastSavedEvent = -1;
     uint32_t lastAppliedEvent = -1;
 
+    bool resave = true;
     bool reprint = true;
     bool running = true;
 };

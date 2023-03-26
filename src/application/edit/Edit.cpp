@@ -41,59 +41,67 @@ void Edit::handleUserInput() {
             reprint = file.cursorRight();
             break;
         case 'S':
-            file.save();
+            // TODO: Check if save was successfull
+            if (resave) {
+                file.save();
+                resave = false;
+            }
             break;
         case 'Q':
             running = false;
             break;
         case 'U':
-            reprint = undoEvent();
+            undoEvent();
             break;
         case 'R':
-            reprint = redoEvent();
+            redoEvent();
             break;
         case 0x08:
             // Backspace
-            reprint = saveEvent(file.deleteBeforeCursor());
+            saveEvent(file.deleteBeforeCursor());
             break;
         default:
             // Write text
-            reprint = saveEvent(file.insertAtCursor(static_cast<char>(input)));
+            saveEvent(file.insertAtCursor(static_cast<char>(input)));
     }
 
     // Need to be in canonical mode for printing
     Util::Graphic::Ansi::enableCanonicalMode();
 }
 
-auto Edit::saveEvent(EditEvent *event) -> bool {
+void Edit::saveEvent(EditEvent *event) {
     if (event == nullptr) {
-        return false;
+        return;
     }
 
     events.add(++lastAppliedEvent, event);
     lastEvent = lastAppliedEvent;
-    return true;
+    reprint = true;
+    resave = true;
 }
 
-auto Edit::undoEvent() -> bool {
+void Edit::undoEvent() {
     if (lastAppliedEvent == -1) {
-        return false;
+        return;
     }
 
     events.get(lastAppliedEvent--)->revert(file);
-    return true;
+    reprint = true;
+    resave = true;
 }
 
-auto Edit::redoEvent() -> bool {
+void Edit::redoEvent() {
     if (lastAppliedEvent == lastEvent) {
-        return false;
+        return;
     }
 
     events.get(++lastAppliedEvent)->apply(file);
-    return true;
+    reprint = true;
+    resave = true;
 }
 
 void Edit::updateView() {
+    // TODO: Only repaint changed line(s)
     if (reprint) {
         Util::Graphic::Ansi::clearScreen();
         Util::Graphic::Ansi::setPosition({0, 0});
