@@ -115,4 +115,53 @@ void SseAddress<T>::copyRange(const Address<T> &sourceAddress, T length) const {
     }
 }
 
+template<typename T>
+void SseAddress<T>::moveRange(const Address<T> &sourceAddress, T length) const {
+    // Memory doesn't overlap or copy from right to left => Use copyRange
+    if ((Address<T>::address > sourceAddress.get() && Address<T>::address - sourceAddress.get() >= length)
+        || (Address<T>::address < sourceAddress.get() && sourceAddress.get() - Address<T>::address >= length)
+        || sourceAddress.get() > Address<T>::address) {
+        copyRange(sourceAddress, length);
+    }
+
+        // Copy from left to right => Begin at the end of the target
+    else if (sourceAddress.get() < Address<T>::address) {
+        auto *target = reinterpret_cast<uint32_t *>(Address<T>::address + length);
+        auto *source = reinterpret_cast<uint32_t *>(sourceAddress.get() + length);
+
+        while (length - 16 * sizeof(uint64_t) < length) {
+            asm volatile (
+                    "movdqu -16(%0),%%xmm0;"
+                    "movdqu -32(%0),%%xmm1;"
+                    "movdqu -48(%0),%%xmm2;"
+                    "movdqu -64(%0),%%xmm3;"
+                    "movdqu -80(%0),%%xmm4;"
+                    "movdqu -96(%0),%%xmm5;"
+                    "movdqu -112(%0),%%xmm6;"
+                    "movdqu -128(%0),%%xmm7;"
+                    "movdqu %%xmm0,-16(%1);"
+                    "movdqu %%xmm1,-32(%1);"
+                    "movdqu %%xmm2,-48(%1);"
+                    "movdqu %%xmm3,-64(%1);"
+                    "movdqu %%xmm4,-80(%1);"
+                    "movdqu %%xmm5,-96(%1);"
+                    "movdqu %%xmm6,-112(%1);"
+                    "movdqu %%xmm7,-128(%1);"
+                    : :
+                    "r"(source),
+                    "r"(target)
+                    );
+            source -= 16;
+            target -= 16;
+            length -= 16 * sizeof(uint64_t);
+        }
+
+        auto *targetRest = reinterpret_cast<uint8_t *>(target);
+        auto *sourceRest = reinterpret_cast<uint8_t *>(source);
+        while (length-- > 0) {
+            *--targetRest = *--sourceRest;
+        }
+    }
+}
+
 }

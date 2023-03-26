@@ -59,6 +59,8 @@ public:
     void setRange(uint8_t value, T length) const override;
 
     void copyRange(const Address<T> &sourceAddress, T length) const override;
+
+    void moveRange(const Address<T> &sourceAddress, T length) const override;
 };
 
 template

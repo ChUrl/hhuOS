@@ -114,4 +114,53 @@ void MmxAddress<T>::copyRange(const Address<T> &sourceAddress, T length) const {
     }
 }
 
+template<typename T>
+void MmxAddress<T>::moveRange(const Address<T> &sourceAddress, T length) const {
+    // Memory doesn't overlap or copy from right to left => Use copyRange
+    if ((Address<T>::address > sourceAddress.get() && Address<T>::address - sourceAddress.get() >= length)
+        || (Address<T>::address < sourceAddress.get() && sourceAddress.get() - Address<T>::address >= length)
+        || sourceAddress.get() > Address<T>::address) {
+        copyRange(sourceAddress, length);
+    }
+
+        // Copy from left to right => Begin at the end of the target
+    else if (sourceAddress.get() < Address<T>::address) {
+        auto *target = reinterpret_cast<uint32_t *>(Address<T>::address + length);
+        auto *source = reinterpret_cast<uint32_t *>(sourceAddress.get() + length);
+
+        while (length - 8 * sizeof(uint64_t) < length) {
+            asm volatile (
+                    "movq -8(%0), %%mm0;"
+                    "movq -16(%0), %%mm1;"
+                    "movq -24(%0), %%mm2;"
+                    "movq -32(%0), %%mm3;"
+                    "movq -40(%0), %%mm4;"
+                    "movq -48(%0), %%mm5;"
+                    "movq -56(%0), %%mm6;"
+                    "movq -64(%0), %%mm7;"
+                    "movq %%mm0, -8(%1);"
+                    "movq %%mm1, -16(%1);"
+                    "movq %%mm2, -24(%1);"
+                    "movq %%mm3, -32(%1);"
+                    "movq %%mm4, -40(%1);"
+                    "movq %%mm5, -48(%1);"
+                    "movq %%mm6, -56(%1);"
+                    "movq %%mm7, -64(%1);"
+                    : :
+                    "r"(source),
+                    "r"(target)
+                    );
+            source -= 8;
+            target -= 8;
+            length -= 8 * sizeof(uint64_t);
+        }
+
+        auto *targetRest = reinterpret_cast<uint8_t *>(target);
+        auto *sourceRest = reinterpret_cast<uint8_t *>(source);
+        while (length-- > 0) {
+            *--targetRest = *--sourceRest;
+        }
+    }
+}
+
 }
