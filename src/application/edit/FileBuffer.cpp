@@ -23,11 +23,18 @@ FileBuffer::FileBuffer(const Util::String &path) : path(path) {
         //       I would like to just tell the ArrayList to use fileContents as its buffer...
         //       Or initialize the ArrayList with Array<char>::wrap(fileContents)...
         //       It is not even possible to reserve space like in std::vector?
+        uint32_t linestart = 0;
         for (uint32_t i = 0; i < fileLength; ++i) {
             buffer.add(static_cast<char>(fileContents[i]));
+            if (static_cast<char>(fileContents[i]) == '\n') {
+                rows.add(Row(linestart, i));
+                linestart = i + 1;
+            }
         }
-
-        // TODO: Build the row indices and append \n if necessary
+        if (buffer.get(buffer.size() - 1) != '\n') {
+            buffer.add('\n');
+            rows.add(Row(linestart, buffer.size()));
+        }
 
         delete[] fileContents;
     } else {
