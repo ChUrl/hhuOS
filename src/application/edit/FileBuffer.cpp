@@ -75,7 +75,10 @@ void FileBuffer::insertString(uint32_t charindex, const Util::String &string) {
 }
 
 void FileBuffer::deleteString(uint32_t charindex, uint32_t length) {
-     // TODO
+    for (uint32_t i = 0; i < length; ++i) {
+        prepareRowsDeleteCharacter(charindex + i);
+        buffer.removeIndex(charindex + i);
+    }
 }
 
 auto FileBuffer::getNumberOfRows() const -> uint32_t {
@@ -106,8 +109,29 @@ void FileBuffer::prepareRowsNewCharacter(uint32_t charindex) {
     }
 }
 
+// Rows:
+// [0, 1] -> [0, 0]
+// [0, 5] -> [0, 4]
+// [0, 5] [6, 9] -> [0, 4] [5, 8] (delete in first line)
+// [0, 5] [6, 9] -> [0, 8] (delete at start of second line)
+// [0, 5] [6, 9] [10, 16] -> [0, 8] [9, 15] (same as above)
 void FileBuffer::prepareRowsDeleteCharacter(uint32_t charindex) {
-    // TODO
+    auto [rowindex, row] = getCharacterRow(charindex);
+
+    // NOTE: This does a forward deletion, also on backspace!
+    if (charindex == row.second) {
+        // Delete at start of line (except first line)
+        rows.set(rowindex, Row(row.first, rows.get(rowindex + 1).second - 1));
+        rows.removeIndex(rowindex + 1);
+    } else {
+        rows.set(rowindex, Row(row.first, row.second - 1));
+    }
+
+    // Translate the following rows by -1
+    for (uint32_t i = rowindex + 1; i < rows.size(); ++i) {
+        row = rows.get(i);
+        rows.set(i, Row(row.first - 1, row.second - 1));
+    }
 }
 
 // Rows:
@@ -125,6 +149,7 @@ void FileBuffer::prepareRowsNewLine(uint32_t charindex) {
         rows.add(rowindex + 1, Row(charindex + 1, row.second + 1));
     }
 
+    // Translate the following rows by 1
     for (uint32_t i = rowindex + 2; i < rows.size(); ++i) {
         row = rows.get(i);
         rows.set(i, Row(row.first + 1, row.second + 1));
@@ -132,6 +157,7 @@ void FileBuffer::prepareRowsNewLine(uint32_t charindex) {
 }
 
 void FileBuffer::prepareRowsDeleteLine(uint32_t charindex) {
+    auto [rowindex, row] = getCharacterRow(charindex);
     // TODO
 }
 

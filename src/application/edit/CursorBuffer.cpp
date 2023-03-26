@@ -65,7 +65,7 @@ void CursorBuffer::deleteBeforeCursor() {
         return;
     }
 
-    deleteString(cursor--, 1);
+    deleteString(--cursor, 1);
 }
 
 auto CursorBuffer::getScreenCursor() const -> Util::Graphic::Ansi::CursorPosition {

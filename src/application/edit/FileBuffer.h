@@ -11,7 +11,8 @@
 #include "lib/util/collection/ArrayList.h"
 #include "lib/util/collection/Pair.h"
 
-#define ENABLE_EDIT_DEBUG 0
+#define ENABLE_EDIT_DEBUG 1
+#define DEBUG_EXCEPTION(msg) Util::Exception::throwException(Util::Exception::UNSUPPORTED_OPERATION, msg)
 
 class FileBuffer {
 #if ENABLE_EDIT_DEBUG == 1
