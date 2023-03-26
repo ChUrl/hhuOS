@@ -5,6 +5,7 @@
 #include "Edit.h"
 #include "lib/util/base/System.h"
 #include "lib/util/io/stream/PrintStream.h"
+#include "application/edit/event/InsertCharEvent.h"
 
 Edit::Edit(const Util::String &path) : file(CursorBuffer(path)) {}
 
@@ -46,17 +47,48 @@ void Edit::handleUserInput() {
         case 'Q':
             running = false;
             break;
+        case 'U':
+            undoEvent();
+            break;
+        case 'R':
+            redoEvent();
+            break;
         case 0x08:
             // Backspace
-            file.deleteBeforeCursor();
+            saveEvent(file.deleteBeforeCursor());
             break;
         default:
             // Write text
-            file.insertAtCursor(static_cast<char>(input));
+            saveEvent(file.insertAtCursor(static_cast<char>(input)));
     }
 
     // Need to be in canonical mode for printing
     Util::Graphic::Ansi::enableCanonicalMode();
+}
+
+void Edit::saveEvent(EditEvent *event) {
+    if (event == nullptr) {
+        return;
+    }
+
+    events.add(++lastAppliedEvent, event);
+    lastEvent = lastAppliedEvent;
+}
+
+void Edit::undoEvent() {
+    if (lastAppliedEvent == -1) {
+        return;
+    }
+
+    events.get(lastAppliedEvent--)->revert(file);
+}
+
+void Edit::redoEvent() {
+    if (lastAppliedEvent == lastEvent) {
+        return;
+    }
+
+    events.get(++lastAppliedEvent)->apply(file);
 }
 
 // TODO: Only reprint if necessary (not on cursor change!)

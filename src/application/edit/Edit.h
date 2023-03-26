@@ -10,6 +10,7 @@
 #include "lib/util/io/file/File.h"
 #include "lib/util/graphic/Ansi.h"
 #include "application/edit/CursorBuffer.h"
+#include "application/edit/event/EditEvent.h"
 
 class Edit : public Util::Async::Runnable {
 public:
@@ -25,10 +26,23 @@ public:
 private:
     void handleUserInput();
 
+    void saveEvent(EditEvent *event);
+
+    void undoEvent();
+
+    void redoEvent();
+
     void updateView();
 
 private:
     CursorBuffer file; // The file open for editing. Only a single file possible.
+
+    // TODO: Compress CharEvents to StringEvents for words (on events with ' ')?
+    // TODO: Replace with RingBuffer
+    Util::ArrayList<EditEvent *> events = Util::ArrayList<EditEvent *>();
+    uint32_t lastEvent = -1;
+    uint32_t lastSavedEvent = -1;
+    uint32_t lastAppliedEvent = -1;
 
     bool running = true;
 };
