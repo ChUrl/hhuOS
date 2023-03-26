@@ -123,10 +123,10 @@ void MmxAddress<T>::moveRange(const Address<T> &sourceAddress, T length) const {
         copyRange(sourceAddress, length);
     }
 
-        // Copy from left to right => Begin at the end of the target
+    // Copy from left to right => Begin at the end of the target
     else if (sourceAddress.get() < Address<T>::address) {
-        auto *target = reinterpret_cast<uint32_t *>(Address<T>::address + length);
-        auto *source = reinterpret_cast<uint32_t *>(sourceAddress.get() + length);
+        auto *target = reinterpret_cast<uint64_t *>(Address<T>::address + length);
+        auto *source = reinterpret_cast<uint64_t *>(sourceAddress.get() + length);
 
         while (length - 8 * sizeof(uint64_t) < length) {
             asm volatile (
