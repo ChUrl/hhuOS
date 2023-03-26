@@ -26,11 +26,11 @@ public:
 private:
     void handleUserInput();
 
-    void saveEvent(EditEvent *event);
+    [[nodiscard]] auto saveEvent(EditEvent *event) -> bool;
 
-    void undoEvent();
+    [[nodiscard]] auto undoEvent() -> bool;
 
-    void redoEvent();
+    [[nodiscard]] auto redoEvent() -> bool;
 
     void updateView();
 
@@ -44,6 +44,7 @@ private:
     uint32_t lastSavedEvent = -1;
     uint32_t lastAppliedEvent = -1;
 
+    bool reprint = true;
     bool running = true;
 };
 

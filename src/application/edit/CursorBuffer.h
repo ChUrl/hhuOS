@@ -18,21 +18,17 @@ public:
 
     ~CursorBuffer() = default;
 
-    void cursorUp();
+    [[nodiscard]] auto cursorUp() -> bool;
 
-    void cursorDown();
+    [[nodiscard]] auto cursorDown() -> bool;
 
-    void cursorLeft();
+    [[nodiscard]] auto cursorLeft() -> bool;
 
-    void cursorRight();
+    [[nodiscard]] auto cursorRight() -> bool;
 
-    auto insertAtCursor(char character) -> EditEvent *;
+    [[nodiscard]] auto insertAtCursor(char character) -> EditEvent *;
 
-    auto deleteBeforeCursor() -> EditEvent *;
-
-    void deleteAtCursor();
-
-    // [[nodiscard]] auto getRowsFromCursor(uint32_t length) const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
+    [[nodiscard]] auto deleteBeforeCursor() -> EditEvent *;
 
     [[nodiscard]] auto getView() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
 
@@ -41,7 +37,7 @@ public:
      */
     [[nodiscard]] auto getViewCursor() const -> Util::Graphic::Ansi::CursorPosition;
 
-    void fixView();
+    [[nodiscard]] auto fixView() -> bool;
 
 private:
     uint32_t cursor = 0;

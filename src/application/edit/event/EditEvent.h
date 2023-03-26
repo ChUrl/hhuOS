@@ -26,10 +26,6 @@ public:
 
     virtual void apply(CursorBuffer &cursorBuffer) = 0;
 
-    // virtual void applyAction(FileBuffer &fileBuffer) = 0;
-
-    // [[nodiscard]] virtual bool valid(const FileBuffer &fileBuffer) const = 0;
-
     virtual void revert(CursorBuffer &cursorBuffer) = 0;
 
 protected:

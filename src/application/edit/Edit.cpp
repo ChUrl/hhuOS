@@ -5,7 +5,6 @@
 #include "Edit.h"
 #include "lib/util/base/System.h"
 #include "lib/util/io/stream/PrintStream.h"
-#include "application/edit/event/InsertCharEvent.h"
 
 Edit::Edit(const Util::String &path) : file(CursorBuffer(path)) {}
 
@@ -30,16 +29,16 @@ void Edit::handleUserInput() {
     const int16_t input = Util::Graphic::Ansi::readChar();
     switch (input) {
         case Util::Graphic::Ansi::KEY_UP:
-            file.cursorUp();
+            reprint = file.cursorUp();
             break;
         case Util::Graphic::Ansi::KEY_DOWN:
-            file.cursorDown();
+            reprint = file.cursorDown();
             break;
         case Util::Graphic::Ansi::KEY_LEFT:
-            file.cursorLeft();
+            reprint = file.cursorLeft();
             break;
         case Util::Graphic::Ansi::KEY_RIGHT:
-            file.cursorRight();
+            reprint = file.cursorRight();
             break;
         case 'S':
             file.save();
@@ -48,78 +47,65 @@ void Edit::handleUserInput() {
             running = false;
             break;
         case 'U':
-            undoEvent();
+            reprint = undoEvent();
             break;
         case 'R':
-            redoEvent();
+            reprint = redoEvent();
             break;
         case 0x08:
             // Backspace
-            saveEvent(file.deleteBeforeCursor());
+            reprint = saveEvent(file.deleteBeforeCursor());
             break;
         default:
             // Write text
-            saveEvent(file.insertAtCursor(static_cast<char>(input)));
+            reprint = saveEvent(file.insertAtCursor(static_cast<char>(input)));
     }
 
     // Need to be in canonical mode for printing
     Util::Graphic::Ansi::enableCanonicalMode();
 }
 
-void Edit::saveEvent(EditEvent *event) {
+auto Edit::saveEvent(EditEvent *event) -> bool {
     if (event == nullptr) {
-        return;
+        return false;
     }
 
     events.add(++lastAppliedEvent, event);
     lastEvent = lastAppliedEvent;
+    return true;
 }
 
-void Edit::undoEvent() {
+auto Edit::undoEvent() -> bool {
     if (lastAppliedEvent == -1) {
-        return;
+        return false;
     }
 
     events.get(lastAppliedEvent--)->revert(file);
+    return true;
 }
 
-void Edit::redoEvent() {
+auto Edit::redoEvent() -> bool {
     if (lastAppliedEvent == lastEvent) {
-        return;
+        return false;
     }
 
     events.get(++lastAppliedEvent)->apply(file);
+    return true;
 }
 
-// TODO: Only reprint if necessary (not on cursor change!)
 void Edit::updateView() {
-    Util::Graphic::Ansi::clearScreen();
-    Util::Graphic::Ansi::setPosition({0, 0});
+    if (reprint) {
+        Util::Graphic::Ansi::clearScreen();
+        Util::Graphic::Ansi::setPosition({0, 0});
 
-
-#if ENABLE_EDIT_DEBUG == 1
-    Util::System::out << "Line Based: ==============================\n";
-    for (uint32_t i = 0; i < file.getNumberOfRows(); ++i) {
-        const FileBuffer::Row row = file.getRow(i);
-        Util::System::out << Util::String::format("[%u, %u]: ", row.first, row.second);
-        const auto [begin, end] = file.getSingleRow(i);
+        const auto [begin, end] = file.getView();
         for (auto it = begin; it != end; ++it) {
             Util::System::out << *it;
         }
-    }
-    Util::System::out << "Whole File: ==============================\n";
-#endif
 
-    const auto [begin, end] = file.getView();
-    for (auto it = begin; it != end; ++it) {
-        Util::System::out << *it;
+        Util::System::out << Util::Io::PrintStream::flush;
+        reprint = false;
     }
 
-    Util::System::out << Util::Io::PrintStream::flush;
-
-#if ENABLE_EDIT_DEBUG == 1
-    Util::Graphic::Ansi::setPosition({file.getScreenCursor().column, static_cast<uint16_t>(file.getScreenCursor().row + file.rows.size() + 2)});
-#else
     Util::Graphic::Ansi::setPosition(file.getViewCursor());
-#endif
 }
