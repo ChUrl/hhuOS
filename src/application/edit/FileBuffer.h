@@ -77,7 +77,7 @@ protected:
     // that I used before. Drawback: On each line manipulation, the whole part of the file after
     // the cursor has to be moved in memory. When surpassing file sizes of 250kB, it's noticeably slower.
     // If large files are of concern, it could probably be accelerated significantly by using
-    // some kind of tree (rope?)
+    // some kind of tree (rope?). For now, I don't care about large files.
     Util::ArrayList<char> buffer = Util::ArrayList<char>();
 
     Util::ArrayList<Row> rows = Util::ArrayList<Row>();

@@ -54,7 +54,7 @@ auto CursorBuffer::cursorLeft() -> bool {
 }
 
 auto CursorBuffer::cursorRight() -> bool {
-    if (cursor == buffer.size()) {
+    if (cursor + 1 == buffer.size()) {
         return false;
     }
 
