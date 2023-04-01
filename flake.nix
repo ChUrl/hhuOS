@@ -69,6 +69,8 @@
             grub2_efi
             xorriso
             util-linux
+            include-what-you-use # Include every used symbol
+            cloc # Count lines of code
 
             # Buildinputs
             qemu # Start os in virtual machine
