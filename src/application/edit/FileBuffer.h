@@ -57,6 +57,15 @@ protected:
         Row() = default;
 
         Row(uint32_t begin, uint32_t end);
+
+        // TODO
+        [[nodiscard]] auto start() const -> uint32_t;
+
+        [[nodiscard]] auto end() const -> uint32_t;
+
+        [[nodiscard]] auto length() const -> uint32_t;
+
+        [[nodiscard]] auto isEmpty() const -> bool;
     };
 
 protected:

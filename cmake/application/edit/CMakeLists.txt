@@ -18,8 +18,11 @@ set(SOURCE_FILES
         ${HHUOS_SRC_DIR}/application/edit/event/EditEvent.cpp
         ${HHUOS_SRC_DIR}/application/edit/event/InsertCharEvent.cpp
         ${HHUOS_SRC_DIR}/application/edit/event/DeleteCharEvent.cpp
-        ${HHUOS_SRC_DIR}/application/edit/event/InsertStringEvent.cpp
-        ${HHUOS_SRC_DIR}/application/edit/event/DeleteStringEvent.cpp
+        # ${HHUOS_SRC_DIR}/application/edit/event/InsertStringEvent.cpp
+        # ${HHUOS_SRC_DIR}/application/edit/event/DeleteStringEvent.cpp
+        ${HHUOS_SRC_DIR}/application/edit/userinterface/Compositor.cpp
+        ${HHUOS_SRC_DIR}/application/edit/userinterface/component/Component.cpp
+        ${HHUOS_SRC_DIR}/application/edit/userinterface/component/TextView.cpp
         )
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})

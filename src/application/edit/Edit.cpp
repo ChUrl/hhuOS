@@ -4,11 +4,22 @@
 
 #include "Edit.h"
 #include "application/edit/event/EditEvent.h"
+#include "application/edit/userinterface/Compositor.h"
+#include "application/edit/userinterface/component/TextView.h"
 #include "lib/util/base/System.h"
+#include "lib/util/graphic/Fonts.h"
 
-Edit::Edit(const Util::String &path) : file(CursorBuffer(path)) {}
+Edit::Edit(const Util::String &path, Util::Graphic::LinearFrameBuffer &lfb)
+        : file(CursorBuffer(path)), userinterface(Compositor(lfb)) {
+    // Init UI
+    Util::Graphic::Ansi::CursorPosition limits = Util::Graphic::Ansi::getCursorLimits();
+    Component *view = new TextView(limits.column + 1, limits.row + 1, Util::Graphic::Fonts::TERMINAL_FONT, file);
+    userinterface.setRoot(view);
+}
 
 void Edit::run() {
+    Util::Graphic::Ansi::prepareGraphicalApplication(false);
+
     // Main edit loop
     while (running) {
         updateView();
@@ -25,6 +36,7 @@ void Edit::handleUserInput() {
     // Canonical mode accepts input after enter, raw mode processes every keypress
     Util::Graphic::Ansi::enableRawMode();
 
+    // TODO: Remove char bindings, how do Ctrl-combinations work?
     // Handle user input
     const int16_t input = Util::Graphic::Ansi::readChar();
     switch (input) {
@@ -41,7 +53,7 @@ void Edit::handleUserInput() {
             reprint = file.cursorRight();
             break;
         case 'S':
-            // TODO: Check if save was successfull
+            // TODO: Check if save was successful
             if (resave) {
                 file.save();
                 resave = false;
@@ -103,17 +115,20 @@ void Edit::redoEvent() {
 void Edit::updateView() {
     // TODO: Only repaint changed line(s)
     if (reprint) {
-        Util::Graphic::Ansi::clearScreen();
-        Util::Graphic::Ansi::setPosition({0, 0});
+        // Util::Graphic::Ansi::clearScreen();
+        // Util::Graphic::Ansi::setPosition({0, 0});
 
-        const auto [begin, end] = file.getViewIterators();
-        for (auto it = begin; it != end; ++it) {
-            Util::System::out << *it;
-        }
+        // const auto [begin, end] = file.getViewIterators();
+        // for (auto it = begin; it != end; ++it) {
+        //     Util::System::out << *it;
+        // }
 
-        Util::System::out << Util::Io::PrintStream::flush;
+        // Util::System::out << Util::Io::PrintStream::flush;
+
+        userinterface.update();
+        userinterface.draw();
         reprint = false;
     }
 
-    Util::Graphic::Ansi::setPosition(file.getRelativeViewCursor());
+    // Util::Graphic::Ansi::setPosition(file.getRelativeViewCursor());
 }

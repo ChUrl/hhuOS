@@ -6,8 +6,11 @@
 #define HHUOS_EDIT_H
 
 #include <cstdint>
+#include "application/edit/userinterface/Compositor.h"
 #include "application/edit/CursorBuffer.h"
 #include "lib/util/async/Runnable.h"
+#include "lib/util/graphic/LinearFrameBuffer.h"
+#include "lib/util/io/file/File.h"
 
 namespace Util {
 class String;
@@ -16,9 +19,10 @@ template<typename T>
 class ArrayList;
 }
 
+// TODO: Switch to CursorRunnable
 class Edit : public Util::Async::Runnable {
 public:
-    explicit Edit(const Util::String &path);
+    explicit Edit(const Util::String &path, Util::Graphic::LinearFrameBuffer &lfb);
 
     ~Edit() override = default;
 
@@ -40,6 +44,7 @@ private:
 
 private:
     CursorBuffer file; // The file open for editing. Only a single file possible.
+    Compositor userinterface;
 
     // TODO: Compress CharEvents to StringEvents for words (on events with ' ')?
     // TODO: Replace with RingBuffer

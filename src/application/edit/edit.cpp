@@ -39,7 +39,9 @@ int32_t main(int32_t argc, char *argv[]) {
         return -1;
     }
 
-    Edit edit = Edit(path);
+    auto lfbFile = Util::Io::File("/device/lfb");
+    auto lfb = Util::Graphic::LinearFrameBuffer(lfbFile);
+    Edit edit = Edit(path, lfb);
     edit.run();
 
     return 0;
