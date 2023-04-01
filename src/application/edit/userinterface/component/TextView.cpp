@@ -14,7 +14,13 @@ TextView::TextView(uint16_t charactersX, uint16_t charactersY, Util::Graphic::Fo
 void TextView::draw() {
     clear();
 
-    // TODO
+    lineDrawer.drawLine(0, 0, getResolutionX() - 1, 0, Util::Graphic::Colors::WHITE);
+    lineDrawer.drawLine(0, 0, 0, getResolutionY() - 1, Util::Graphic::Colors::WHITE);
+    lineDrawer.drawLine(getResolutionX() - 1, getResolutionY() - 1, getResolutionX() - 1, 0, Util::Graphic::Colors::WHITE);
+    lineDrawer.drawLine(getResolutionX() - 1, getResolutionY() - 1, 0, getResolutionY() - 1, Util::Graphic::Colors::WHITE);
+
+    // TODO: Scrolling the buffer is probably faster because of MMX?
+    //       But this is going to change anyway, after I work with const char * buffer...
     uint16_t x = 0, y = 0;
     auto [begin, end] = cursorBuffer.getViewIterators();
     for (auto it = begin; it != end; ++it) {

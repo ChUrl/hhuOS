@@ -23,7 +23,6 @@
 #include "lib/util/base/Address.h"
 #include "lib/util/base/MmxAddress.h"
 #include "lib/util/base/SseAddress.h"
-#include "lib/util/math/Math.h"
 
 namespace Util {
 
@@ -164,7 +163,8 @@ void ArrayList<T>::add(uint32_t index, const T &element) {
     // Util::Address source = Util::Address(reinterpret_cast<uint32_t>(&elements[index]));
     // target->moveRange(source, (length - index) * sizeof(T));
     // if (mmx) {
-    //     Math::endMmx();
+    //     // NOTE: Can't include Util::Math here
+    //     asm volatile ("emms");
     // }
 
     elements[index] = element;

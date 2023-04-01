@@ -15,8 +15,8 @@ void Compositor::update() {
     root->draw();
 }
 
+// TODO: The component positioning/alignment is not implemented yet
 void Compositor::draw() {
-    // TODO
     lfb.clear();
     // Copy line by line for now, without positioning/alignment
     for (uint32_t i = 0; i < root->getResolutionY(); ++i) {

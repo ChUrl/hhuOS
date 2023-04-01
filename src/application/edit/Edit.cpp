@@ -12,6 +12,10 @@
 Edit::Edit(const Util::String &path, Util::Graphic::LinearFrameBuffer &lfb)
         : file(CursorBuffer(path)), userinterface(Compositor(lfb)) {
     // Init UI
+
+    // TODO: Don't use the Ansi limits, depend on the lfb size instead
+    //       This requires also setting the CursorBuffer view window accordingly (at least
+    //       as long as this is still managed there...)
     Util::Graphic::Ansi::CursorPosition limits = Util::Graphic::Ansi::getCursorLimits();
     Component *view = new TextView(limits.column + 1, limits.row + 1, Util::Graphic::Fonts::TERMINAL_FONT, file);
     userinterface.setRoot(view);
