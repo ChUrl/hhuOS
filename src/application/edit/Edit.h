@@ -43,8 +43,8 @@ private:
     uint32_t lastEvent = -1;
     uint32_t lastAppliedEvent = -1;
 
-    bool resave = true;
-    bool reprint = true;
+    bool resave = true; // Indicates if the file requires saving
+    bool reprint = true; // Indicates if the screen contents have changed
     bool running = true;
 };
 

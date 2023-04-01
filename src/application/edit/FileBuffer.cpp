@@ -92,14 +92,14 @@ auto FileBuffer::getNumberOfRows() const -> uint32_t {
     return rows.size();
 }
 
-auto FileBuffer::getSingleRow(uint32_t rowindex) const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>> {
+auto FileBuffer::getRowIterators(uint32_t rowindex) const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>> {
     const Row row = rows.get(rowindex);
     const auto begin = Util::Iterator<char>(buffer.toArray(), row.first);
     const auto end = Util::Iterator<char>(buffer.toArray(), row.second + 1);
     return {begin, end};
 }
 
-auto FileBuffer::getAllRows() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>> {
+auto FileBuffer::getFileIterators() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>> {
     return {buffer.begin(), buffer.end()};
 }
 
@@ -108,7 +108,7 @@ auto FileBuffer::getAllRows() const -> Util::Pair<Util::Iterator<char>, Util::It
 // [0, 5] -> [0, 6]
 // [0, 5] [6, 9] -> [0, 6] [7, 10] (insert in first line)
 void FileBuffer::prepareRowsNewCharacter(uint32_t charindex) {
-    auto [rowindex, row] = getCharacterRow(charindex);
+    auto [rowindex, row] = getRowByChar(charindex);
     rows.set(rowindex, Row(row.first, row.second + 1));
 
     // Translate the following rows by 1
@@ -125,7 +125,7 @@ void FileBuffer::prepareRowsNewCharacter(uint32_t charindex) {
 // [0, 5] [6, 9] -> [0, 8] (delete at start of second line)
 // [0, 5] [6, 9] [10, 16] -> [0, 8] [9, 15] (same as above)
 void FileBuffer::prepareRowsDeleteCharacter(uint32_t charindex) {
-    auto [rowindex, row] = getCharacterRow(charindex);
+    auto [rowindex, row] = getRowByChar(charindex);
 
     // NOTE: This does a forward deletion, also on backspace!
     if (charindex == row.second) {
@@ -149,7 +149,7 @@ void FileBuffer::prepareRowsDeleteCharacter(uint32_t charindex) {
 // [0, 5] -> [0, 2] [3, 6] (insert inside of line (index 2))
 // [0, 5] [6, 9] -> [0, 2] [3, 6] [7, 10] (same as above)
 void FileBuffer::prepareRowsNewLine(uint32_t charindex) {
-    auto [rowindex, row] = getCharacterRow(charindex);
+    auto [rowindex, row] = getRowByChar(charindex);
     if (charindex == row.second) {
         // Insert at end of line
         rows.add(rowindex + 1, Row(charindex + 1, charindex + 1));
@@ -166,7 +166,7 @@ void FileBuffer::prepareRowsNewLine(uint32_t charindex) {
 }
 
 void FileBuffer::prepareRowsDeleteLine(uint32_t charindex) {
-    auto [rowindex, row] = getCharacterRow(charindex);
+    auto [rowindex, row] = getRowByChar(charindex);
     // TODO
 }
 
@@ -174,7 +174,7 @@ auto FileBuffer::getRow(uint32_t rowindex) const -> FileBuffer::Row {
     return rows.get(rowindex);
 }
 
-auto FileBuffer::getCharacterRow(uint32_t charindex) const -> Util::Pair<uint32_t, Row> {
+auto FileBuffer::getRowByChar(uint32_t charindex) const -> Util::Pair<uint32_t, Row> {
     for (uint32_t i = 0; i < rows.size(); ++i) {
         const Row row = rows.get(i);
         if (charindex >= row.first && charindex <= row.second) {
@@ -182,7 +182,7 @@ auto FileBuffer::getCharacterRow(uint32_t charindex) const -> Util::Pair<uint32_
         }
     }
 
-    Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "getCharacterRow(): Index outside of buffer!");
+    Util::Exception::throwException(Util::Exception::INVALID_ARGUMENT, "getRowByChar(): Index outside of buffer!");
 }
 
 FileBuffer::Row::Row(uint32_t begin, uint32_t end) : Pair(begin, end) {}

@@ -9,7 +9,7 @@
 CursorBuffer::CursorBuffer(const Util::String &path) : FileBuffer(path) {}
 
 auto CursorBuffer::cursorUp() -> bool {
-    const auto [rowindex, row] = getCharacterRow(cursor);
+    const auto [rowindex, row] = getRowByChar(cursor);
     if (rowindex == 0) {
         return false;
     }
@@ -23,11 +23,11 @@ auto CursorBuffer::cursorUp() -> bool {
         cursor = targetRow.second;
     }
 
-    return fixView();
+    return alignViewToCursor();
 }
 
 auto CursorBuffer::cursorDown() -> bool {
-    const auto [rowindex, row] = getCharacterRow(cursor);
+    const auto [rowindex, row] = getRowByChar(cursor);
     if (rowindex + 1 == rows.size()) {
         return false;
     }
@@ -41,7 +41,7 @@ auto CursorBuffer::cursorDown() -> bool {
         cursor = targetRow.second;
     }
 
-    return fixView();
+    return alignViewToCursor();
 }
 
 auto CursorBuffer::cursorLeft() -> bool {
@@ -50,7 +50,7 @@ auto CursorBuffer::cursorLeft() -> bool {
     }
 
     cursor--;
-    return fixView();
+    return alignViewToCursor();
 }
 
 auto CursorBuffer::cursorRight() -> bool {
@@ -59,7 +59,7 @@ auto CursorBuffer::cursorRight() -> bool {
     }
 
     cursor++;
-    return fixView();
+    return alignViewToCursor();
 }
 
 auto CursorBuffer::insertAtCursor(char character) -> EditEvent * {
@@ -78,11 +78,11 @@ auto CursorBuffer::deleteBeforeCursor() -> EditEvent * {
     return event;
 }
 
-auto CursorBuffer::getView() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>> {
-    auto [firstBegin, firstEnd] = getSingleRow(viewAnchor);
-    auto [lastBegin, lastEnd] = getSingleRow(rows.size() > viewAnchor + viewSize - 1
-                                             ? viewAnchor + viewSize - 1
-                                             : rows.size() - 1);
+auto CursorBuffer::getViewIterators() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>> {
+    auto [firstBegin, firstEnd] = getRowIterators(viewAnchor);
+    auto [lastBegin, lastEnd] = getRowIterators(rows.size() > viewAnchor + viewSize - 1
+                                                ? viewAnchor + viewSize - 1
+                                                : rows.size() - 1);
 
     // TODO: Hack, the last \n may not be printed if the view is "full"
     auto lastNoNewline = lastBegin;
@@ -96,15 +96,15 @@ auto CursorBuffer::getView() const -> Util::Pair<Util::Iterator<char>, Util::Ite
     return {firstBegin, lastNoNewline};
 }
 
-auto CursorBuffer::getViewCursor() const -> Util::Graphic::Ansi::CursorPosition {
-    const auto [rowindex, row] = getCharacterRow(cursor);
+auto CursorBuffer::getRelativeViewCursor() const -> Util::Graphic::Ansi::CursorPosition {
+    const auto [rowindex, row] = getRowByChar(cursor);
     const uint32_t rowOffset = cursor - row.first;
     return {static_cast<uint16_t>(rowOffset), static_cast<uint16_t>(rowindex - viewAnchor)};
 }
 
 // TODO: Configurable scrolloff (lines always visible before/after cursor)
-auto CursorBuffer::fixView() -> bool {
-    auto [rowindex, row] = getCharacterRow(cursor);
+auto CursorBuffer::alignViewToCursor() -> bool {
+    auto [rowindex, row] = getRowByChar(cursor);
     if (rowindex < viewAnchor) {
         // Scroll view up
         viewAnchor = rowindex;

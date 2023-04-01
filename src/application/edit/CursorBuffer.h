@@ -30,14 +30,14 @@ public:
 
     [[nodiscard]] auto deleteBeforeCursor() -> EditEvent *;
 
-    [[nodiscard]] auto getView() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
+    [[nodiscard]] auto getViewIterators() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
 
     /**
      * @brief Determine the two-dimensional representation of the current cursor.
      */
-    [[nodiscard]] auto getViewCursor() const -> Util::Graphic::Ansi::CursorPosition;
+    [[nodiscard]] auto getRelativeViewCursor() const -> Util::Graphic::Ansi::CursorPosition;
 
-    [[nodiscard]] auto fixView() -> bool;
+    [[nodiscard]] auto alignViewToCursor() -> bool;
 
 private:
     uint32_t cursor = 0;

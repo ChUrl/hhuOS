@@ -106,7 +106,7 @@ void Edit::updateView() {
         Util::Graphic::Ansi::clearScreen();
         Util::Graphic::Ansi::setPosition({0, 0});
 
-        const auto [begin, end] = file.getView();
+        const auto [begin, end] = file.getViewIterators();
         for (auto it = begin; it != end; ++it) {
             Util::System::out << *it;
         }
@@ -115,5 +115,5 @@ void Edit::updateView() {
         reprint = false;
     }
 
-    Util::Graphic::Ansi::setPosition(file.getViewCursor());
+    Util::Graphic::Ansi::setPosition(file.getRelativeViewCursor());
 }

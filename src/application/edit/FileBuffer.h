@@ -43,9 +43,9 @@ public:
 
     [[nodiscard]] auto getNumberOfRows() const -> uint32_t;
 
-    [[nodiscard]] auto getSingleRow(uint32_t rowindex) const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
+    [[nodiscard]] auto getRowIterators(uint32_t rowindex) const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
 
-    [[nodiscard]] auto getAllRows() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
+    [[nodiscard]] auto getFileIterators() const -> Util::Pair<Util::Iterator<char>, Util::Iterator<char>>;
 
 protected:
     struct Row : public Util::Pair<uint32_t, uint32_t> {
@@ -68,16 +68,18 @@ protected:
     /**
      * @brief Determine the index of the row containing the character at index.
      */
-    [[nodiscard]] auto getCharacterRow(uint32_t charindex) const -> Util::Pair<uint32_t, Row>;
+    [[nodiscard]] auto getRowByChar(uint32_t charindex) const -> Util::Pair<uint32_t, Row>;
 
 protected:
     Util::String path;
 
     // This approach is very simple to implement, in comparison to the line-based buffer approach
     // that I used before. Drawback: On each line manipulation, the whole part of the file after
-    // the cursor has to be moved in memory. When surpassing file sizes of 250kB, it's noticeably slower.
+    // the cursor has to be moved in memory. When surpassing file sizes of 250kB, it's unusable.
     // If large files are of concern, it could probably be accelerated significantly by using
     // some kind of tree (rope?). For now, I don't care about large files.
+    // I tried replacing the internal ArrayList copy with an SSE/MMX version, but that did not
+    // yield a noticeable improvement for some reason. Would like to profile this...
     Util::ArrayList<char> buffer = Util::ArrayList<char>();
 
     Util::ArrayList<Row> rows = Util::ArrayList<Row>();
