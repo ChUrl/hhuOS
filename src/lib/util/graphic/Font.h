@@ -61,7 +61,7 @@ public:
      * @param c The character
      * @return The pointer
      */
-    [[nodiscard]] uint8_t *getChar(uint8_t c) const;
+    [[nodiscard]] virtual uint8_t *getChar(uint8_t c) const;
 
     /**
      * Get the character width.
@@ -77,7 +77,7 @@ public:
      */
     [[nodiscard]] uint8_t getCharHeight() const;
 
-private:
+protected:
 
     const uint8_t charWidth;
     const uint8_t charHeight;
