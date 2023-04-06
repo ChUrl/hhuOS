@@ -3,9 +3,9 @@
 
 #include "TerminalFont.h"
 #include "TerminalFontSmall.h"
+#include "SpleenFont.h"
 #include "Font.h"
-#include "BdfFonts/SpleenFont12x24.h"
-#include "BdfFonts/BdfFont.h"
+#include "BdfFont.h"
 
 namespace Util::Graphic::Fonts {
 
