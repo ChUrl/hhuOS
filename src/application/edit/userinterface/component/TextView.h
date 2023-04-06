@@ -14,9 +14,8 @@ public:
     //       The cursor management and scrolling should probably also happen here.
     //       It seems like I should ditch the ArrayList<char> in the FileBuffer and implement
     //       a raw dynamic array again after all.
-    // TODO: Additional constructor with resolutionX/resolutionY
-    explicit TextView(uint16_t charactersX, uint16_t charactersY, Util::Graphic::Font &font,
-                      const CursorBuffer &cursorBuffer);
+    // TODO: Use constructor with resolutionX/resolutionY, as the current way depends on font size
+    TextView(uint16_t charactersX, uint16_t charactersY, Util::Graphic::Font &font, const CursorBuffer &cursorBuffer);
 
     ~TextView() override = default;
 
