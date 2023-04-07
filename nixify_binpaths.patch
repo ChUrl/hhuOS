@@ -77,23 +77,6 @@ index d86eadc7..dc618605 100644
          WORKING_DIRECTORY ${HHUOS_ROOT_DIR}/floppy0 COMMAND ${HHUOS_ROOT_DIR}/floppy0/build.sh
          DEPENDS echo)
  
-diff --git a/cmake/grub/CMakeLists.txt b/cmake/grub/CMakeLists.txt
-index 84508b64..dd4d1fde 100644
---- a/cmake/grub/CMakeLists.txt
-+++ b/cmake/grub/CMakeLists.txt
-@@ -20,9 +20,9 @@ project(grub)
- message(STATUS "Project " ${PROJECT_NAME})
- 
- add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hhuOS.iso"
--        COMMAND /bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img"
--        COMMAND /bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.bin"
--        COMMAND /bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.initrd"
-+        COMMAND /run/current-system/sw/bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img"
-+        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.bin"
-+        COMMAND /run/current-system/sw/bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.initrd"
-         COMMAND grub-mkrescue "/usr/lib/grub/i386-pc" "/usr/lib/grub/i386-efi" -o "${HHUOS_ROOT_DIR}/hhuOS-grub.iso" "${HHUOS_ROOT_DIR}/loader/grub/"
-         DEPENDS system initrd floppy0 hdd0)
- 
 diff --git a/cmake/hdd0/CMakeLists.txt b/cmake/hdd0/CMakeLists.txt
 index a011bf9a..b52706b6 100644
 --- a/cmake/hdd0/CMakeLists.txt
