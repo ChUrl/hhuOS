@@ -1,0 +1,392 @@
+diff --git a/cmake/asciimation/CMakeLists.txt b/cmake/asciimation/CMakeLists.txt
+index 7a6cd6b3..8cce39fd 100644
+--- a/cmake/asciimation/CMakeLists.txt
++++ b/cmake/asciimation/CMakeLists.txt
+@@ -22,22 +22,22 @@ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ if ($ENV{HHUOS_REDISTRIBUTABLE_BUILD})
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/asciimation/"
+-        COMMAND COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/")
++        COMMAND COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/")
+ 
+     add_custom_target(${PROJECT_NAME} DEPENDS
+             "${CMAKE_BINARY_DIR}/asciimation/")
+ else()
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/asciimation/star_wars.txt"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/"
+             COMMAND wget https://www.asciimation.co.nz/asciimation/SwPlay.jar
+             COMMAND unzip -u SwPlay.jar -d star_wars
+-            COMMAND /bin/echo 14,67 | /bin/cat - star_wars/data/sw1.txt >> "${CMAKE_BINARY_DIR}/asciimation/star_wars.txt")
++            COMMAND /run/current-system/sw/bin/echo 14,67 | /run/current-system/sw/bin/cat - star_wars/data/sw1.txt >> "${CMAKE_BINARY_DIR}/asciimation/star_wars.txt")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/asciimation/jar_jar.txt"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/asciimation/"
+             COMMAND wget https://www.asciimation.co.nz/asciimation/jjplay.jar
+             COMMAND unzip -u jjplay.jar -d jar_jar
+-            COMMAND /bin/echo 23,81 | /bin/cat - jar_jar/data/jj1.txt >> "${CMAKE_BINARY_DIR}/asciimation/jar_jar.txt")
++            COMMAND /run/current-system/sw/bin/echo 23,81 | /run/current-system/sw/bin/cat - jar_jar/data/jj1.txt >> "${CMAKE_BINARY_DIR}/asciimation/jar_jar.txt")
+ 
+     add_custom_target(${PROJECT_NAME} DEPENDS
+             "${CMAKE_BINARY_DIR}/asciimation/star_wars.txt"
+diff --git a/cmake/books/CMakeLists.txt b/cmake/books/CMakeLists.txt
+index 518d2d27..5f71bcaf 100644
+--- a/cmake/books/CMakeLists.txt
++++ b/cmake/books/CMakeLists.txt
+@@ -21,21 +21,21 @@ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ if ($ENV{HHUOS_REDISTRIBUTABLE_BUILD})
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/books/"
+-        COMMAND COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/books/")
++        COMMAND COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/books/")
+ 
+     add_custom_target(${PROJECT_NAME} DEPENDS
+             "${CMAKE_BINARY_DIR}/books/")
+ else()
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/books/alice.txt"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
+             COMMAND wget https://www.gutenberg.org/files/11/11-0.txt -O "${CMAKE_BINARY_DIR}/books/alice.txt")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/books/peter_pan.txt"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
+             COMMAND wget https://www.gutenberg.org/files/16/16-0.txt -O "${CMAKE_BINARY_DIR}/books/peter_pan.txt")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/books/sleepy_hollow.txt"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/books/"
+             COMMAND wget https://www.gutenberg.org/files/41/41-0.txt -O "${CMAKE_BINARY_DIR}/books/sleepy_hollow.txt")
+ 
+     add_custom_target(${PROJECT_NAME} DEPENDS
+diff --git a/cmake/floppy0/CMakeLists.txt b/cmake/floppy0/CMakeLists.txt
+index d86eadc7..dc618605 100644
+--- a/cmake/floppy0/CMakeLists.txt
++++ b/cmake/floppy0/CMakeLists.txt
+@@ -20,9 +20,9 @@ project(floppy0)
+ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/floppy0.img"
+-        COMMAND /bin/mkdir -p "${HHUOS_ROOT_DIR}/floppy0/img/bin"
+-        COMMAND /bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/floppy0/img/bin/echo"
+-        COMMAND /bin/cp -r "${CMAKE_BINARY_DIR}/books" "${HHUOS_ROOT_DIR}/floppy0/img/"
++        COMMAND /run/current-system/sw/bin/mkdir -p "${HHUOS_ROOT_DIR}/floppy0/img/bin"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/floppy0/img/bin/echo"
++        COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/books" "${HHUOS_ROOT_DIR}/floppy0/img/"
+         WORKING_DIRECTORY ${HHUOS_ROOT_DIR}/floppy0 COMMAND ${HHUOS_ROOT_DIR}/floppy0/build.sh
+         DEPENDS echo)
+ 
+diff --git a/cmake/grub/CMakeLists.txt b/cmake/grub/CMakeLists.txt
+index 84508b64..dd4d1fde 100644
+--- a/cmake/grub/CMakeLists.txt
++++ b/cmake/grub/CMakeLists.txt
+@@ -20,9 +20,9 @@ project(grub)
+ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hhuOS.iso"
+-        COMMAND /bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img"
+-        COMMAND /bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.bin"
+-        COMMAND /bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.initrd"
++        COMMAND /run/current-system/sw/bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.bin"
++        COMMAND /run/current-system/sw/bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/grub/boot/hhuOS.initrd"
+         COMMAND grub-mkrescue "/usr/lib/grub/i386-pc" "/usr/lib/grub/i386-efi" -o "${HHUOS_ROOT_DIR}/hhuOS-grub.iso" "${HHUOS_ROOT_DIR}/loader/grub/"
+         DEPENDS system initrd floppy0 hdd0)
+ 
+diff --git a/cmake/hdd0/CMakeLists.txt b/cmake/hdd0/CMakeLists.txt
+index a011bf9a..b52706b6 100644
+--- a/cmake/hdd0/CMakeLists.txt
++++ b/cmake/hdd0/CMakeLists.txt
+@@ -20,45 +20,45 @@ project(hdd0)
+ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hdd0.img"
+-        COMMAND /bin/mkdir -p "${HHUOS_ROOT_DIR}/hdd0/img/bin"
+-        COMMAND /bin/mkdir -p "${HHUOS_ROOT_DIR}/hdd0/img/user"
+-        COMMAND /bin/mkdir -p "${HHUOS_ROOT_DIR}/hdd0/img/media/floppy"
+-        COMMAND /bin/cp "$<TARGET_FILE:shell>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/shell"
+-        COMMAND /bin/cp "$<TARGET_FILE:ant>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ant"
+-        COMMAND /bin/cp "$<TARGET_FILE:beep>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/beep"
+-        COMMAND /bin/cp "$<TARGET_FILE:cat>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/cat"
+-        COMMAND /bin/cp "$<TARGET_FILE:color>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/color"
+-        COMMAND /bin/cp "$<TARGET_FILE:cp>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/cp"
+-        COMMAND /bin/cp "$<TARGET_FILE:cube>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/cube"
+-        COMMAND /bin/cp "$<TARGET_FILE:date>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/date"
+-        COMMAND /bin/cp "$<TARGET_FILE:dino>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/dino"
+-        COMMAND /bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/echo"
+-        COMMAND /bin/cp "$<TARGET_FILE:edit>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/edit"
+-        COMMAND /bin/cp "$<TARGET_FILE:head>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/head"
+-        COMMAND /bin/cp "$<TARGET_FILE:hexdump>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/hexdump"
+-        COMMAND /bin/cp "$<TARGET_FILE:ip>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ip"
+-        COMMAND /bin/cp "$<TARGET_FILE:kill>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/kill"
+-        COMMAND /bin/cp "$<TARGET_FILE:ls>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ls"
+-        COMMAND /bin/cp "$<TARGET_FILE:lvgl_demo>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/lvgl"
+-        COMMAND /bin/cp "$<TARGET_FILE:membench>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/membench"
+-        COMMAND /bin/cp "$<TARGET_FILE:mkdir>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/mkdir"
+-        COMMAND /bin/cp "$<TARGET_FILE:mount>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/mount"
+-        COMMAND /bin/cp "$<TARGET_FILE:mouse>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/mouse"
+-        COMMAND /bin/cp "$<TARGET_FILE:ping>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ping"
+-        COMMAND /bin/cp "$<TARGET_FILE:polygon>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/polygon"
+-        COMMAND /bin/cp "$<TARGET_FILE:ps>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ps"
+-        COMMAND /bin/cp "$<TARGET_FILE:pwd>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/pwd"
+-        COMMAND /bin/cp "$<TARGET_FILE:rm>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/rm"
+-        COMMAND /bin/cp "$<TARGET_FILE:rmdir>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/rmdir"
+-        COMMAND /bin/cp "$<TARGET_FILE:shutdown>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/shutdown"
+-        COMMAND /bin/cp "$<TARGET_FILE:touch>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/touch"
+-        COMMAND /bin/cp "$<TARGET_FILE:tree>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/tree"
+-        COMMAND /bin/cp "$<TARGET_FILE:uecho>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/uecho"
+-        COMMAND /bin/cp "$<TARGET_FILE:unmount>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/unmount"
+-        COMMAND /bin/cp "$<TARGET_FILE:uptime>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/uptime"
+-        COMMAND /bin/cp -r "${CMAKE_BINARY_DIR}/beep" "${HHUOS_ROOT_DIR}/hdd0/img/user"
+-        COMMAND /bin/cp -r "${CMAKE_BINARY_DIR}/asciimation" "${HHUOS_ROOT_DIR}/hdd0/img/user"
+-        COMMAND /bin/cp -r "${CMAKE_BINARY_DIR}/books" "${HHUOS_ROOT_DIR}/hdd0/img/user"
++        COMMAND /run/current-system/sw/bin/mkdir -p "${HHUOS_ROOT_DIR}/hdd0/img/bin"
++        COMMAND /run/current-system/sw/bin/mkdir -p "${HHUOS_ROOT_DIR}/hdd0/img/user"
++        COMMAND /run/current-system/sw/bin/mkdir -p "${HHUOS_ROOT_DIR}/hdd0/img/media/floppy"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:shell>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/shell"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ant>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ant"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:beep>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/beep"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:cat>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/cat"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:color>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/color"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:cp>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/cp"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:cube>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/cube"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:date>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/date"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:dino>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/dino"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/echo"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:edit>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/edit"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:head>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/head"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:hexdump>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/hexdump"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ip>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ip"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:kill>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/kill"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ls>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ls"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:lvgl_demo>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/lvgl"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:membench>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/membench"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:mkdir>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/mkdir"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:mount>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/mount"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:mouse>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/mouse"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ping>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ping"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:polygon>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/polygon"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ps>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/ps"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:pwd>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/pwd"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:rm>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/rm"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:rmdir>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/rmdir"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:shutdown>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/shutdown"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:touch>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/touch"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:tree>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/tree"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:uecho>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/uecho"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:unmount>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/unmount"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:uptime>" "${HHUOS_ROOT_DIR}/hdd0/img/bin/uptime"
++        COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/beep" "${HHUOS_ROOT_DIR}/hdd0/img/user"
++        COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/asciimation" "${HHUOS_ROOT_DIR}/hdd0/img/user"
++        COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/books" "${HHUOS_ROOT_DIR}/hdd0/img/user"
+         WORKING_DIRECTORY ${HHUOS_ROOT_DIR}/hdd0 COMMAND ${HHUOS_ROOT_DIR}/hdd0/build.sh
+         DEPENDS asciimation music books shell ant beep cat color cp cube date dino echo edit head hexdump ip kill ls lvgl_demo membench mkdir mount mouse ping polygon ps pwd rm rmdir shutdown touch tree uecho unmount uptime)
+ 
+diff --git a/cmake/initrd/CMakeLists.txt b/cmake/initrd/CMakeLists.txt
+index 6825343a..202a42c3 100644
+--- a/cmake/initrd/CMakeLists.txt
++++ b/cmake/initrd/CMakeLists.txt
+@@ -21,54 +21,54 @@ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ if ($ENV{HHUOS_MINIMAL_INITRD})
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/hhuOS.initrd"
+-            COMMAND /bin/mkdir -p "${HHUOS_ROOT_DIR}/initrd/bin"
+-            COMMAND /bin/cp "$<TARGET_FILE:shell>" "${HHUOS_ROOT_DIR}/initrd/bin/shell"
+-            COMMAND /bin/tar -C "${HHUOS_ROOT_DIR}/initrd/" --xform s:'./':: -cf "${CMAKE_BINARY_DIR}/hhuOS.initrd" ./
+-            COMMAND /bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img" "${HHUOS_ROOT_DIR}/hhuOS.iso"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${HHUOS_ROOT_DIR}/initrd/bin"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:shell>" "${HHUOS_ROOT_DIR}/initrd/bin/shell"
++            COMMAND /run/current-system/sw/bin/tar -C "${HHUOS_ROOT_DIR}/initrd/" --xform s:'./':: -cf "${CMAKE_BINARY_DIR}/hhuOS.initrd" ./
++            COMMAND /run/current-system/sw/bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img" "${HHUOS_ROOT_DIR}/hhuOS.iso"
+             DEPENDS shell)
+ 
+     add_custom_target(${PROJECT_NAME} DEPENDS shell "${CMAKE_BINARY_DIR}/hhuOS.initrd")
+ else()
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/hhuOS.initrd"
+-            COMMAND /bin/mkdir -p "${HHUOS_ROOT_DIR}/initrd/bin"
+-            COMMAND /bin/cp "$<TARGET_FILE:shell>" "${HHUOS_ROOT_DIR}/initrd/bin/shell"
+-            COMMAND /bin/cp "$<TARGET_FILE:ant>" "${HHUOS_ROOT_DIR}/initrd/bin/ant"
+-            COMMAND /bin/cp "$<TARGET_FILE:asciimate>" "${HHUOS_ROOT_DIR}/initrd/bin/asciimate"
+-            COMMAND /bin/cp "$<TARGET_FILE:beep>" "${HHUOS_ROOT_DIR}/initrd/bin/beep"
+-            COMMAND /bin/cp "$<TARGET_FILE:cat>" "${HHUOS_ROOT_DIR}/initrd/bin/cat"
+-            COMMAND /bin/cp "$<TARGET_FILE:color>" "${HHUOS_ROOT_DIR}/initrd/bin/color"
+-            COMMAND /bin/cp "$<TARGET_FILE:cp>" "${HHUOS_ROOT_DIR}/initrd/bin/cp"
+-            COMMAND /bin/cp "$<TARGET_FILE:cube>" "${HHUOS_ROOT_DIR}/initrd/bin/cube"
+-            COMMAND /bin/cp "$<TARGET_FILE:date>" "${HHUOS_ROOT_DIR}/initrd/bin/date"
+-            COMMAND /bin/cp "$<TARGET_FILE:dino>" "${HHUOS_ROOT_DIR}/initrd/bin/dino"
+-            COMMAND /bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/initrd/bin/echo"
+-            COMMAND /bin/cp "$<TARGET_FILE:edit>" "${HHUOS_ROOT_DIR}/initrd/bin/edit"
+-            COMMAND /bin/cp "$<TARGET_FILE:head>" "${HHUOS_ROOT_DIR}/initrd/bin/head"
+-            COMMAND /bin/cp "$<TARGET_FILE:hexdump>" "${HHUOS_ROOT_DIR}/initrd/bin/hexdump"
+-            COMMAND /bin/cp "$<TARGET_FILE:ip>" "${HHUOS_ROOT_DIR}/initrd/bin/ip"
+-            COMMAND /bin/cp "$<TARGET_FILE:kill>" "${HHUOS_ROOT_DIR}/initrd/bin/kill"
+-            COMMAND /bin/cp "$<TARGET_FILE:ls>" "${HHUOS_ROOT_DIR}/initrd/bin/ls"
+-            COMMAND /bin/cp "$<TARGET_FILE:lvgl_demo>" "${HHUOS_ROOT_DIR}/initrd/bin/lvgl"
+-            COMMAND /bin/cp "$<TARGET_FILE:membench>" "${HHUOS_ROOT_DIR}/initrd/bin/membench"
+-            COMMAND /bin/cp "$<TARGET_FILE:mkdir>" "${HHUOS_ROOT_DIR}/initrd/bin/mkdir"
+-            COMMAND /bin/cp "$<TARGET_FILE:mount>" "${HHUOS_ROOT_DIR}/initrd/bin/mount"
+-            COMMAND /bin/cp "$<TARGET_FILE:mouse>" "${HHUOS_ROOT_DIR}/initrd/bin/mouse"
+-            COMMAND /bin/cp "$<TARGET_FILE:ping>" "${HHUOS_ROOT_DIR}/initrd/bin/ping"
+-            COMMAND /bin/cp "$<TARGET_FILE:polygon>" "${HHUOS_ROOT_DIR}/initrd/bin/polygon"
+-            COMMAND /bin/cp "$<TARGET_FILE:ps>" "${HHUOS_ROOT_DIR}/initrd/bin/ps"
+-            COMMAND /bin/cp "$<TARGET_FILE:pwd>" "${HHUOS_ROOT_DIR}/initrd/bin/pwd"
+-            COMMAND /bin/cp "$<TARGET_FILE:rm>" "${HHUOS_ROOT_DIR}/initrd/bin/rm"
+-            COMMAND /bin/cp "$<TARGET_FILE:rmdir>" "${HHUOS_ROOT_DIR}/initrd/bin/rmdir"
+-            COMMAND /bin/cp "$<TARGET_FILE:shutdown>" "${HHUOS_ROOT_DIR}/initrd/bin/shutdown"
+-            COMMAND /bin/cp "$<TARGET_FILE:touch>" "${HHUOS_ROOT_DIR}/initrd/bin/touch"
+-            COMMAND /bin/cp "$<TARGET_FILE:tree>" "${HHUOS_ROOT_DIR}/initrd/bin/tree"
+-            COMMAND /bin/cp "$<TARGET_FILE:uecho>" "${HHUOS_ROOT_DIR}/initrd/bin/uecho"
+-            COMMAND /bin/cp "$<TARGET_FILE:unmount>" "${HHUOS_ROOT_DIR}/initrd/bin/unmount"
+-            COMMAND /bin/cp "$<TARGET_FILE:uptime>" "${HHUOS_ROOT_DIR}/initrd/bin/uptime"
+-            COMMAND /bin/cp -r "${CMAKE_BINARY_DIR}/beep" "${HHUOS_ROOT_DIR}/initrd"
+-            COMMAND /bin/cp -r "${CMAKE_BINARY_DIR}/asciimation" "${HHUOS_ROOT_DIR}/initrd"
+-            COMMAND /bin/tar -C "${HHUOS_ROOT_DIR}/initrd/" --xform s:'./':: -cf "${CMAKE_BINARY_DIR}/hhuOS.initrd" ./
+-            COMMAND /bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img" "${HHUOS_ROOT_DIR}/hhuOS.iso"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${HHUOS_ROOT_DIR}/initrd/bin"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:shell>" "${HHUOS_ROOT_DIR}/initrd/bin/shell"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ant>" "${HHUOS_ROOT_DIR}/initrd/bin/ant"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:asciimate>" "${HHUOS_ROOT_DIR}/initrd/bin/asciimate"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:beep>" "${HHUOS_ROOT_DIR}/initrd/bin/beep"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:cat>" "${HHUOS_ROOT_DIR}/initrd/bin/cat"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:color>" "${HHUOS_ROOT_DIR}/initrd/bin/color"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:cp>" "${HHUOS_ROOT_DIR}/initrd/bin/cp"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:cube>" "${HHUOS_ROOT_DIR}/initrd/bin/cube"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:date>" "${HHUOS_ROOT_DIR}/initrd/bin/date"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:dino>" "${HHUOS_ROOT_DIR}/initrd/bin/dino"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:echo>" "${HHUOS_ROOT_DIR}/initrd/bin/echo"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:edit>" "${HHUOS_ROOT_DIR}/initrd/bin/edit"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:head>" "${HHUOS_ROOT_DIR}/initrd/bin/head"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:hexdump>" "${HHUOS_ROOT_DIR}/initrd/bin/hexdump"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ip>" "${HHUOS_ROOT_DIR}/initrd/bin/ip"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:kill>" "${HHUOS_ROOT_DIR}/initrd/bin/kill"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ls>" "${HHUOS_ROOT_DIR}/initrd/bin/ls"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:lvgl_demo>" "${HHUOS_ROOT_DIR}/initrd/bin/lvgl"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:membench>" "${HHUOS_ROOT_DIR}/initrd/bin/membench"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:mkdir>" "${HHUOS_ROOT_DIR}/initrd/bin/mkdir"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:mount>" "${HHUOS_ROOT_DIR}/initrd/bin/mount"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:mouse>" "${HHUOS_ROOT_DIR}/initrd/bin/mouse"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ping>" "${HHUOS_ROOT_DIR}/initrd/bin/ping"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:polygon>" "${HHUOS_ROOT_DIR}/initrd/bin/polygon"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:ps>" "${HHUOS_ROOT_DIR}/initrd/bin/ps"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:pwd>" "${HHUOS_ROOT_DIR}/initrd/bin/pwd"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:rm>" "${HHUOS_ROOT_DIR}/initrd/bin/rm"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:rmdir>" "${HHUOS_ROOT_DIR}/initrd/bin/rmdir"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:shutdown>" "${HHUOS_ROOT_DIR}/initrd/bin/shutdown"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:touch>" "${HHUOS_ROOT_DIR}/initrd/bin/touch"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:tree>" "${HHUOS_ROOT_DIR}/initrd/bin/tree"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:uecho>" "${HHUOS_ROOT_DIR}/initrd/bin/uecho"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:unmount>" "${HHUOS_ROOT_DIR}/initrd/bin/unmount"
++            COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:uptime>" "${HHUOS_ROOT_DIR}/initrd/bin/uptime"
++            COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/beep" "${HHUOS_ROOT_DIR}/initrd"
++            COMMAND /run/current-system/sw/bin/cp -r "${CMAKE_BINARY_DIR}/asciimation" "${HHUOS_ROOT_DIR}/initrd"
++            COMMAND /run/current-system/sw/bin/tar -C "${HHUOS_ROOT_DIR}/initrd/" --xform s:'./':: -cf "${CMAKE_BINARY_DIR}/hhuOS.initrd" ./
++            COMMAND /run/current-system/sw/bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.img" "${HHUOS_ROOT_DIR}/hhuOS.iso"
+             DEPENDS asciimation music shell ant asciimate beep cat color cp cube date dino echo edit head hexdump ip kill ls lvgl_demo membench mkdir mount mouse ping polygon ps pwd rm rmdir shutdown touch tree uecho unmount uptime)
+ 
+     add_custom_target(${PROJECT_NAME} DEPENDS music asciimation shell ant asciimate beep cat color cp cube date dino echo edit head hexdump ip kill ls lvgl_demo membench mkdir mount mouse ping polygon ps pwd rm rmdir shutdown touch tree uecho unmount uptime "${CMAKE_BINARY_DIR}/hhuOS.initrd")
+diff --git a/cmake/limine/CMakeLists.txt b/cmake/limine/CMakeLists.txt
+index 0eff9afa..75772c01 100644
+--- a/cmake/limine/CMakeLists.txt
++++ b/cmake/limine/CMakeLists.txt
+@@ -21,10 +21,10 @@ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hhuOS.iso"
+         WORKING_DIRECTORY "${HHUOS_ROOT_DIR}/loader/limine/"
+-        COMMAND /bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/limine/iso/hhuOS.bin"
+-        COMMAND /bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/limine/iso/hhuOS.initrd"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/limine/iso/hhuOS.bin"
++        COMMAND /run/current-system/sw/bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/limine/iso/hhuOS.initrd"
+         COMMAND "${HHUOS_ROOT_DIR}/loader/limine/build.sh"
+-        COMMAND /bin/mv "${HHUOS_ROOT_DIR}/loader/limine/hhuOS-limine.iso" "${HHUOS_ROOT_DIR}"
++        COMMAND /run/current-system/sw/bin/mv "${HHUOS_ROOT_DIR}/loader/limine/hhuOS-limine.iso" "${HHUOS_ROOT_DIR}"
+         DEPENDS system initrd floppy0 hdd0)
+ 
+ add_custom_target(${PROJECT_NAME} DEPENDS system initrd floppy0 hdd0 "${HHUOS_ROOT_DIR}/hhuOS.iso")
+\ No newline at end of file
+diff --git a/cmake/music/CMakeLists.txt b/cmake/music/CMakeLists.txt
+index 7cd36f35..2406a57e 100644
+--- a/cmake/music/CMakeLists.txt
++++ b/cmake/music/CMakeLists.txt
+@@ -21,49 +21,49 @@ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ if ($ENV{HHUOS_REDISTRIBUTABLE_BUILD})
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/"
+-            COMMAND COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/")
++            COMMAND COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/")
+ 
+     add_custom_target(${PROJECT_NAME} DEPENDS
+             "${CMAKE_BINARY_DIR}/beep/")
+ else()
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/angel.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2020/01/cruel-angels-thesis-neon-genesis.html > "${CMAKE_BINARY_DIR}/beep/angel.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/castlevania.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2020/10/vampire-killer-castlevania.html > "${CMAKE_BINARY_DIR}/beep/castlevania.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/dance_monkey.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2020/04/dance-monkey-by-tones-and-i-hard-version.html > "${CMAKE_BINARY_DIR}/beep/dance_monkey.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/deja_vu.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2019/02/deja-vu-initial-d.html -t 94 > "${CMAKE_BINARY_DIR}/beep/deja_vu.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/ghostbusters.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2019/10/ghostbusters-theme-hard-version.html > "${CMAKE_BINARY_DIR}/beep/ghostbusters.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/harry_potter.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2019/07/nimbus-2000-harry-potter.html -t 94 > "${CMAKE_BINARY_DIR}/beep/harry_potter.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/mario.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2022/06/overworld-theme-new-super-mario-bros-ds.html -t 94 > "${CMAKE_BINARY_DIR}/beep/mario.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/sonne.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2022/01/sonne-by-rammstein.html > "${CMAKE_BINARY_DIR}/beep/sonne.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/star_wars.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2015/11/star-wars-main-theme.html > "${CMAKE_BINARY_DIR}/beep/star_wars.beep")
+ 
+     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/beep/tetris.beep"
+-            COMMAND /bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
++            COMMAND /run/current-system/sw/bin/mkdir -p "${CMAKE_BINARY_DIR}/beep/"
+             COMMAND python3 "${HHUOS_TOOL_DIR}/beep.py" -i https://pianoletternotes.blogspot.com/2019/10/tetris-theme-hard-version.html > "${CMAKE_BINARY_DIR}/beep/tetris.beep")
+ 
+     add_custom_target(${PROJECT_NAME} DEPENDS
+diff --git a/cmake/towboot/CMakeLists.txt b/cmake/towboot/CMakeLists.txt
+index b17fd143..1585464d 100644
+--- a/cmake/towboot/CMakeLists.txt
++++ b/cmake/towboot/CMakeLists.txt
+@@ -21,11 +21,11 @@ message(STATUS "Project " ${PROJECT_NAME})
+ 
+ add_custom_command(OUTPUT "${HHUOS_ROOT_DIR}/hhuOS.img"
+         WORKING_DIRECTORY "${HHUOS_ROOT_DIR}/loader/towboot/"
+-        COMMAND /bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.iso"
+-        COMMAND /bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.bin"
+-        COMMAND /bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.initrd"
++        COMMAND /run/current-system/sw/bin/rm -f "${HHUOS_ROOT_DIR}/hhuOS.iso"
++        COMMAND /run/current-system/sw/bin/cp "$<TARGET_FILE:system>" "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.bin"
++        COMMAND /run/current-system/sw/bin/cp "${CMAKE_BINARY_DIR}/hhuOS.initrd" "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS.initrd"
+         COMMAND "${HHUOS_ROOT_DIR}/loader/towboot/build.sh"
+-        COMMAND /bin/mv "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS-towboot.img" "${HHUOS_ROOT_DIR}"
++        COMMAND /run/current-system/sw/bin/mv "${HHUOS_ROOT_DIR}/loader/towboot/hhuOS-towboot.img" "${HHUOS_ROOT_DIR}"
+         DEPENDS system initrd floppy0 hdd0)
+ 
+ add_custom_target(${PROJECT_NAME} DEPENDS system initrd floppy0 hdd0 "${HHUOS_ROOT_DIR}/hhuOS.img")
+\ No newline at end of file
