@@ -98,6 +98,11 @@
               help = "Show qemu i386 architecture information";
               command = "qemu-system-i386 -cpu help";
             }
+            {
+              name = "watch-drive";
+              help = "Show info on connected 'TransMemory' flash drive";
+              command = "watch -d -c -n 1 'lsblk -o NAME,LABEL,UUID,FSTYPE,SIZE,FSUSE%,MOUNTPOINT,MODEL | grep --color=auto -E \"TransMemory\"'";
+            }
           ];
         };
       });
