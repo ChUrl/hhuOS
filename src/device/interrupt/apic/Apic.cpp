@@ -175,7 +175,7 @@ Util::Array<LocalApic*> Apic::getLocalApics() {
         const Acpi::LocalApicNmi *nmiInfo = nullptr;
         for (const auto *localNmi : acpiLocalApicNmis) {
             // 0xff means all APs
-            if ((localNmi->acpiProcessorId == localInfo->acpiProcessorId) | (localNmi->acpiProcessorId == 0xff)) {
+            if ((localNmi->acpiProcessorId == localInfo->acpiProcessorId) || (localNmi->acpiProcessorId == 0xff)) {
                 nmiInfo = localNmi;
                 break;
             }

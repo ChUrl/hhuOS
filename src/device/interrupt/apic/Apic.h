@@ -181,7 +181,6 @@ private:
     LocalApicErrorHandler errorHandler;  // The interrupt handler that gets triggered on an internal APIC error.
 
     static Kernel::Logger log;
-
 };
 
 }
